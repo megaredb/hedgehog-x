@@ -1,0 +1,16 @@
+services:
+  db:
+    ports:
+      - '5432:5432'
+
+  traefik:
+    ports:
+      - '80:80'
+      - '443:443'
+      - '8080:8080' # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik/dynamic:ro
+      - ./.certs:/etc/certs:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'

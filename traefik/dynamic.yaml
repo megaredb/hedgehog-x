@@ -1,0 +1,20 @@
+http:
+  routers:
+    vite-dev:
+      rule: 'Host(`hedgehog-inc.localhost`)'
+      service: 'vite-dev-service'
+      entryPoints:
+        - 'websecure'
+      tls: {}
+
+  services:
+    vite-dev-service:
+      loadBalancer:
+        servers:
+          # host.docker.internal routes back to the host machine
+          - url: 'http://host.docker.internal:5173'
+
+tls:
+  certificates:
+    - certFile: '/etc/certs/hedgehog-inc.localhost.pem'
+      keyFile: '/etc/certs/hedgehog-inc.localhost-key.pem'
