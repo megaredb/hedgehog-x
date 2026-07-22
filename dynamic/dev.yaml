@@ -1,0 +1,29 @@
+tls:
+  certificates:
+    - certFile: /certs/hedgehog-inc.localhost+1.pem
+      keyFile: /certs/hedgehog-inc.localhost+1-key.pem
+
+http:
+  routers:
+    frontend-router:
+      rule: 'Host(`hedgehog-inc.localhost`)'
+      entrypoints:
+        - 'websecure'
+      tls: true
+      service: 'frontend-service'
+    preview-frontend-router:
+      rule: 'Host(`preview.hedgehog-inc.localhost`)'
+      entrypoints:
+        - 'websecure'
+      tls: true
+      service: 'preview-frontend-service'
+
+  services:
+    frontend-service:
+      loadBalancer:
+        servers:
+          - url: 'http://host.docker.internal:5173'
+    preview-frontend-service:
+      loadBalancer:
+        servers:
+          - url: 'http://host.docker.internal:5174'

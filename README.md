@@ -15,7 +15,7 @@ To recreate this project with the same configuration:
 
 ```sh
 # recreate this project
-pnpm dlx sv@0.16.1 create --template minimal --types ts --add prettier eslint playwright tailwindcss="plugins:none" drizzle="database:postgresql+postgresql:postgres.js+docker:yes" better-auth="demo:none" mcp="ide:cursor,gemini,opencode,vscode,other+setup:local" --install pnpm .
+pnpm dlx sv@0.16.2 create --template minimal --types ts --add prettier eslint playwright tailwindcss="plugins:none" sveltekit-adapter="adapter:node" drizzle="database:postgresql+postgresql:postgres.js+docker:yes" better-auth="demo:none" mcp="ide:vscode,other,gemini+setup:local" --install pnpm .
 ```
 
 ## Developing

@@ -1,12 +1,16 @@
 /// <reference types="vite-plugin-pwa/info" />
+/// <reference types="vite-plugin-pwa/client" />
 /// <reference types="vite-plugin-pwa/svelte" />
+
+import type { User, Session } from 'better-auth';
+
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 declare global {
 	namespace App {
 		interface Locals {
-			user: import('better-auth').User | null;
-			session: import('better-auth').Session | null;
+			user?: User;
+			session?: Session;
 		}
 
 		// interface Error {}

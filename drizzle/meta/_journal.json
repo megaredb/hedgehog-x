@@ -5,15 +5,22 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1783244418152,
-      "tag": "0000_unusual_firelord",
+      "when": 1783893230217,
+      "tag": "0000_unknown_captain_america",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1783274835880,
-      "tag": "0001_exotic_manta",
+      "when": 1783896848134,
+      "tag": "0001_normal_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783897010523,
+      "tag": "0002_dizzy_zombie",
       "breakpoints": true
     }
   ]

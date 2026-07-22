@@ -6,23 +6,46 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
+	/* БЫЛО: --background: oklch(1 0 0); -> СТАЛО: oklch(0.96 0.02 85) [Мягкий кремовый фон] */
+	--background: oklch(0.96 0.02 85);
+	/* БЫЛО: --foreground: oklch(0.145 0 0); -> СТАЛО: oklch(0.2 0.02 85) [Мягкий темно-серый текст] */
+	--foreground: oklch(0.2 0.02 85);
+
+	/* БЫЛО: --card: oklch(1 0 0); -> СТАЛО: oklch(0.96 0.02 85) */
+	--card: oklch(0.96 0.02 85);
+	/* БЫЛО: --card-foreground: oklch(0.145 0 0); -> СТАЛО: oklch(0.2 0.02 85) */
+	--card-foreground: oklch(0.2 0.02 85);
+
+	/* БЫЛО: --popover: oklch(1 0 0); -> СТАЛО: oklch(0.96 0.02 85) */
+	--popover: oklch(0.96 0.02 85);
+	/* БЫЛО: --popover-foreground: oklch(0.145 0 0); -> СТАЛО: oklch(0.2 0.02 85) */
+	--popover-foreground: oklch(0.2 0.02 85);
+
+	/* БЫЛО: --primary: oklch(0.205 0 0); -> СТАЛО: oklch(0.25 0.05 85) [более мягкий темно-серый] */
+	--primary: oklch(0.25 0.05 85);
 	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
+
+	/* БЫЛО: --secondary: oklch(0.97 0 0); -> СТАЛО: oklch(0.9 0.01 85) [светлый теплый серый] */
+	--secondary: oklch(0.9 0.01 85);
+	/* БЫЛО: --secondary-foreground: oklch(0.205 0 0); -> СТАЛО: oklch(0.25 0.05 85) */
+	--secondary-foreground: oklch(0.25 0.05 85);
+
+	/* БЫЛО: --muted: oklch(0.97 0 0); -> СТАЛО: oklch(0.9 0.01 85) */
+	--muted: oklch(0.9 0.01 85);
 	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
+
+	/* БЫЛО: --accent: oklch(0.97 0 0); -> СТАЛО: oklch(0.9 0.01 85) */
+	--accent: oklch(0.9 0.01 85);
+	/* БЫЛО: --accent-foreground: oklch(0.205 0 0); -> СТАЛО: oklch(0.25 0.05 85) */
+	--accent-foreground: oklch(0.25 0.05 85);
+
 	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
+
+	/* БЫЛО: --border: oklch(0.922 0 0); -> СТАЛО: oklch(0.85 0.01 85) [Светлый теплый серый] */
+	--border: oklch(0.85 0.01 85);
+	/* БЫЛО: --input: oklch(0.922 0 0); -> СТАЛО: oklch(0.85 0.01 85) */
+	--input: oklch(0.85 0.01 85);
+
 	--ring: oklch(0.708 0 0);
 	--chart-1: oklch(0.87 0 0);
 	--chart-2: oklch(0.556 0 0);
@@ -121,9 +144,77 @@
 		@apply border-border outline-ring/50;
 	}
 	body {
-		@apply bg-background text-foreground;
+		@apply min-h-screen bg-background text-foreground;
 	}
+
 	html {
 		@apply font-sans;
+	}
+}
+
+.layout-content {
+	@apply mx-auto w-full max-w-5xl px-4 md:px-8;
+}
+
+@media (prefers-reduced-motion) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
+
+/* --- VIEW TRANSITIONS --- */
+
+/* Отключаем дефолтную анимацию для всего экрана (чтобы сайдбар и хлебные крошки не моргали) */
+:root {
+	view-transition-name: none;
+}
+
+/* Привязываем имя анимации к контентной области */
+.page-content-transition {
+	view-transition-name: page-content;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 0%;
+	position: relative;
+	width: 100%;
+	min-height: 0;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+::view-transition-old(page-content) {
+	animation: 100ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
+}
+
+::view-transition-new(page-content) {
+	animation:
+		200ms cubic-bezier(0, 0, 0.2, 1) both fade-in,
+		200ms cubic-bezier(0.34, 1.56, 0.64, 1) both slide-up;
+}
+
+@keyframes slide-up {
+	from {
+		transform: translateY(16px);
+	}
+	to {
+		transform: translateY(0);
 	}
 }

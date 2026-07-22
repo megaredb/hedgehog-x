@@ -1,16 +1,56 @@
 services:
   db:
     ports:
-      - '5432:5432'
+      - 5432:5432
 
   traefik:
+    image: traefik:v3
+    container_name: traefik
+    restart: unless-stopped
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    security_opt:
+      - no-new-privileges:true
     ports:
       - '80:80'
       - '443:443'
-      - '8080:8080' # Traefik dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik:/etc/traefik/dynamic:ro
-      - ./.certs:/etc/certs:ro
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - ./certs:/certs:ro
+      - ./dynamic:/dynamic:ro
+    command:
+      # EntryPoints
+      - '--entrypoints.web.address=:80'
+      - '--entrypoints.web.http.redirections.entrypoint.to=websecure'
+      - '--entrypoints.web.http.redirections.entrypoint.scheme=https'
+      - '--entrypoints.web.http.redirections.entrypoint.permanent=true'
+      - '--entrypoints.websecure.address=:443'
+      - '--entrypoints.websecure.http.tls=true'
+
+      - '--providers.file.directory=/dynamic'
+      - '--providers.file.watch=true'
+
+      # Providers
+      - '--providers.docker=true'
+      - '--providers.docker.exposedbydefault=false'
+      - '--providers.docker.network=proxy'
+
+      # API & Dashboard
+      - '--api.dashboard=true'
+      - '--api.insecure=false'
+
+      # Observability
+      - '--log.level=INFO'
+      - '--accesslog=true'
+      - '--metrics.prometheus=true'
+
+    # Traefik Dynamic configuration via Docker labels
+    labels:
+      # Enable self‑routing
+      - 'traefik.enable=true'
+
+      # Dashboard router
+      - 'traefik.http.routers.dashboard.rule=Host(`traefik.hedgehog-inc.localhost`)'
+      - 'traefik.http.routers.dashboard.entrypoints=websecure'
+      - 'traefik.http.routers.dashboard.service=api@internal'
+      - 'traefik.http.routers.dashboard.tls=true'

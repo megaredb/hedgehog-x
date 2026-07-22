@@ -1,37 +1,55 @@
 <script lang="ts">
 	import './layout.css';
-	import { ModeWatcher } from 'mode-watcher';
 	import favicon from '$lib/assets/favicon.svg';
-	import PwaReloadPrompt from '$lib/components/PwaReloadPrompt.svelte';
-	import GlobalPlayer from '$lib/components/GlobalPlayer.svelte';
-	import Header from '$lib/components/Header.svelte';
-	import AnimatedGradient from '$lib/components/AnimatedGradient.svelte';
-	import DownloadPopup from '$lib/components/DownloadPopup.svelte';
-	import { player } from '$lib/client/player.svelte';
+	import AppNavigation from '$lib/components/header/AppNavigation.svelte';
+	import AppBreadcrumbs from '$lib/components/layout/AppBreadcrumbs.svelte';
+	import GlobalPlayer from '$lib/components/audio/GlobalPlayer.svelte';
+	import { ModeWatcher } from 'mode-watcher';
+	import { onNavigate } from '$app/navigation';
 	import { pwaInfo } from 'virtual:pwa-info';
+	import { AudioProvider } from '$lib/components/ui/audio/provider';
+	import { Tooltip } from 'bits-ui';
 
-	let { children, data } = $props();
+	let { children } = $props();
+
+	onNavigate((navigation) => {
+		if (!document.startViewTransition) return;
+
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+		});
+	});
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	{#if pwaInfo}
-		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-		{@html pwaInfo.webManifest.linkTag}
-	{/if}
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+	{@html pwaInfo ? pwaInfo.webManifest.linkTag : ''}
 </svelte:head>
 
-<ModeWatcher />
+<AudioProvider>
+	<Tooltip.Provider delayDuration={200}>
+		<ModeWatcher disableTransitions={false} />
 
-<main
-	class="min-h-screen bg-background text-foreground antialiased transition-all duration-300 relative overflow-x-hidden"
-	class:pb-20={player.currentTrack !== null}
-	class:md:pb-24={player.currentTrack !== null}
->
-	<AnimatedGradient />
-	<Header user={data.user} />
-	{@render children()}
-	<PwaReloadPrompt />
-	<DownloadPopup />
-	<GlobalPlayer />
-</main>
+		<div class="flex flex-col lg:flex-row min-h-screen w-full">
+			<!-- Универсальная навигация (Десктопный Sidebar + Мобильный Header) -->
+			<AppNavigation />
+
+			<!-- Область контента -->
+			<div
+				class="flex-1 flex flex-col min-w-0 relative bg-no-repeat"
+				style="background-image: radial-gradient(circle 800px at 50% -300px, color-mix(in oklch, var(--color-secondary) 100%, transparent) 0%, transparent 100%);"
+			>
+				<AppBreadcrumbs />
+				<!-- Страницы -->
+				<main class="flex-1 page-content-transition">
+					{@render children()}
+				</main>
+				<GlobalPlayer />
+			</div>
+		</div>
+	</Tooltip.Provider>
+</AudioProvider>
