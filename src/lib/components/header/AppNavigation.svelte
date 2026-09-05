@@ -123,7 +123,6 @@
 					<p class="text-sm font-semibold truncate text-foreground leading-snug">
 						{session.user.name}
 					</p>
-					<p class="text-xs text-muted-foreground truncate leading-normal">@telegram</p>
 				</div>
 			{:else}
 				<div class="flex items-center gap-3">

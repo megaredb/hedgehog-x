@@ -11,7 +11,6 @@
 	import { AudioProvider } from '$lib/components/ui/audio/provider';
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
-	import WelcomeModal from '$lib/components/overlay/WelcomeModal.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
 
 	let { children } = $props();
@@ -94,6 +93,3 @@
 </AudioProvider>
 
 <ValueChangeOverlay supervisedValues={[displayVolume, displayRate]} />
-
-<!-- Тестовое приветственное модальное окно: появляется при открытии сайта -->
-<WelcomeModal />

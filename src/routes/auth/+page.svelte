@@ -2,45 +2,82 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { Send } from '@lucide/svelte';
+	import { LogOut } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
+	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
 	import { authClient } from '$lib/client/authClient';
 	import { useSession } from '$lib/client/session.svelte';
+	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
 
 	const session = useSession();
 
-	let isSubmitting = $state(false);
+	let isSubmitting = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
+	let errorModalOpen = $state(false);
 
-	async function signInWithTelegram() {
+	const from = $derived.by(() => {
+		const raw = page.url.searchParams.get('from') ?? resolve('/');
+		// Страница входа — туда возвращаться нельзя (цикл). Уводим на главную.
+		if (raw === resolve('/auth')) return resolve('/');
+		return raw;
+	});
+
+	// Если провайдер вернул нас с ошибкой (отмена авторизации, access_denied
+	// и т.п.) — показываем модальное окно с сообщением.
+	$effect(() => {
+		if (session.isPending) return;
+		if (session.user) return;
+		const params = page.url.searchParams;
+		const err = params.get('error') ?? params.get('error_description');
+		if (err) {
+			errorMessage =
+				err === 'access_denied'
+					? 'Вы отменили авторизацию. Вход не выполнен.'
+					: decodeURIComponent(err).replace(/^[A-Za-z_]+:\s*/, '');
+			errorModalOpen = true;
+			// Чистим URL от параметров ошибки, чтобы при повторном визите
+			// модалка не открывалась снова.
+			const url = new URL(window.location.href);
+			url.searchParams.delete('error');
+			url.searchParams.delete('error_description');
+			url.searchParams.delete('provider');
+			window.history.replaceState({}, '', url);
+		}
+	});
+
+	function showError(message: string) {
+		errorMessage = message;
+		errorModalOpen = true;
+	}
+
+	async function startOAuth(provider: AuthProvider) {
 		if (isSubmitting) return;
-		isSubmitting = true;
+		isSubmitting = provider.id;
 		errorMessage = null;
-
-		const from = page.url.searchParams.get('from') ?? '/';
-
 		try {
-			const result = await authClient.signInWithTelegramOIDC({
+			// Лучше-auth сам создаёт состояние и редиректит на страницу провайдера:
+			// Telegram -> oauth.telegram.org (OIDC), Discord -> discord.com (OAuth2).
+			const result = (await authClient.signIn.social({
+				provider: provider.id,
 				callbackURL: from
-			});
-
+			})) as unknown as {
+				data?: { url?: string; redirect?: boolean } | null;
+				error?: { message?: string } | null;
+			};
 			if (result.error) {
-				errorMessage = result.error.message || 'Не удалось войти через Telegram';
-				isSubmitting = false;
+				showError(result.error.message || 'Не удалось войти');
+				isSubmitting = null;
 				return;
 			}
-
-			// better-auth сам редиректит на страницу авторизации Telegram (oauth.telegram.org)
-			const socialSignIn = result.data as { url?: string; redirect?: boolean } | null;
-			if (socialSignIn?.url) {
-				window.location.href = socialSignIn.url;
+			const url = result.data?.url;
+			if (url) {
+				window.location.href = url;
 				return;
 			}
-
-			isSubmitting = false;
+			isSubmitting = null;
 		} catch {
-			errorMessage = 'Не удалось войти через Telegram';
-			isSubmitting = false;
+			showError('Не удалось войти');
+			isSubmitting = null;
 		}
 	}
 
@@ -56,8 +93,8 @@
 		<div class="space-y-2 text-center">
 			<h1 class="text-2xl font-bold tracking-tight">Вход в аккаунт</h1>
 			<p class="text-sm text-muted-foreground">
-				Войдите через Telegram, чтобы синхронизировать прогресс прослушивания, закладки и загрузки
-				между устройствами.
+				Войдите через Telegram или Discord, чтобы синхронизировать прогресс прослушивания, закладки
+				и загрузки между устройствами.
 			</p>
 		</div>
 
@@ -78,37 +115,58 @@
 				</div>
 				<div>
 					<p class="font-semibold">{session.user.name}</p>
-					<p class="text-xs text-muted-foreground">{session.user.email}</p>
 				</div>
-				<Button variant="outline" class="w-full" onclick={signOut} disabled={isSubmitting}>
+				<Button variant="outline" class="w-full" onclick={signOut}>
+					<LogOut class="h-4 w-4" />
 					Выйти
 				</Button>
 			</div>
+			<p class="text-center text-xs text-muted-foreground">
+				Управлять способами входа можно на
+				<a href={resolve('/profile')} class="underline underline-offset-2 hover:text-foreground"
+					>странице профиля</a
+				>.
+			</p>
 		{:else}
 			<div class="space-y-3">
-				<Button
-					class="w-full gap-2 py-3"
-					size="lg"
-					onclick={signInWithTelegram}
-					disabled={isSubmitting}
-				>
-					<Send class="h-5 w-5" />
-					{#if isSubmitting}
-						Подключение к Telegram…
-					{:else}
-						Войти через Telegram
-					{/if}
-				</Button>
-
-				{#if errorMessage}
-					<p class="text-sm text-destructive">{errorMessage}</p>
-				{/if}
+				{#each AUTH_PROVIDERS as provider (provider.id)}
+					{@const Icon = provider.icon}
+					<Button
+						size="lg"
+						class="w-full gap-2.5 border-0 py-3 text-white shadow-sm transition hover:brightness-110"
+						style="background-color: {provider.brandColor};"
+						disabled={isSubmitting !== null}
+						onclick={() => startOAuth(provider)}
+					>
+						<Icon class="h-5 w-5 shrink-0" />
+						{#if isSubmitting === provider.id}
+							Подключение…
+						{:else}
+							Войти через {provider.label}
+						{/if}
+					</Button>
+				{/each}
 
 				<p class="text-center text-xs text-muted-foreground">
-					Нажимая «Войти», вы соглашаетесь на передачу имени, username и фото профиля из Telegram.
-					Ваш номер телефона остаётся скрытым.
+					Входя через Telegram, вы соглашаетесь на передачу имени, username и фото профиля. Входя
+					через Discord — на передачу имени и аватара.
 				</p>
 			</div>
 		{/if}
 	</div>
+
+	<!-- Модалка об ошибке авторизации -->
+	<BaseModal
+		bind:open={errorModalOpen}
+		title="Не удалось войти"
+		description={errorMessage ?? ''}
+		showCloseButton={true}
+		onClose={() => (errorModalOpen = false)}
+	>
+		{#snippet footer()}
+			<Button variant="outline" class="w-full" onclick={() => (errorModalOpen = false)}>
+				Понятно
+			</Button>
+		{/snippet}
+	</BaseModal>
 </div>

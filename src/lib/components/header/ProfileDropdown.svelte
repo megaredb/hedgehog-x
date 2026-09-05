@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { User, Settings, LogOut, LogIn } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { authClient } from '$lib/client/authClient';
@@ -22,6 +23,14 @@
 	} = $props();
 
 	const session = useSession();
+
+	// Какой путь отдадим в resolve(): страница входа, если мы не на ней,
+	// иначе главная. (resolve() зовём в шаблоне, чтобы пройти eslint rule
+	// svelte/no-navigation-without-resolve.)
+	const authTarget = $derived.by(() => {
+		const current = page.url.pathname;
+		return current === '/auth' ? '/' : current + page.url.search;
+	});
 
 	async function signOut() {
 		await authClient.signOut();
@@ -58,7 +67,7 @@
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 {:else}
-	<a href={resolve('/auth')} class={triggerClass}>
+	<a href={resolve(`/auth?from=${encodeURIComponent(authTarget)}`)} class={triggerClass}>
 		<span class="flex items-center gap-2">
 			<LogIn class="h-4 w-4" />
 			<span class="text-sm font-medium">Войти</span>

@@ -3,7 +3,17 @@ import type { BetterFetchError } from '@better-fetch/fetch';
 
 interface SessionData {
 	session: { id: string; userId: string; expiresAt: Date; token: string } | null;
-	user: { id: string; name: string; email: string; image?: string | null } | null;
+	user: {
+		id: string;
+		name: string;
+		email: string;
+		image?: string | null;
+		// Аватары/username каждого провайдера (доп.поля user)
+		telegramAvatar?: string | null;
+		telegramOidcUsername?: string | null;
+		discordAvatar?: string | null;
+		discordUsername?: string | null;
+	} | null;
 }
 
 interface SessionState {
@@ -26,10 +36,14 @@ export function useSession() {
 	let isPending = $state(atom.get().isPending);
 
 	$effect(() => {
-		const unsubscribe = atom.listen((state: SessionState) => {
-			data = state.data;
-			error = state.error;
-			isPending = state.isPending;
+		const state = atom.get();
+		data = state.data;
+		error = state.error;
+		isPending = state.isPending;
+		const unsubscribe = atom.listen((next: SessionState) => {
+			data = next.data;
+			error = next.error;
+			isPending = next.isPending;
 		});
 		return unsubscribe;
 	});
