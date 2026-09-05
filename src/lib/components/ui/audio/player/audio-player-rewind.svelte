@@ -26,7 +26,7 @@
 	const isDisabled = $derived(
 		!audioStore.currentTrack || audioStore.currentTime <= 0 || isLiveStream
 	);
-	const tooltipLabel = $derived(isLiveStream ? 'Not available for live streams' : 'Skip backward');
+	const tooltipLabel = $derived(isLiveStream ? 'Недоступно для прямого эфира' : 'Перемотать назад');
 
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);

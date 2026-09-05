@@ -7,13 +7,20 @@ export type Track = {
 	images?: string[];
 	duration?: number;
 	album?: string;
+	/** Real volume ID (UUID) — separate from album title */
+	volumeId?: string;
+	/** Book ID (UUID) — for building navigation links */
+	bookId?: string;
 	genre?: string;
 	live?: boolean;
+	/** Start playback from this position in seconds (used for resume) */
+	startTime?: number;
 	[key: string]: unknown;
 };
 
 type LoadParams = {
 	url: string;
+	id?: string | number;
 	startTime?: number;
 	isLiveStream?: boolean;
 };
@@ -100,6 +107,8 @@ class HtmlAudio {
 		});
 	}
 
+	private currentBlobUrl: string | null = null;
+
 	cleanup(): void {
 		if (this.audio) {
 			this.audio.pause();
@@ -109,6 +118,10 @@ class HtmlAudio {
 		if (this.fadeTimeout) {
 			clearTimeout(this.fadeTimeout);
 			this.fadeTimeout = null;
+		}
+		if (this.currentBlobUrl) {
+			URL.revokeObjectURL(this.currentBlobUrl);
+			this.currentBlobUrl = null;
 		}
 		this.playPromise = null;
 	}
@@ -134,30 +147,64 @@ class HtmlAudio {
 	}
 
 	async load(params: LoadParams): Promise<void> {
-		const { url, startTime = 0, isLiveStream = false } = params;
-		const result = this.ifClient(() => this._load({ url, startTime, isLiveStream }));
+		const { url, id, startTime = 0, isLiveStream = false } = params;
+		const result = this.ifClient(() => this._load({ url, id, startTime, isLiveStream }));
 		if (result) await result;
 	}
 
 	private async _load(params: {
 		url: string;
+		id?: string | number;
 		startTime: number;
 		isLiveStream: boolean;
 	}): Promise<void> {
-		const { url, startTime, isLiveStream } = params;
+		const { url, id, startTime, isLiveStream } = params;
 		const audio = this.ensureAudio();
 		if (!audio) return;
 
 		try {
 			this.retryAttempts = 0;
-			if (audio.src === url) {
+
+			let finalUrl = url;
+			if (!isLiveStream && id) {
+				const idStr = String(id);
+				try {
+					const opfsRoot = await navigator.storage.getDirectory();
+					const fileHandle = await opfsRoot.getFileHandle(idStr);
+					const file = await fileHandle.getFile();
+					finalUrl = URL.createObjectURL(file);
+				} catch (err) {
+					// Fallback to checking legacy CacheStorage (for files downloaded before OPFS migration)
+					try {
+						const cache = await caches.open('audio-cache');
+						const cachedResponse = await cache.match(url, { ignoreSearch: true, ignoreVary: true });
+						if (cachedResponse) {
+							const blob = await cachedResponse.blob();
+							finalUrl = URL.createObjectURL(blob);
+						}
+					} catch {
+						console.warn('Failed to read audio from cache/OPFS:', err);
+					}
+				}
+			}
+
+			// Clean up previous blob URL if we are loading a new one
+			if (this.currentBlobUrl && this.currentBlobUrl !== finalUrl) {
+				URL.revokeObjectURL(this.currentBlobUrl);
+				this.currentBlobUrl = null;
+			}
+			if (finalUrl.startsWith('blob:')) {
+				this.currentBlobUrl = finalUrl;
+			}
+
+			if (audio.src === finalUrl || (audio.src === url && finalUrl === url)) {
 				if (audio.currentTime !== startTime && !isLiveStream) audio.currentTime = startTime;
 				return;
 			}
 
 			audio.pause();
 			audio.src = '';
-			audio.src = url;
+			audio.src = finalUrl;
 			audio.preload = 'auto';
 
 			const loadTimeout = isLiveStream ? this.LOAD_TIMEOUT_LIVE : this.LOAD_TIMEOUT_NORMAL;

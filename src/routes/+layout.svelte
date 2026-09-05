@@ -5,12 +5,18 @@
 	import AppBreadcrumbs from '$lib/components/layout/AppBreadcrumbs.svelte';
 	import GlobalPlayer from '$lib/components/audio/GlobalPlayer.svelte';
 	import { ModeWatcher } from 'mode-watcher';
-	import { onNavigate } from '$app/navigation';
+	import { onNavigate, afterNavigate } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { pwaInfo } from 'virtual:pwa-info';
 	import { AudioProvider } from '$lib/components/ui/audio/provider';
 	import { Tooltip } from 'bits-ui';
+	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
+	import { audioStore } from '$lib/audio-store.svelte';
 
 	let { children } = $props();
+
+	let displayVolume = $derived(`${Math.round(audioStore.volume * 100)}%`);
+	let displayRate = $derived(`${Math.round(audioStore.playbackRate * 100)}%`);
 
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
@@ -21,6 +27,38 @@
 				await navigation.complete;
 			});
 		});
+	});
+
+	afterNavigate(async ({ to }) => {
+		if (to && typeof navigator !== 'undefined' && navigator.onLine) {
+			try {
+				const cache = await caches.open('pages-cache');
+				const exists = await cache.match(to.url.pathname);
+				if (!exists) {
+					const res = await fetch(to.url.pathname);
+					if (res.ok) {
+						await cache.put(to.url.pathname, res);
+					}
+				}
+			} catch {
+				// Ошибки фонового кэширования страниц не должны влиять на UI
+			}
+		}
+	});
+
+	onMount(async () => {
+		if (pwaInfo) {
+			const { registerSW } = await import('virtual:pwa-register');
+			registerSW({
+				immediate: true,
+				onRegistered(r) {
+					console.log('SW registered:', r);
+				},
+				onRegisterError(error) {
+					console.error('SW registration error:', error);
+				}
+			});
+		}
 	});
 </script>
 
@@ -53,3 +91,5 @@
 		</div>
 	</Tooltip.Provider>
 </AudioProvider>
+
+<ValueChangeOverlay supervisedValues={[displayVolume, displayRate]} />

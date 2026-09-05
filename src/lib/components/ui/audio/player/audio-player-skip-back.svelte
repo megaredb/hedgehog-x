@@ -31,6 +31,7 @@
 	<Tooltip.Trigger>
 		{#snippet child({ props })}
 			<Button
+				aria-label="Предыдущий"
 				class={cn(className)}
 				data-slot="audio-skip-back-button"
 				disabled={isDisabled}
@@ -48,5 +49,5 @@
 			</Button>
 		{/snippet}
 	</Tooltip.Trigger>
-	<Tooltip.Content sideOffset={4}>Previous</Tooltip.Content>
+	<Tooltip.Content sideOffset={4}>Предыдущий</Tooltip.Content>
 </Tooltip.Root>

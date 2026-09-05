@@ -74,6 +74,15 @@ export interface SyncItem {
 	timestamp: number;
 }
 
+export interface OfflineDownload {
+	chapterId: string;
+	status: 'queued' | 'downloading' | 'downloaded' | 'error';
+	progress?: number;
+	totalBytes?: number;
+	error?: string;
+	createdAt?: number;
+}
+
 const db = new Dexie('HedgehogDB') as Dexie & {
 	books: EntityTable<OfflineBook, 'id'>;
 	volumes: EntityTable<OfflineVolume, 'id'>;
@@ -84,6 +93,8 @@ const db = new Dexie('HedgehogDB') as Dexie & {
 	volumeLikes: EntityTable<OfflineVolumeLike, 'volumeId'>;
 	chapterLikes: EntityTable<OfflineChapterLike, 'chapterId'>;
 	bookmarks: EntityTable<OfflineBookmark, 'id'>;
+
+	downloads: EntityTable<OfflineDownload, 'chapterId'>;
 
 	syncQueue: EntityTable<SyncItem, 'id'>;
 };
@@ -98,6 +109,8 @@ db.version(1).stores({
 	volumeLikes: 'volumeId',
 	chapterLikes: 'chapterId',
 	bookmarks: 'id, chapterId',
+
+	downloads: 'chapterId, status',
 
 	syncQueue: '++id, action, timestamp'
 });

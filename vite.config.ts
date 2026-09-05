@@ -24,6 +24,9 @@ export default defineConfig({
 			},
 			serviceWorker: {
 				register: false
+			},
+			paths: {
+				relative: false
 			}
 		}),
 

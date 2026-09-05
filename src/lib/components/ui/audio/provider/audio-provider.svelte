@@ -4,6 +4,7 @@
 	import { htmlAudio } from '$lib/html-audio.js';
 	import type { Track } from '$lib/html-audio.js';
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
+	import { db } from '$lib/client/db';
 
 	interface Props {
 		tracks?: Track[];
@@ -24,6 +25,8 @@
 	let lastSeekTime = 0;
 	let lastUpdateTime = 0;
 	let prevTrackId: string | number | undefined = undefined;
+	let lastProgressSaveTime = 0;
+	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
 
 	// ─── Sync tracks prop → store ───────────────────────────────────────────────
 	$effect(() => {
@@ -54,6 +57,24 @@
 		if (!audio) return;
 		if (Math.abs(audioStore.currentTime - audio.currentTime) > MIN_UPDATE_THRESHOLD) {
 			audioStore.syncTime(audio.currentTime, audio.duration || 0);
+		}
+		// Save progress to Dexie every PROGRESS_SAVE_INTERVAL ms
+		if (
+			audioStore.currentTrack?.id &&
+			audio.currentTime > 0 &&
+			now - lastProgressSaveTime >= PROGRESS_SAVE_INTERVAL
+		) {
+			lastProgressSaveTime = now;
+			const chapterId = String(audioStore.currentTrack.id);
+			const progressSeconds = Math.floor(audio.currentTime);
+			db.progress
+				.put({
+					chapterId,
+					progressSeconds,
+					isCompleted: false,
+					updatedAt: now
+				})
+				.catch(() => {});
 		}
 	}
 
@@ -92,7 +113,7 @@
 			const currentTime = audio.currentTime;
 			const wasPlaying = !audio.paused;
 			if (audioStore.currentTrack) {
-				await htmlAudio.load({ url: audioStore.currentTrack.url, startTime: currentTime });
+				await htmlAudio.load({ url: audioStore.currentTrack.url, id: audioStore.currentTrack.id, startTime: currentTime });
 				if (wasPlaying) await htmlAudio.play();
 			}
 			return true;
@@ -181,6 +202,19 @@
 			const audioDuration = audio.duration || 0;
 			const isLiveStream = htmlAudio.isLive(audioDuration);
 
+			// Mark chapter as completed in local DB
+			if (audioStore.currentTrack?.id && !isLiveStream && audioDuration > 0) {
+				const chapterId = String(audioStore.currentTrack.id);
+				db.progress
+					.put({
+						chapterId,
+						progressSeconds: Math.floor(audioDuration),
+						isCompleted: true,
+						updatedAt: Date.now()
+					})
+					.catch(() => {});
+			}
+
 			if (audioStore.currentTrack && isLiveStream) {
 				audioStore.isError = true;
 				audioStore.errorMessage = 'Live stream connection lost';
@@ -191,6 +225,7 @@
 				try {
 					await htmlAudio.load({
 						url: audioStore.currentTrack.url,
+						id: audioStore.currentTrack.id,
 						startTime: 0,
 						isLiveStream
 					});
@@ -201,6 +236,12 @@
 				} catch {
 					/* fall through to next */
 				}
+			}
+
+			if (audioStore.sleepTimerEndOnTrack) {
+				audioStore.pause();
+				audioStore.cancelSleepTimer();
+				return;
 			}
 
 			audioStore.handleTrackEnd();
@@ -269,7 +310,7 @@
 			prevTrackId = track.id; // suppress the track-change effect on restore
 			try {
 				audioStore.isLoading = true;
-				await htmlAudio.load({ url: track.url, startTime, isLiveStream: isLive });
+				await htmlAudio.load({ url: track.url, id: track.id, startTime, isLiveStream: isLive });
 				htmlAudio.setVolume({ volume: audioStore.volume });
 				htmlAudio.setMuted(audioStore.isMuted);
 				htmlAudio.setPlaybackRate(audioStore.playbackRate);
@@ -311,8 +352,13 @@
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
 
+		// Reset progress save timer for new track
+		lastProgressSaveTime = 0;
+
+		const startTime = track.startTime ?? 0;
+
 		htmlAudio
-			.load({ url: track.url, startTime: 0, isLiveStream: false })
+			.load({ url: track.url, id: track.id, startTime, isLiveStream: false })
 			.then(() => {
 				audioStore.isLoading = false;
 				if (audioStore.isPlaying) return htmlAudio.play();
@@ -351,6 +397,27 @@
 	$effect(() => {
 		const qLen = audioStore.queue.length; // track reactively
 		if (qLen === 0 && preloadAudio) preloadAudio.src = '';
+	});
+
+	/** Sleep timer countdown ticker */
+	$effect(() => {
+		if (!audioStore.sleepTimerEndsAt) return;
+
+		const updateTimer = () => {
+			if (!audioStore.sleepTimerEndsAt) return;
+			const remaining = Math.max(0, Math.ceil((audioStore.sleepTimerEndsAt - Date.now()) / 1000));
+			audioStore.sleepTimerRemainingSec = remaining;
+
+			if (remaining <= 0) {
+				audioStore.pause();
+				audioStore.cancelSleepTimer();
+			}
+		};
+
+		updateTimer();
+		const interval = setInterval(updateTimer, 1000);
+
+		return () => clearInterval(interval);
 	});
 
 	/** Persist state to localStorage */

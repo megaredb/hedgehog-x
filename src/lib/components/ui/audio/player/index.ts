@@ -9,6 +9,9 @@ import SkipBack from './audio-player-skip-back.svelte';
 import SkipForward from './audio-player-skip-forward.svelte';
 import TimeDisplay from './audio-player-time-display.svelte';
 import Volume from './audio-player-volume.svelte';
+import Speed from './audio-player-speed.svelte';
+import SleepTimer from './audio-player-sleep-timer.svelte';
+import Download from './audio-player-download.svelte';
 
 export {
 	Root,
@@ -22,6 +25,9 @@ export {
 	SkipForward,
 	TimeDisplay,
 	Volume,
+	Speed,
+	SleepTimer,
+	Download,
 
 	//
 	Root as AudioPlayer,
@@ -34,5 +40,8 @@ export {
 	SkipBack as AudioPlayerSkipBack,
 	SkipForward as AudioPlayerSkipForward,
 	TimeDisplay as AudioPlayerTimeDisplay,
-	Volume as AudioPlayerVolume
+	Volume as AudioPlayerVolume,
+	Speed as AudioPlayerSpeed,
+	SleepTimer as AudioPlayerSleepTimer,
+	Download as AudioPlayerDownload
 };

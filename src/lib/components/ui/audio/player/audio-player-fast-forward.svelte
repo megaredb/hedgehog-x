@@ -27,7 +27,9 @@
 		if (!audioStore.currentTrack || isLiveStream) return true;
 		return audioStore.duration > 0 && audioStore.currentTime >= audioStore.duration;
 	});
-	const tooltipLabel = $derived(isLiveStream ? 'Not available for live streams' : 'Skip forward');
+	const tooltipLabel = $derived(
+		isLiveStream ? 'Недоступно для прямого эфира' : 'Перемотать вперёд'
+	);
 
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);

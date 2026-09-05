@@ -32,7 +32,7 @@
 	<Tooltip.Trigger>
 		{#snippet child({ props })}
 			<Button
-				aria-label="Next"
+				aria-label="Следующий"
 				class={cn(className)}
 				data-slot="audio-skip-forward-button"
 				disabled={isDisabled}
@@ -50,5 +50,5 @@
 			</Button>
 		{/snippet}
 	</Tooltip.Trigger>
-	<Tooltip.Content sideOffset={4}>Next</Tooltip.Content>
+	<Tooltip.Content sideOffset={4}>Следующий</Tooltip.Content>
 </Tooltip.Root>

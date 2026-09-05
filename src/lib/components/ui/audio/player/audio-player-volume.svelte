@@ -24,7 +24,7 @@
 		return Volume2;
 	});
 
-	const tooltipLabel = $derived(audioStore.isMuted ? 'Muted' : `Volume ${volumePercent}%`);
+	const tooltipLabel = $derived(audioStore.isMuted ? 'Беззвуч.' : `Громк. ${volumePercent}%`);
 
 	function handleSliderChange(v: number) {
 		if (v === undefined) return;
@@ -56,12 +56,8 @@
 		<Tooltip.Content sideOffset={4}>{tooltipLabel}</Tooltip.Content>
 	</Tooltip.Root>
 
-	<DropdownMenu.Content class={cn('flex w-48 flex-col gap-1.5 p-1.5', className)}>
-		<div class="flex items-center justify-between">
-			<span class="text-sm">Volume</span>
-			<span class="font-mono text-sm tabular-nums">{volumePercent}%</span>
-		</div>
-		<div class="flex items-center gap-2">
+	<DropdownMenu.Content align="center" class={cn('flex flex-col min-w-8 gap-1.5 p-1.5', className)}>
+		<div class="flex flex-col-reverse items-center gap-2">
 			<!-- Mute toggle icon -->
 			<button
 				type="button"
@@ -77,6 +73,7 @@
 
 			<Slider
 				type="single"
+				orientation="vertical"
 				class={className}
 				max={100}
 				min={0}
@@ -87,6 +84,7 @@
 			/>
 
 			<Volume2 aria-hidden="true" class="size-4 shrink-0 opacity-60" />
+			<span class="font-mono text-xs tabular-nums">{volumePercent}%</span>
 		</div>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>

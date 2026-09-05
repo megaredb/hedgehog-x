@@ -24,7 +24,7 @@
 
 	const showSpinner = $derived(audioStore.isLoading || audioStore.isBuffering);
 	const isDisabled = $derived(showSpinner || !audioStore.currentTrack);
-	const tooltipLabel = $derived(audioStore.isPlaying ? 'Pause' : 'Play');
+	const tooltipLabel = $derived(audioStore.isPlaying ? 'Пауза' : 'Играть');
 
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);

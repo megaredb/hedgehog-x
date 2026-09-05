@@ -70,6 +70,9 @@ class AudioStore {
 	isError = $state(false);
 	errorMessage: string | null = $state(null);
 	currentQueueIndex = $state(-1);
+	sleepTimerEndsAt: number | null = $state(null);
+	sleepTimerEndOnTrack = $state(false);
+	sleepTimerRemainingSec = $state(0);
 
 	constructor() {
 		if (canUseDOM()) this.loadFromStorage();
@@ -146,6 +149,9 @@ class AudioStore {
 		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
 		this.currentTime = valid;
 		this.progress = this.duration > 0 ? (valid / this.duration) * 100 : 0;
+		// Directly seek the audio element so fast drags are applied immediately.
+		// The $effect in AudioProvider will skip the redundant seek via lastSeekTime.
+		htmlAudio.setCurrentTime(valid);
 	}
 
 	next(): void {
@@ -169,6 +175,8 @@ class AudioStore {
 		if (this.currentTime > 3 && !this.shuffleEnabled) {
 			this.currentTime = 0;
 			this.progress = 0;
+			// Must call directly: $effect skips seek when lastSeekTime === 0 (same value).
+			htmlAudio.setCurrentTime(0);
 			return;
 		}
 		const idx = calculatePreviousIndex({
@@ -295,6 +303,24 @@ class AudioStore {
 	}
 	setInsertMode(mode: InsertMode): void {
 		this.insertMode = mode;
+	}
+
+	startSleepTimer(duration: number | 'end_of_track'): void {
+		if (duration === 'end_of_track') {
+			this.sleepTimerEndOnTrack = true;
+			this.sleepTimerEndsAt = null;
+			this.sleepTimerRemainingSec = 0;
+		} else {
+			this.sleepTimerEndOnTrack = false;
+			this.sleepTimerEndsAt = Date.now() + duration * 60 * 1000;
+			this.sleepTimerRemainingSec = duration * 60;
+		}
+	}
+
+	cancelSleepTimer(): void {
+		this.sleepTimerEndsAt = null;
+		this.sleepTimerEndOnTrack = false;
+		this.sleepTimerRemainingSec = 0;
 	}
 
 	shuffle(): void {

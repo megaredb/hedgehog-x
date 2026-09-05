@@ -23,45 +23,59 @@
 		onTouchMove
 	}: Props = $props();
 
-	// Clamp helper
 	const pct = (v: number) => `${Math.max(0, Math.min(100, v))}%`;
 
 	function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
 		onValueChange?.([Number(e.currentTarget.value)]);
 	}
+
+	// === УЛУЧШЕННАЯ ЛОГИКА ПЕРЕТАСКИВАНИЯ ===
+	let isPointerDown = false; // Зажата ли кнопка мыши/палец
+	let isDragging = $state(false); // Начали ли мы физически тащить ползунок
 </script>
 
-<!--
-  Layered slider:
-  1. muted bg track
-  2. buffer progress
-  3. play progress
-  4. invisible <input type="range"> for interaction
-  5. visible thumb
--->
 <div
 	class={cn(
-		'relative flex h-4 w-full cursor-pointer touch-none items-center select-none',
+		'group relative flex w-full cursor-pointer touch-none items-center select-none py-2',
 		disabled && 'pointer-events-none opacity-50',
 		className
 	)}
 	role="presentation"
 >
-	<!-- Track background -->
-	<div class="bg-muted absolute h-1.5 w-full overflow-hidden rounded-full">
-		<!-- Buffer -->
+	<div
+		class={cn(
+			'bg-muted/60 relative w-full overflow-hidden rounded-full transition-all duration-200',
+			// Держим толщину при перетаскивании или наведении
+			isDragging ? 'h-2' : 'h-1 group-hover:h-2'
+		)}
+	>
 		<div
-			class="bg-muted-foreground/30 absolute left-0 h-full rounded-full transition-[width]"
+			class="bg-muted-foreground/40 absolute left-0 h-full rounded-full transition-[width] duration-200"
 			style="width: {pct(bufferValue)}"
 		></div>
-		<!-- Progress -->
+
 		<div
-			class="bg-primary absolute left-0 h-full rounded-full transition-[width]"
+			class={cn(
+				'bg-primary absolute left-0 h-full rounded-full',
+				// Анимация работает всегда, КРОМЕ моментов, когда мы физически тащим ползунок
+				!isDragging && 'transition-[width] duration-200'
+			)}
 			style="width: {pct(value)}"
 		></div>
 	</div>
 
-	<!-- Native range input (invisible, full-width, handles a11y & drag) -->
+	<div
+		class={cn(
+			'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full bg-primary shadow-sm pointer-events-none z-10',
+			// Если тащим - кружок видим. Иначе показываем только при hover
+			isDragging
+				? 'opacity-100 scale-100'
+				: 'opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100',
+			!isDragging && 'transition-all duration-200'
+		)}
+		style="left: {pct(value)}"
+	></div>
+
 	<input
 		type="range"
 		min="0"
@@ -70,20 +84,36 @@
 		{value}
 		{disabled}
 		aria-valuenow={value}
-		class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+		class="absolute inset-0 h-full w-full cursor-pointer opacity-0 z-20"
 		oninput={handleInput}
 		onmousemove={onMouseMove}
-		ontouchstart={onTouchStart}
-		ontouchmove={onTouchMove}
+		ontouchstart={(e) => {
+			isPointerDown = true;
+			onTouchStart?.(e);
+		}}
+		ontouchmove={(e) => {
+			// Отключаем анимацию только если начали водить пальцем
+			if (isPointerDown) isDragging = true;
+			onTouchMove?.(e);
+		}}
+		ontouchend={() => {
+			isPointerDown = false;
+			isDragging = false;
+		}}
+		onpointerdown={() => {
+			isPointerDown = true;
+		}}
+		onpointermove={() => {
+			// Отключаем анимацию только если двигаем зажатой мышью
+			if (isPointerDown) isDragging = true;
+		}}
+		onpointerup={() => {
+			isPointerDown = false;
+			isDragging = false;
+		}}
+		onpointercancel={() => {
+			isPointerDown = false;
+			isDragging = false;
+		}}
 	/>
-
-	<!-- Visible thumb -->
-	<div
-		class={cn(
-			'pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full',
-			'border-primary bg-background border-2 shadow ring-0 transition-all',
-			'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2'
-		)}
-		style="left: {pct(value)}"
-	></div>
 </div>
