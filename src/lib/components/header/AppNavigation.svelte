@@ -16,6 +16,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import ThemeSwitchButton from './ThemeSwitchButton.svelte';
 	import ProfileDropdown from './ProfileDropdown.svelte';
+	import { useSession } from '$lib/client/session.svelte';
+
+	const session = useSession();
 
 	let y = $state(0);
 	let isMobileMenuOpen = $state(false);
@@ -106,15 +109,36 @@
 			side="top"
 			triggerClass="flex items-center gap-3 text-left p-1.5 rounded-xl hover:bg-muted/40 transition-colors w-full focus:outline-none select-none"
 		>
-			<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
-				<Avatar.Image src="/logo.webp" alt="User Profile" />
-				<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">ME</Avatar.Fallback
-				>
-			</Avatar.Root>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-semibold truncate text-foreground leading-snug">Мой Профиль</p>
-				<p class="text-xs text-muted-foreground truncate leading-normal">Hedgehog User</p>
-			</div>
+			{#if session.user}
+				<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
+					{#if session.user.image}
+						<Avatar.Image src={session.user.image} alt={session.user.name} />
+					{:else}
+						<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">
+							{session.user.name?.charAt(0).toUpperCase()}
+						</Avatar.Fallback>
+					{/if}
+				</Avatar.Root>
+				<div class="flex-1 min-w-0">
+					<p class="text-sm font-semibold truncate text-foreground leading-snug">
+						{session.user.name}
+					</p>
+					<p class="text-xs text-muted-foreground truncate leading-normal">@telegram</p>
+				</div>
+			{:else}
+				<div class="flex items-center gap-3">
+					<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
+						<Avatar.Image src="/logo.webp" alt="Гость" />
+						<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold"
+							>Г</Avatar.Fallback
+						>
+					</Avatar.Root>
+					<div class="flex-1 min-w-0">
+						<p class="text-sm font-semibold truncate text-foreground leading-snug">Гость</p>
+						<p class="text-xs text-muted-foreground truncate leading-normal">Войдите в аккаунт</p>
+					</div>
+				</div>
+			{/if}
 		</ProfileDropdown>
 
 		<div class="shrink-0 flex items-center justify-center">
@@ -181,9 +205,13 @@
 			triggerClass="h-8 w-8 rounded-full border border-border/80 shadow-sm overflow-hidden focus:outline-none"
 		>
 			<Avatar.Root class="h-8 w-8">
-				<Avatar.Image src="/logo.webp" alt="User Profile" />
-				<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">ME</Avatar.Fallback
-				>
+				{#if session.user?.image}
+					<Avatar.Image src={session.user.image} alt={session.user.name} />
+				{:else}
+					<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">
+						{session.user?.name?.charAt(0).toUpperCase() ?? 'Г'}
+					</Avatar.Fallback>
+				{/if}
 			</Avatar.Root>
 		</ProfileDropdown>
 	</div>
