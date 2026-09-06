@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Link2Off, Plus, Trash2, UserRound, ShieldAlert } from '@lucide/svelte';
+	import { Link2Off, Plus, Trash2, UserRound, ShieldAlert, Crown } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { useSession } from '$lib/client/session.svelte';
 	import { useAccounts } from '$lib/client/accounts.svelte';
+	import {
+		boostySubscriptionStatus,
+		formatBoostyDate,
+		type BoostySubscriptionStatus
+	} from '$lib/client/boosty';
 	import {
 		AUTH_PROVIDERS,
 		providerAvatar,
@@ -14,6 +19,7 @@
 	} from '$lib/client/providers';
 	import ConfirmModal from '$lib/components/overlay/ConfirmModal.svelte';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
+	import BoostyLogin from '$lib/components/auth/BoostyLogin.svelte';
 	import {
 		DELETE_CONFIRM_TEXTS,
 		computeDeleteButtons,
@@ -23,6 +29,12 @@
 	const session = useSession();
 	const accounts = useAccounts();
 
+	let boostyLinkOpen = $state(false);
+
+	// Статус подписки HEDGEHOG.INC в Boosty (для залогиненного юзера).
+	let boostySubscription = $state<BoostySubscriptionStatus | null>(null);
+	let boostySubError = $state<string | null>(null);
+
 	// Загружаем способы входа, как только появился пользователь.
 	let loadedForUser = $state<string | null>(null);
 
@@ -31,8 +43,20 @@
 		if (userId && loadedForUser !== userId) {
 			loadedForUser = userId;
 			accounts.load();
+			void loadBoostySubscription();
 		}
 	});
+
+	async function loadBoostySubscription() {
+		try {
+			const status = await boostySubscriptionStatus();
+			boostySubscription = status;
+			boostySubError = status.error;
+		} catch (e) {
+			boostySubError = e instanceof Error ? e.message : 'Не удалось загрузить подписку';
+			boostySubscription = null;
+		}
+	}
 
 	// Если сессия загрузилась и пользователя нет — уводим на страницу входа.
 	// (блок «Вы не авторизованы» на этой странице не рисуем вовсе)
@@ -43,6 +67,11 @@
 	});
 
 	async function linkProvider(providerId: string) {
+		// Boosty — не OAuth: привязка идёт через телефон + SMS-код.
+		if (providerId === 'boosty') {
+			boostyLinkOpen = true;
+			return;
+		}
 		const url = await accounts.link(providerId, '/profile');
 		if (url) {
 			// Редирект на страницу авторизации провайдера (Discord/Telegram)
@@ -295,6 +324,64 @@
 				{/if}
 			</section>
 
+			<!-- подписка HEDGEHOG.INC в Boosty (видна только при привязанном Boosty) -->
+			{#if isLinked('boosty')}
+				<section class="mt-8 rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
+					<div class="flex items-center gap-2">
+						<Crown class="size-5 text-primary" />
+						<h2 class="text-xl font-bold tracking-tight">Подписка HEDGEHOG.INC</h2>
+					</div>
+					<p class="text-muted-foreground mt-1 text-sm">
+						Статус вашей подписки на аудиокниги в Boosty.
+					</p>
+
+					{#if boostySubError}
+						<p class="mt-3 text-sm text-destructive">{boostySubError}</p>
+					{:else if boostySubscription === null}
+						<p class="mt-3 text-sm text-muted-foreground">Загружаем статус…</p>
+					{:else if !boostySubscription.subscribed}
+						<div class="mt-3 rounded-lg border border-border/60 bg-muted/30 p-4 text-sm">
+							Активной подписки на HEDGEHOG.INC нет.&nbsp;
+							<a
+								href="https://boosty.to/hedgehoginc"
+								target="_blank"
+								rel="noreferrer"
+								class="font-medium text-primary underline underline-offset-2"
+								>Оформить на boosty.to</a
+							>
+						</div>
+					{:else}
+						<div class="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4">
+							<div class="flex flex-wrap items-center justify-between gap-2">
+								<span class="font-semibold">{boostySubscription.levelName ?? 'Подписка'}</span>
+								<span class="text-lg font-bold text-primary">
+									{boostySubscription.priceRub != null
+										? boostySubscription.priceRub.toLocaleString('ru-RU') + ' ₽'
+										: '—'}
+									<span class="text-sm font-normal text-muted-foreground">
+										/ {boostySubscription.periodMonths ?? 1} мес
+									</span>
+								</span>
+							</div>
+							<div class="text-sm text-muted-foreground">
+								{#if boostySubscription.isPaused}
+									<span class="text-amber-600">Подписка приостановлена.</span>&nbsp;
+								{/if}
+								{#if !boostySubscription.isFeePaid}
+									<span class="text-amber-600">Оплата ожидается.</span>&nbsp;
+								{/if}
+								{#if boostySubscription.nextPayTime}
+									Действует до&nbsp;<span class="font-medium text-foreground"
+										>{formatBoostyDate(boostySubscription.nextPayTime)}</span
+									>
+									(следующий платёж).
+								{/if}
+							</div>
+						</div>
+					{/if}
+				</section>
+			{/if}
+
 			<!-- опасная зона: удаление аккаунта -->
 			<section class="mt-10 rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
 				<div class="flex items-center gap-2 text-destructive">
@@ -355,6 +442,17 @@
 						{/each}
 					</div>
 				{/snippet}
+			</BaseModal>
+
+			<!-- Привязка Boosty: телефон + SMS-код -->
+			<BaseModal
+				bind:open={boostyLinkOpen}
+				title="Привязать Boosty"
+				description="Войдите по номеру телефона Boosty — мы привяжем аккаунт автоматически."
+				showCloseButton={true}
+				onClose={() => (boostyLinkOpen = false)}
+			>
+				<BoostyLogin callbackURL="/profile" />
 			</BaseModal>
 
 			<!-- модалка подтверждения отвязки провайдера -->

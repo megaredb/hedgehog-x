@@ -1,0 +1,140 @@
+import { refreshTokens } from '$lib/server/boosty/phone-client';
+
+/**
+ * Подписки пользователя Boosty: проверка подписки на блог HEDGEHOG.INC.
+ *
+ * Данные берём из приватного API Boosty как фронт:
+ *   GET /v1/user/subscriptions?limit=30&with_follow=true
+ *   Authorization: Bearer <access_token>
+ * (access обновляем по refresh_token, если нужно).
+ */
+
+/** Блог HEDGEHOG.INC в бусти. */
+export const HEDGEHOG_BLOG_URL = 'hedgehoginc';
+export const HEDGEHOG_OWNER_ID = 1876162;
+
+export interface HedgehogSubscriptionStatus {
+	/** Есть ли у пользователя привязанный Boosty-аккаунт. */
+	linked: boolean;
+	/** Есть ли активная подписка на блог HEDGEHOG.INC. */
+	subscribed: boolean;
+	/** Название уровня подписки (например «ПОВЕЛИТЕЛЬ!»). */
+	levelName: string | null;
+	/** Цена за период в рублях. */
+	priceRub: number | null;
+	/** Период подписки в месяцах (period), по умолчанию 1. */
+	periodMonths: number | null;
+	/** Дата следующего платежа (unix, секунды) — до какого числа действует. */
+	nextPayTime: number | null;
+	/** Дата оформления (unix, секунды). */
+	onTime: number | null;
+	/** Оплачена ли текущая подписка. */
+	isFeePaid: boolean;
+	/** Приостановлена ли подписка. */
+	isPaused: boolean;
+	/** Ошибка запроса к Boosty (если была). */
+	error: string | null;
+}
+
+interface SubscriptionRaw {
+	name?: string;
+	price?: number;
+	period?: number;
+	isFeePaid?: boolean;
+	isPaused?: boolean;
+	onTime?: number;
+	nextPayTime?: number | null;
+	currencyPrices?: Record<string, number>;
+	blog?: {
+		blogUrl?: string;
+		owner?: { id?: number; name?: string };
+	};
+}
+
+async function fetchSubscriptions(params: {
+	refreshToken: string;
+	deviceId: string;
+}): Promise<{ subs: SubscriptionRaw[]; newRefreshToken: string | null }> {
+	// 1. Получаем свежий access_token по refresh. ВАЖНО: каждый успешный
+	// refresh РОТИРУЕТ refresh_token (старый отзывается). Возвращаем новый
+	// наружу, чтобы вызывающий сохранил его в БД.
+	const tokens = await refreshTokens({
+		refreshToken: params.refreshToken,
+		deviceId: params.deviceId
+	});
+	// 2. Список подписок.
+	const res = await fetch('https://api.boosty.to/v1/user/subscriptions?limit=30&with_follow=true', {
+		headers: {
+			accept: 'application/json, text/plain, */*',
+			authorization: 'Bearer ' + tokens.accessToken,
+			'user-agent':
+				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+			'x-app': 'web',
+			'x-from-id': params.deviceId,
+			'x-locale': 'ru_RU'
+		}
+	});
+	if (!res.ok) {
+		throw new Error('Boosty subscriptions: HTTP ' + res.status);
+	}
+	const data = (await res.json()) as { data?: SubscriptionRaw[] };
+	return { subs: data.data ?? [], newRefreshToken: tokens.refreshToken };
+}
+
+export interface HedgehogSubscriptionResult {
+	status: HedgehogSubscriptionStatus;
+	/** Новый refresh_token (после ротации) — сохранить в БД. */
+	newRefreshToken: string | null;
+}
+
+const EMPTY_STATUS: HedgehogSubscriptionStatus = {
+	linked: true,
+	subscribed: false,
+	levelName: null,
+	priceRub: null,
+	periodMonths: null,
+	nextPayTime: null,
+	onTime: null,
+	isFeePaid: false,
+	isPaused: false,
+	error: null
+};
+
+/** Проверить подписку на HEDGEHOG.INC. */
+export async function getHedgehogSubscription(params: {
+	refreshToken: string;
+	deviceId: string;
+}): Promise<HedgehogSubscriptionResult> {
+	try {
+		const { subs, newRefreshToken } = await fetchSubscriptions(params);
+		// Ищем подписку строго по ownerId блога (HEDGEHOG.INC = 1876162),
+		// а не по имени владельца (оно может меняться).
+		const target = subs.find((s) => s.blog?.owner?.id === HEDGEHOG_OWNER_ID);
+		if (!target) {
+			return { status: EMPTY_STATUS, newRefreshToken };
+		}
+		return {
+			status: {
+				linked: true,
+				subscribed: true,
+				levelName: target.name ?? null,
+				priceRub: target.currencyPrices?.RUB ?? target.price ?? null,
+				periodMonths: target.period ?? 1,
+				nextPayTime: target.nextPayTime ?? null,
+				onTime: target.onTime ?? null,
+				isFeePaid: target.isFeePaid ?? false,
+				isPaused: target.isPaused ?? false,
+				error: null
+			},
+			newRefreshToken
+		};
+	} catch (e) {
+		return {
+			status: {
+				...EMPTY_STATUS,
+				error: e instanceof Error ? e.message : String(e)
+			},
+			newRefreshToken: null
+		};
+	}
+}

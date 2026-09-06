@@ -73,7 +73,10 @@ export const auth = betterAuth({
 			telegramAvatar: { type: 'string' },
 			telegramOidcUsername: { type: 'string' },
 			discordAvatar: { type: 'string' },
-			discordUsername: { type: 'string' }
+			discordUsername: { type: 'string' },
+			// Аватар и имя из Boosty — отдельно для карточки Boosty-способа входа.
+			boostyAvatar: { type: 'string' },
+			boostyName: { type: 'string' }
 		}
 	},
 	socialProviders: {

@@ -43,6 +43,13 @@
       "when": 1788644309889,
       "tag": "0005_fix-schema",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788709084780,
+      "tag": "0006_huge_enchantress",
+      "breakpoints": true
     }
   ]
 }

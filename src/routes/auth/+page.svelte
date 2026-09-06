@@ -5,6 +5,7 @@
 	import { LogOut } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
+	import BoostyLogin from '$lib/components/auth/BoostyLogin.svelte';
 	import { authClient } from '$lib/client/authClient';
 	import { useSession } from '$lib/client/session.svelte';
 	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
@@ -14,6 +15,7 @@
 	let isSubmitting = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let errorModalOpen = $state(false);
+	let boostyModalOpen = $state(false);
 
 	const from = $derived.by(() => {
 		const raw = page.url.searchParams.get('from') ?? resolve('/');
@@ -52,6 +54,13 @@
 
 	async function startOAuth(provider: AuthProvider) {
 		if (isSubmitting) return;
+		// Boosty — не OAuth: наш сервер сам вызывает приватный API входа по
+		// телефону+SMS (send-code/confirm-code), юзер ничего не вводит кроме
+		// телефона и кода.
+		if (provider.id === 'boosty') {
+			boostyModalOpen = true;
+			return;
+		}
 		isSubmitting = provider.id;
 		errorMessage = null;
 		try {
@@ -168,5 +177,16 @@
 				Понятно
 			</Button>
 		{/snippet}
+	</BaseModal>
+
+	<!-- Вход через Boosty: телефон + SMS-код -->
+	<BaseModal
+		bind:open={boostyModalOpen}
+		title="Вход через Boosty"
+		description="Войдите по номеру телефона: получите SMS-код и подтвердите — аккаунт привяжется автоматически."
+		showCloseButton={true}
+		onClose={() => (boostyModalOpen = false)}
+	>
+		<BoostyLogin callbackURL={from} />
 	</BaseModal>
 </div>
