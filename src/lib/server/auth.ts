@@ -11,26 +11,23 @@ import { db } from '$lib/server/db';
 // с заголовком Origin не пройдёт origin-check и вернёт 403 Invalid origin).
 // Протокол берётся из запроса (default 'auto'): для localhost — http, для
 // HTTPS-хоста (mkcert hedgehog-inc.localhost) — https.
-// fallback — используется, когда origin не определяется из запроса.
-const baseURL = {
-	allowedHosts: [
-		'hedgehog-inc.localhost',
-		'preview.hedgehog-inc.localhost',
-		// dev/preview порты (Host заголовок включает порт)
-		'localhost',
-		'localhost:5173',
-		'localhost:5174',
-		'localhost:4173',
-		'127.0.0.1',
-		'127.0.0.1:5173',
-		'127.0.0.1:5174',
-		'127.0.0.1:4173',
-		'[::1]',
-		'[::1]:5173',
-		'[::1]:5174'
-	],
-	fallback: 'http://localhost:5173'
-};
+//
+// Конфиг baseURL строится ТОЛЬКО из env — никаких значений по умолчанию:
+//   BETTER_AUTH_ALLOWED_HOSTS — список доверенных хостов через запятую
+//     (строка, без пробелов; порт включается в элемент, как 'localhost:5173').
+//   BETTER_AUTH_FALLBACK_URL — URL, используемый, когда origin не определяется
+//     из запроса (опционально).
+// Если BETTER_AUTH_ALLOWED_HOSTS не задан — baseURL не передаётся, и
+// лучше-auth сам выводит origin из запроса.
+const allowedHosts = env.BETTER_AUTH_ALLOWED_HOSTS
+	? env.BETTER_AUTH_ALLOWED_HOSTS.split(',')
+			.map((h) => h.trim())
+			.filter((h) => h.length > 0)
+	: undefined;
+
+const baseURL = allowedHosts?.length
+	? { allowedHosts, fallback: env.BETTER_AUTH_FALLBACK_URL }
+	: undefined;
 
 /**
  * Настоящий Telegram id пользователя из OIDC-claims.
