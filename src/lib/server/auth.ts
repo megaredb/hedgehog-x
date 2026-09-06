@@ -68,10 +68,15 @@ export const auth = betterAuth({
 	// в карточке соответствующего способа входа.
 	user: {
 		additionalFields: {
-			telegramAvatar: { type: 'string', input: false },
-			telegramOidcUsername: { type: 'string', input: false },
-			discordAvatar: { type: 'string', input: false },
-			discordUsername: { type: 'string', input: false }
+			// НЕ ставим input: false — better-auth выбрасывает такие поля при
+			// импорте профиля провайдера (parseAdditionalUserInputFromProviderProfile),
+			// и аватары/username не попадают в user. Храним их внутри процесса
+			// (приходят только из mapProfileToUser / mapOIDCProfileToUser),
+			// на изменение через API-эндпоинты не выставляем.
+			telegramAvatar: { type: 'string' },
+			telegramOidcUsername: { type: 'string' },
+			discordAvatar: { type: 'string' },
+			discordUsername: { type: 'string' }
 		}
 	},
 	socialProviders: {

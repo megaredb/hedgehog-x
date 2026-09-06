@@ -303,7 +303,45 @@ test.describe('Страница профиля: удаление аккаунт�
 		await expect.poll(() => deleteCalled).toBe(0);
 	});
 
-	test('все кнопки (включая подтверждение) меняются местами после нажатия', async ({ page }) => {
+	test('закрытие кликом по оверлею позволяет открыть модалку снова', async ({ page }) => {
+		await mockLoggedIn(page, [telegramAccount]);
+
+		let deleteCalled = 0;
+		await page.route('**/api/user/delete', async (route) => {
+			deleteCalled += 1;
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ ok: true })
+			});
+		});
+
+		await page.goto('/profile');
+
+		// Открываем модалку удаления
+		await page.getByRole('button', { name: 'Удалить аккаунт' }).click();
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible();
+
+		// Закрываем кликом по оверлею (затемняющий фон вне модалки)
+		await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } });
+		await expect(dialog).not.toBeVisible();
+
+		// Повторно открываем — модалка должна появиться снова (баг: требовалась перезагрузка)
+		await page.getByRole('button', { name: 'Удалить аккаунт' }).click();
+		await expect(dialog).toBeVisible();
+		await expect(dialog).toContainText('Удалить аккаунт');
+
+		// Закрываем и убеждаемся, что delete API не вызывался
+		await dialog
+			.getByRole('button', { name: /Не надо|Передумал|Оставить аккаунт|Вернуться|Отмена/ })
+			.first()
+			.click();
+		await expect(dialog).not.toBeVisible();
+		await expect.poll(() => deleteCalled).toBe(0);
+	});
+
+	test('кнопка подтверждения каждый раз на новом месте (4 шага)', async ({ page }) => {
 		await mockLoggedIn(page, [telegramAccount]);
 
 		let deleteCalled = 0;
@@ -320,31 +358,45 @@ test.describe('Страница профиля: удаление аккаунт�
 		await page.getByRole('button', { name: 'Удалить аккаунт' }).click();
 		const dialog = page.getByRole('dialog');
 
-		// Собираем порядок ВСЕХ кнопок на шаге 1
-		const step1 = await dialog
-			.locator('button')
-			.allTextContents()
-			.then((texts) => texts.map((t) => t.trim()).filter((t) => t !== '' && t !== 'Удаление…'));
+		// Тексты подтверждения по шагам (в порядке появления в модалке).
+		const confirmLabels = [
+			'Удалить аккаунт',
+			'Точно удалить?',
+			'Да, удалить навсегда',
+			'Удалить безвозвратно'
+		];
 
-		// Переходим на шаг 2 (нажимаем кнопку-подтверждение «Удалить аккаунт»)
-		await dialog.getByRole('button', { name: 'Удалить аккаунт' }).click();
-		await expect(dialog).toContainText('Точно удалить?');
+		/** Индекс позиции кнопки с данным текстом среди ВСЕХ 4 кнопок модалки. */
+		async function confirmPosition(label: string): Promise<number> {
+			const texts = await dialog
+				.locator('button')
+				.allTextContents()
+				.then((all) => all.map((t) => t.trim()).filter((t) => t !== '' && t !== 'Удаление…'));
+			expect(texts).toHaveLength(4);
+			const idx = texts.indexOf(label);
+			expect(idx).toBeGreaterThanOrEqual(0);
+			return idx;
+		}
 
-		const step2 = await dialog
-			.locator('button')
-			.allTextContents()
-			.then((texts) => texts.map((t) => t.trim()).filter((t) => t !== '' && t !== 'Удаление…'));
+		// Проходим все 4 шага: на каждом подтверждение должно быть НЕ там,
+		// где на предыдущем шаге (гарантия «нового места»).
+		const positions: number[] = [];
+		for (let step = 0; step < confirmLabels.length; step++) {
+			const label = confirmLabels[step];
+			const pos = await confirmPosition(label);
+			positions.push(pos);
+			if (positions.length > 1) {
+				expect(pos).not.toBe(positions[positions.length - 2]);
+			}
+			if (step < confirmLabels.length - 1) {
+				await dialog.getByRole('button', { name: label }).click();
+				await expect(dialog).toContainText(confirmLabels[step + 1]);
+			}
+		}
 
-		// В модалке должно быть 4 кнопки
-		expect(step1).toHaveLength(4);
-		expect(step2).toHaveLength(4);
-
-		// Подтверждение на шаге 2 — новый текст
-		expect(step2).toContain('Точно удалить?');
-
-		// Порядок кнопок изменился (перемешиваются ВСЕ 4, а не только отмены)
-		expect(step1.join('|')).not.toBe(step2.join('|'));
-		await expect.poll(() => deleteCalled).toBe(0);
+		// На последнем шаге нажимаем подтверждение — реальное удаление.
+		await dialog.getByRole('button', { name: 'Удалить безвозвратно' }).click();
+		await expect.poll(() => deleteCalled).toBe(1);
 	});
 
 	test('после удаления аккаунта пользователь переходит на главную', async ({ page }) => {

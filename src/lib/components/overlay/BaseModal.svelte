@@ -29,7 +29,7 @@
 </script>
 
 <Dialog.Root
-	open={isOpen}
+	bind:open={isOpen}
 	onOpenChange={(o) => {
 		if (!o) onClose?.();
 	}}

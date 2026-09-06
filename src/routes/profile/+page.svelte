@@ -14,6 +14,11 @@
 	} from '$lib/client/providers';
 	import ConfirmModal from '$lib/components/overlay/ConfirmModal.svelte';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
+	import {
+		DELETE_CONFIRM_TEXTS,
+		computeDeleteButtons,
+		nextDeleteConfirmPos
+	} from '$lib/delete-confirm';
 
 	const session = useSession();
 	const accounts = useAccounts();
@@ -100,17 +105,11 @@
 	}
 
 	// --- Удаление аккаунта с многоступенчатым подтверждением ---
-	// 4 кнопки: три «отмены» + одно «подтверждение». ВСЕ кнопки перемешиваются
-	// на каждом нажатии подтверждения (и текст подтверждения меняется).
-	const DELETE_CANCEL_TEXTS = ['Не надо', 'Передумал', 'Оставить аккаунт', 'Вернуться', 'Отмена'];
-	const DELETE_CONFIRM_TEXTS = [
-		'Удалить аккаунт',
-		'Точно удалить?',
-		'Да, удалить навсегда',
-		'Удалить безвозвратно'
-	];
+	// Логика кнопок (позиция подтверждения, тексты) вынесена в
+	// src/lib/delete-confirm.ts — там же unit-тесты инвариантов.
 	let deleteConfirmStep = $state(0);
-	let deleteShuffle = $state(0);
+	// Позиция (0..3) кнопки подтверждения на текущем шаге.
+	let deleteConfirmPos = $state(0);
 	let deleteModalOpen = $state(false);
 	let deleting = $state(false);
 	let deleteError = $state<string | null>(null);
@@ -118,49 +117,19 @@
 	/** Текущий текст кнопки подтверждения. */
 	const deleteConfirmLabel = $derived(DELETE_CONFIRM_TEXTS[deleteConfirmStep]);
 
-	/**
-	 * 4 кнопки в перемешанном порядке: 3 «отмены» + 1 «подтверждение».
-	 * Каждая запись: { key, label, confirm? } — чтобы у кнопки подтверждения
-	 * был отдельный стиль и обработчик.
-	 */
-	function computeDeleteButtons(): { key: string; label: string; confirm: boolean }[] {
-		const base = deleteShuffle;
-		const pool = DELETE_CANCEL_TEXTS;
-		// 3 «отмены»: последовательно идём по пулу со сдвигом (случайно).
-		const start = base % pool.length;
-		const cancels: { key: string; label: string; confirm: boolean }[] = [];
-		for (let i = 0; i < 3; i++) {
-			const label = pool[(start + i) % pool.length];
-			cancels.push({ key: `c-${start}-${i}`, label, confirm: false });
-		}
-		const confirm: { key: string; label: string; confirm: boolean } = {
-			key: `ok-${base}`,
-			label: deleteConfirmLabel,
-			confirm: true
-		};
-		// Собираем 4 кнопки и полностью перемешиваем (Fisher–Yates).
-		const all = [...cancels, confirm];
-		// Детерминированная перетасовка от deleteShuffle.
-		const shuffled = [...all];
-		let seed = base;
-		for (let i = shuffled.length - 1; i > 0; i--) {
-			seed = (seed * 9301 + 49297) % 233280;
-			const j = seed % (i + 1);
-			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-		}
-		return shuffled;
-	}
-	const deleteButtons = $derived(computeDeleteButtons());
+	const deleteButtons = $derived(computeDeleteButtons(deleteConfirmLabel, deleteConfirmPos));
 
 	function openDeleteModal() {
 		deleteConfirmStep = 0;
-		deleteShuffle = Math.floor(Math.random() * 1000);
+		// Случайная стартовая позиция подтверждения (0..3).
+		deleteConfirmPos = Math.floor(Math.random() * 4);
 		deleteError = null;
 		deleteModalOpen = true;
 	}
 
 	function advanceDeleteStep() {
-		deleteShuffle = deleteShuffle + 1;
+		// Гарантированно меняем позицию кнопки подтверждения (см. shared-модуль).
+		deleteConfirmPos = nextDeleteConfirmPos(deleteConfirmPos);
 		if (deleteConfirmStep < DELETE_CONFIRM_TEXTS.length - 1) {
 			deleteConfirmStep += 1;
 			return;
