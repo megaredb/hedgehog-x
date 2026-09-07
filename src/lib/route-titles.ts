@@ -37,8 +37,9 @@ export function segmentTitle(segment: string): string | undefined {
 /**
  * Заголовок маршрута по полному pathname: возвращает заголовок последнего
  * (самого глубокого) известного статического сегмента пути. Для главной (`/`,
- * пустой путь) — «Главная». `undefined`, если ни один сегмент не известен
- * (полностью динамический маршрут без статических частей).
+ * пустой путь) — «Главная». Если ни один сегмент не известен (полностью
+ * динамический маршрут без статических частей) — тоже «Главная»
+ * (`ROUTE_TITLES['']`).
  */
 export function routeTitle(pathname: string): string | undefined {
 	const segments = pathname.split('/').filter(Boolean);
