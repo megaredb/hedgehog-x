@@ -1,6 +1,7 @@
 import { db, type OfflineChapter, type OfflineDownload } from '$lib/client/db';
 import { liveQuery } from 'dexie';
 import { SvelteMap } from 'svelte/reactivity';
+import { AUDIO_CACHE, DOWNLOAD_STORAGE_RESERVE_BYTES } from '$lib/constants';
 
 export interface DownloadStats {
 	percentage: number;
@@ -94,7 +95,7 @@ async function performDownload(chapter: OfflineChapter) {
 			const estimate = await navigator.storage.estimate();
 			if (estimate.quota && estimate.usage) {
 				const availableBytes = estimate.quota - estimate.usage;
-				if (availableBytes < totalBytes + 50 * 1024 * 1024) {
+				if (availableBytes < totalBytes + DOWNLOAD_STORAGE_RESERVE_BYTES) {
 					throw new Error('Not enough storage space on device.');
 				}
 			}
@@ -107,7 +108,7 @@ async function performDownload(chapter: OfflineChapter) {
 
 		// Удаляем из старого кэша, если вдруг он там застрял
 		try {
-			const cache = await caches.open('audio-cache');
+			const cache = await caches.open(AUDIO_CACHE);
 			await cache.delete(chapter.audioUrl);
 		} catch {
 			// ignore
@@ -254,7 +255,7 @@ export function useDownloads() {
 
 		if (targetAudioUrl) {
 			try {
-				const cache = await caches.open('audio-cache');
+				const cache = await caches.open(AUDIO_CACHE);
 				await cache.delete(targetAudioUrl);
 			} catch {
 				// ignore

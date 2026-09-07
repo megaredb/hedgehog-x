@@ -1,4 +1,5 @@
-import { refreshTokens } from '$lib/server/boosty/phone-client';
+import { boostyHeaders, refreshTokens } from '$lib/server/boosty/phone-client';
+import { BOOSTY_ENDPOINTS, HEDGEHOG_OWNER_ID } from '$lib/server/config';
 
 /**
  * Подписки пользователя Boosty: проверка подписки на блог HEDGEHOG.INC.
@@ -8,10 +9,6 @@ import { refreshTokens } from '$lib/server/boosty/phone-client';
  *   Authorization: Bearer <access_token>
  * (access обновляем по refresh_token, если нужно).
  */
-
-/** Блог HEDGEHOG.INC в бусти. */
-export const HEDGEHOG_BLOG_URL = 'hedgehoginc';
-export const HEDGEHOG_OWNER_ID = 1876162;
 
 export interface HedgehogSubscriptionStatus {
 	/** Есть ли у пользователя привязанный Boosty-аккаунт. */
@@ -63,16 +60,11 @@ async function fetchSubscriptions(params: {
 		deviceId: params.deviceId
 	});
 	// 2. Список подписок.
-	const res = await fetch('https://api.boosty.to/v1/user/subscriptions?limit=30&with_follow=true', {
-		headers: {
-			accept: 'application/json, text/plain, */*',
-			authorization: 'Bearer ' + tokens.accessToken,
-			'user-agent':
-				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-			'x-app': 'web',
-			'x-from-id': params.deviceId,
-			'x-locale': 'ru_RU'
-		}
+	const res = await fetch(BOOSTY_ENDPOINTS.subscriptions, {
+		headers: boostyHeaders(params.deviceId, {
+			locale: 'ru_RU',
+			extra: { authorization: 'Bearer ' + tokens.accessToken }
+		})
 	});
 	if (!res.ok) {
 		throw new Error('Boosty subscriptions: HTTP ' + res.status);

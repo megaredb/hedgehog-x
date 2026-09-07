@@ -68,7 +68,8 @@
 		<h1 class="text-3xl font-bold tracking-tight">Загрузки</h1>
 	</div>
 	<p class="text-muted-foreground mb-8">
-		Менеджер загрузок. Здесь вы можете управлять сохраненными аудиокнигами для оффлайн-прослушивания.
+		Менеджер загрузок. Здесь вы можете управлять сохраненными аудиокнигами для
+		оффлайн-прослушивания.
 	</p>
 
 	<!-- Активная очередь -->
@@ -117,7 +118,8 @@
 										{group.volume?.title || 'Неизвестный том'}
 									</a>
 									<p class="text-xs text-muted-foreground mt-0.5">
-										{group.items.length} {group.items.length === 1 ? 'глава' : 'глав'} в очереди
+										{group.items.length}
+										{group.items.length === 1 ? 'глава' : 'глав'} в очереди
 									</p>
 								</div>
 								<Button
@@ -136,7 +138,9 @@
 						<Accordion.Content class="p-4 pt-1 bg-muted/5 border-t">
 							<div class="flex flex-col gap-2 mt-2">
 								{#each group.items as { chapter, download } (chapter.id)}
-									<Item class="flex items-center justify-between p-3 rounded-lg border bg-background hover:bg-muted/10 transition-colors">
+									<Item
+										class="flex items-center justify-between p-3 rounded-lg border bg-background hover:bg-muted/10 transition-colors"
+									>
 										<div class="flex-1 min-w-0 pr-4">
 											<p class="font-medium truncate text-sm">{chapter.title}</p>
 											{#if download.status === 'downloading'}
@@ -205,7 +209,8 @@
 										{group.volume?.title || 'Неизвестный том'}
 									</a>
 									<p class="text-xs mt-0.5 text-green-600 font-medium">
-										Доступно оффлайн: {group.items.length} {group.items.length === 1 ? 'глава' : 'глав'}
+										Доступно оффлайн: {group.items.length}
+										{group.items.length === 1 ? 'глава' : 'глав'}
 									</p>
 								</div>
 								<Button
@@ -228,11 +233,15 @@
 							<div class="flex flex-col gap-2 mt-2">
 								{#each group.items as { chapter } (chapter.id)}
 									{@const stats = manager.getProgress(chapter.id)}
-									<Item class="flex items-center justify-between p-3 rounded-lg border bg-background hover:bg-muted/10 transition-colors">
+									<Item
+										class="flex items-center justify-between p-3 rounded-lg border bg-background hover:bg-muted/10 transition-colors"
+									>
 										<div class="flex-1 min-w-0 pr-4">
 											<p class="font-medium truncate text-sm">{chapter.title}</p>
 											<p class="text-xs text-muted-foreground mt-1">
-												Размер: {stats.totalBytes > 0 ? (stats.totalBytes / (1024 * 1024)).toFixed(2) + ' МБ' : 'Неизвестно'}
+												Размер: {stats.totalBytes > 0
+													? (stats.totalBytes / (1024 * 1024)).toFixed(2) + ' МБ'
+													: 'Неизвестно'}
 											</p>
 										</div>
 										<Button

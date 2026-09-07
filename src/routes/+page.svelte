@@ -10,6 +10,7 @@
 	import { resolve } from '$app/paths';
 	import { ChevronUp, ChevronDown } from '@lucide/svelte';
 	import { fade } from 'svelte/transition';
+	import { VIDEO_BG_STORE_KEY } from '$lib/constants';
 
 	// Определяем стартовый индекс прямо при инициализации (работает и на сервере!)
 	// Это предотвращает hydration_mismatch.
@@ -30,7 +31,7 @@
 
 	onMount(() => {
 		// Восстанавливаем настройку видео из localStorage
-		const storedVideoPref = localStorage.getItem('videoBackgroundPlaying');
+		const storedVideoPref = localStorage.getItem(VIDEO_BG_STORE_KEY);
 		if (storedVideoPref !== null) {
 			isVideoPlaying = storedVideoPref === 'true';
 		}
@@ -62,7 +63,7 @@
 
 	function toggleVideo() {
 		isVideoPlaying = !isVideoPlaying;
-		localStorage.setItem('videoBackgroundPlaying', String(isVideoPlaying));
+		localStorage.setItem(VIDEO_BG_STORE_KEY, String(isVideoPlaying));
 	}
 
 	function scrollToIndex(index: number, behavior: ScrollBehavior = 'smooth') {

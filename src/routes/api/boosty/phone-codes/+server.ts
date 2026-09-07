@@ -1,5 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
+import { boostyHeaders } from '$lib/server/boosty/phone-client';
+import { BOOSTY_ENDPOINTS } from '$lib/server/config';
 
 /**
  * GET /api/boosty/phone-codes
@@ -15,16 +17,8 @@ import { randomUUID } from 'node:crypto';
 export const GET = async () => {
 	try {
 		const deviceId = randomUUID();
-		const res = await fetch('https://boosty.to/app/extra-config/phone-codes/', {
-			headers: {
-				accept: 'application/json, text/plain, */*',
-				'user-agent':
-					'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-				'x-app': 'web',
-				'x-from-id': deviceId,
-				'x-locale': 'en_US',
-				referer: 'https://boosty.to/'
-			}
+		const res = await fetch(BOOSTY_ENDPOINTS.phoneCodes, {
+			headers: boostyHeaders(deviceId)
 		});
 		if (!res.ok) {
 			return json({ error: 'Boosty phone-codes: HTTP ' + res.status }, { status: 502 });

@@ -1,54 +1,40 @@
 <script lang="ts">
 	import { SkipForward } from '@lucide/svelte';
 	import { audioStore } from '$lib/audio-store.svelte.js';
-	import { cn } from '$lib/utils.js';
-	import * as Tooltip from '$lib/components/ui/tooltip';
-	import { Button, type ButtonSize, type ButtonVariant } from '$lib/components/ui/button';
+	import AudioPlayerIconButton from './audio-player-icon-button.svelte';
+	import type { ButtonSize, ButtonVariant } from '$lib/components/ui/button';
 
 	interface Props {
 		class?: string;
 		size?: ButtonSize;
 		variant?: ButtonVariant;
 		onclick?: (e: MouseEvent) => void;
-		[key: string]: unknown;
 	}
 
-	let {
-		class: className = '',
-		size = 'icon',
-		variant = 'ghost',
-		onclick,
-		...rest
-	}: Props = $props();
+	let { class: className = '', size = 'icon', variant = 'ghost', onclick }: Props = $props();
 
 	const isDisabled = $derived(
 		!audioStore.currentTrack ||
 			(audioStore.currentQueueIndex === audioStore.queue.length - 1 &&
 				audioStore.repeatMode !== 'all')
 	);
+
+	function handleClick(e: MouseEvent) {
+		onclick?.(e);
+		audioStore.next();
+	}
 </script>
 
-<Tooltip.Root>
-	<Tooltip.Trigger>
-		{#snippet child({ props })}
-			<Button
-				aria-label="Следующий"
-				class={cn(className)}
-				data-slot="audio-skip-forward-button"
-				disabled={isDisabled}
-				{size}
-				{variant}
-				{...props}
-				onclick={(e) => {
-					// @ts-expect-error
-					props.onclick?.(e);
-					onclick?.(e);
-					audioStore.next();
-				}}
-			>
-				<SkipForward fill="currentColor" />
-			</Button>
-		{/snippet}
-	</Tooltip.Trigger>
-	<Tooltip.Content sideOffset={4}>Следующий</Tooltip.Content>
-</Tooltip.Root>
+<AudioPlayerIconButton
+	class={className}
+	dataSlot="audio-skip-forward-button"
+	label="Следующий"
+	{size}
+	{variant}
+	disabled={isDisabled}
+	onclick={handleClick}
+>
+	{#snippet icon()}
+		<SkipForward fill="currentColor" />
+	{/snippet}
+</AudioPlayerIconButton>

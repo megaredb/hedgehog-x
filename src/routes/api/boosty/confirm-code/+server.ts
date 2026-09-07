@@ -4,6 +4,8 @@ import { completeBoostyLogin } from '$lib/server/boosty/complete-flow';
 import { buildSessionCookieValue, sessionCookieName } from '$lib/server/boosty/token-utils';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
+import { checkRateLimitGroup } from '$lib/server/rate-limit';
+import { SESSION_TTL_SECONDS } from '$lib/server/config';
 
 /**
  * POST /api/boosty/confirm-code
@@ -14,7 +16,8 @@ import { dev } from '$app/environment';
  * Ответ: 200 { ok, user } + Set-Cookie (для входа)
  *        или { error, status }.
  */
-export const POST = async ({ request, cookies, locals }) => {
+
+export const POST = async ({ request, cookies, locals, getClientAddress }) => {
 	let body: { deviceId?: string; verifyToken?: string; smsCode?: string; phone?: string };
 	try {
 		body = await request.json();
@@ -25,6 +28,12 @@ export const POST = async ({ request, cookies, locals }) => {
 	if (!deviceId || !verifyToken || !smsCode || !phone) {
 		return json({ error: 'deviceId, verifyToken, smsCode и phone обязательны' }, { status: 400 });
 	}
+
+	const limit = checkRateLimitGroup('confirm-code', phone, getClientAddress());
+	if (!limit.ok) {
+		return json({ error: 'Слишком много попыток. Попробуйте позже.' }, { status: 429 });
+	}
+
 	try {
 		const tokens = await confirmPhoneCode({
 			phone,
@@ -64,7 +73,7 @@ export const POST = async ({ request, cookies, locals }) => {
 				httpOnly: true,
 				sameSite: 'lax',
 				secure: isProduction || isHttps,
-				maxAge: 60 * 60 * 24 * 7
+				maxAge: SESSION_TTL_SECONDS
 			});
 		}
 		return json({ ok: true, user: { id: result.userId, name: result.name, image: result.image } });

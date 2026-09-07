@@ -22,7 +22,13 @@
  * device_id — наш UUID (тот же, что фронт кладёт в cookie _clientId).
  */
 
-const BOOSTY_API = 'https://api.boosty.to';
+import {
+	BOOSTY_AVATAR_URL_PREFIX,
+	BOOSTY_ENDPOINTS,
+	BOOSTY_ORIGIN,
+	BOOSTY_REFERER,
+	BOOSTY_USER_AGENT
+} from '$lib/server/config';
 
 export interface BoostySendResult {
 	/** Verification token из ответа send (нужен для confirm). */
@@ -38,20 +44,34 @@ export interface BoostyTokens {
 	expiresIn: number;
 }
 
-function headers(deviceId: string, extra: Record<string, string> = {}): Record<string, string> {
+/**
+ * Базовые заголовки запроса к приватному API Boosty.
+ * Переиспользуется в subscriptions.ts и phone-codes.
+ */
+export function boostyHeaders(
+	deviceId: string,
+	options: { locale?: 'en_US' | 'ru_RU'; extra?: Record<string, string> } = {}
+): Record<string, string> {
 	return {
 		accept: 'application/json, text/plain, */*',
-		'content-type': 'application/x-www-form-urlencoded',
-		'user-agent':
-			'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+		'user-agent': BOOSTY_USER_AGENT,
 		'x-app': 'web',
 		'x-from-id': deviceId,
-		'x-locale': 'en_US',
-		origin: 'https://boosty.to',
-		referer: 'https://boosty.to/',
-		cookie: '_clientId=' + deviceId,
-		...extra
+		'x-locale': options.locale ?? 'en_US',
+		origin: BOOSTY_ORIGIN,
+		referer: BOOSTY_REFERER,
+		...options.extra
 	};
+}
+
+function formHeaders(deviceId: string, extra: Record<string, string> = {}): Record<string, string> {
+	return boostyHeaders(deviceId, {
+		extra: {
+			'content-type': 'application/x-www-form-urlencoded',
+			cookie: '_clientId=' + deviceId,
+			...extra
+		}
+	});
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -77,9 +97,9 @@ export async function sendPhoneCode(phone: string, deviceId: string): Promise<Bo
 		device_os: 'web',
 		phone
 	});
-	const res = await fetch(BOOSTY_API + '/auth/phone/verification_code/send', {
+	const res = await fetch(BOOSTY_ENDPOINTS.sendCode, {
 		method: 'POST',
-		headers: headers(deviceId),
+		headers: formHeaders(deviceId),
 		body
 	});
 	const data = await parseResponse<{
@@ -109,9 +129,9 @@ export async function confirmPhoneCode(params: {
 		device_os: 'web',
 		device_id: deviceId
 	});
-	const res = await fetch(BOOSTY_API + '/auth/phone/verification_code/confirm', {
+	const res = await fetch(BOOSTY_ENDPOINTS.confirmCode, {
 		method: 'PUT',
-		headers: headers(deviceId),
+		headers: formHeaders(deviceId),
 		body
 	});
 	const data = await parseResponse<{
@@ -141,9 +161,9 @@ export async function refreshTokens(params: {
 		device_id: deviceId,
 		device_os: 'web'
 	});
-	const res = await fetch(BOOSTY_API + '/oauth/token/', {
+	const res = await fetch(BOOSTY_ENDPOINTS.refreshToken, {
 		method: 'POST',
-		headers: headers(deviceId),
+		headers: formHeaders(deviceId),
 		body
 	});
 	const data = await parseResponse<{
@@ -181,16 +201,11 @@ export async function fetchBoostyProfile(params: {
 	accessToken: string;
 	deviceId: string;
 }): Promise<BoostyProfile> {
-	const res = await fetch(BOOSTY_API + '/v1/blog/self', {
-		headers: {
-			accept: 'application/json, text/plain, */*',
-			authorization: 'Bearer ' + params.accessToken,
-			'user-agent':
-				'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-			'x-app': 'web',
-			'x-from-id': params.deviceId,
-			'x-locale': 'ru_RU'
-		}
+	const res = await fetch(BOOSTY_ENDPOINTS.blogSelf, {
+		headers: boostyHeaders(params.deviceId, {
+			locale: 'ru_RU',
+			extra: { authorization: 'Bearer ' + params.accessToken }
+		})
 	});
 	if (!res.ok) return { id: null, avatarUrl: null };
 	const data = (await res.json().catch(() => null)) as { signedQuery?: string } | null;
@@ -198,6 +213,6 @@ export async function fetchBoostyProfile(params: {
 	const id = m ? Number(m[1]) : null;
 	return {
 		id,
-		avatarUrl: id ? 'https://images.boosty.to/user/' + id + '/avatar' : null
+		avatarUrl: id ? BOOSTY_AVATAR_URL_PREFIX + id + '/avatar' : null
 	};
 }

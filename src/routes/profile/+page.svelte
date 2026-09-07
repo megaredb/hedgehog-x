@@ -25,6 +25,7 @@
 		computeDeleteButtons,
 		nextDeleteConfirmPos
 	} from '$lib/delete-confirm';
+	import { BOOSTY_BLOG_PUBLIC_URL } from '$lib/constants';
 
 	const session = useSession();
 	const accounts = useAccounts();
@@ -342,13 +343,15 @@
 					{:else if !boostySubscription.subscribed}
 						<div class="mt-3 rounded-lg border border-border/60 bg-muted/30 p-4 text-sm">
 							Активной подписки на HEDGEHOG.INC нет.&nbsp;
+							<!-- eslint-disable svelte/no-navigation-without-resolve -->
 							<a
-								href="https://boosty.to/hedgehoginc"
+								href={BOOSTY_BLOG_PUBLIC_URL}
 								target="_blank"
 								rel="noreferrer"
 								class="font-medium text-primary underline underline-offset-2"
 								>Оформить на boosty.to</a
 							>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						</div>
 					{:else}
 						<div class="mt-3 space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4">

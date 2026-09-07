@@ -4,6 +4,7 @@ import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
+import { AUDIO_CACHE, PAGES_CACHE } from '$lib/constants';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -12,11 +13,9 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 // 2. Стратегия кэширования навигационных HTML-запросов (страниц)
 const navigationStrategy = new NetworkFirst({
-	cacheName: 'pages-cache',
+	cacheName: PAGES_CACHE,
 	networkTimeoutSeconds: 3,
-	plugins: [
-		new CacheableResponsePlugin({ statuses: [200] })
-	]
+	plugins: [new CacheableResponsePlugin({ statuses: [200] })]
 });
 
 const navigationRoute = new NavigationRoute(async (params) => {
@@ -51,7 +50,7 @@ registerRoute(navigationRoute);
 registerRoute(
 	({ request }) => request.destination === 'audio' || request.url.endsWith('.mp3'),
 	new CacheFirst({
-		cacheName: 'audio-cache',
+		cacheName: AUDIO_CACHE,
 		plugins: [
 			new CacheableResponsePlugin({ statuses: [200] }),
 			new RangeRequestsPlugin() // ❗️ Критически важно для плеера (особенно для iOS/Safari)!
@@ -63,7 +62,7 @@ registerRoute(
 self.addEventListener('install', (event) => {
 	self.skipWaiting();
 	event.waitUntil(
-		caches.open('pages-cache').then((cache) => {
+		caches.open(PAGES_CACHE).then((cache) => {
 			return cache.add('/').catch((err) => console.warn('[SW] Ошибка прогрева кэша /:', err));
 		})
 	);

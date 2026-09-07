@@ -20,6 +20,12 @@ type ServerBookWithRelations = ServerBook & {
 	})[];
 };
 
+/**
+ * Кэш ETag по bookId. Позволяет слать `If-None-Match` при повторной
+ * синхронизации и пропускать гидрацию, когда сервер отвечает 304.
+ */
+const bookETags = new Map<string, string>();
+
 export const syncService = {
 	/**
 	 * Стягивает список книг с бэкенда и сохраняет в локальный Dexie.
@@ -52,7 +58,11 @@ export const syncService = {
 	 */
 	async syncBookDetails(bookId: string, fetchFn: typeof fetch = fetch) {
 		try {
-			const res = await fetchFn(`/api/books/${bookId}`);
+			const etag = bookETags.get(bookId);
+			const headers: Record<string, string> = {};
+			if (etag) headers['If-None-Match'] = etag;
+
+			const res = await fetchFn(`/api/books/${bookId}`, { headers });
 
 			// Если сервер вернул 304, значит данные в локальном кэше (Dexie) полностью актуальны!
 			if (res.status === 304) {
@@ -61,6 +71,9 @@ export const syncService = {
 			}
 
 			if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+			const newEtag = res.headers.get('etag');
+			if (newEtag) bookETags.set(bookId, newEtag);
 
 			const bookData: ServerBookWithRelations = await res.json();
 

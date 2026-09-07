@@ -3,6 +3,12 @@ import { user, account, session } from '$lib/server/db/auth.schema';
 import { eq } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { boostyEmail } from '$lib/server/boosty/token-utils';
+import {
+	ACCOUNT_ID_PREFIX,
+	SESSION_ID_PREFIX,
+	SESSION_TTL_MS,
+	USER_ID_PREFIX
+} from '$lib/server/config';
 
 /**
  * Создание локальной сессии better-auth после входа/привязки Boosty.
@@ -80,7 +86,7 @@ export async function completeBoostyLogin(params: {
 		const created = await db
 			.insert(user)
 			.values({
-				id: 'u_' + randomBytes(16).toString('hex'),
+				id: USER_ID_PREFIX + randomBytes(16).toString('hex'),
 				name,
 				email,
 				emailVerified: true,
@@ -102,7 +108,7 @@ export async function completeBoostyLogin(params: {
 	} else {
 		const nowA = new Date();
 		await db.insert(account).values({
-			id: 'a_' + randomBytes(12).toString('hex'),
+			id: ACCOUNT_ID_PREFIX + randomBytes(12).toString('hex'),
 			accountId: accountKey,
 			providerId: PROVIDER_ID,
 			userId,
@@ -128,10 +134,10 @@ export async function completeBoostyLogin(params: {
 	let expiresAt: Date | null = null;
 	if (!skipSession) {
 		sessionToken = randomBytes(32).toString('base64url');
-		expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000); // 7 дней
+		expiresAt = new Date(Date.now() + SESSION_TTL_MS); // 7 дней
 		const nowS = new Date();
 		await db.insert(session).values({
-			id: 's_' + randomBytes(16).toString('hex'),
+			id: SESSION_ID_PREFIX + randomBytes(16).toString('hex'),
 			token: sessionToken,
 			expiresAt,
 			createdAt: nowS,

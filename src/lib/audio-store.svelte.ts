@@ -1,4 +1,5 @@
 import { htmlAudio, type Track } from '$lib/html-audio.js';
+import { AUDIO_UI_STORE_KEY, clampPlaybackRate, REWIND_THRESHOLD_SEC } from '$lib/constants';
 
 export type RepeatMode = 'none' | 'one' | 'all';
 export type InsertMode = 'first' | 'last' | 'after';
@@ -48,7 +49,7 @@ export function calculatePreviousIndex(params: QueueNavigationParams): number {
 
 // ─── Store ───────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = 'audio:ui:store';
+const STORAGE_KEY = AUDIO_UI_STORE_KEY;
 
 class AudioStore {
 	// ── Reactive state ──────────────────────────────────────────────────────
@@ -146,6 +147,8 @@ class AudioStore {
 	}
 
 	seek(time: number): void {
+		// Для live-потока перемотка запрещена (duration = Infinity/NaN).
+		if (this.duration && htmlAudio.isLive(this.duration)) return;
 		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
 		this.currentTime = valid;
 		this.progress = this.duration > 0 ? (valid / this.duration) * 100 : 0;
@@ -172,7 +175,7 @@ class AudioStore {
 	}
 
 	previous(): void {
-		if (this.currentTime > 3 && !this.shuffleEnabled) {
+		if (this.currentTime > REWIND_THRESHOLD_SEC && !this.shuffleEnabled) {
 			this.currentTime = 0;
 			this.progress = 0;
 			// Must call directly: $effect skips seek when lastSeekTime === 0 (same value).
@@ -289,7 +292,7 @@ class AudioStore {
 
 	setPlaybackRate(rate: number): void {
 		if (this.duration && htmlAudio.isLive(this.duration)) return;
-		this.playbackRate = Math.max(0.25, Math.min(2, rate));
+		this.playbackRate = clampPlaybackRate(rate);
 	}
 
 	changeRepeatMode(): void {

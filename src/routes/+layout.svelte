@@ -12,6 +12,7 @@
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { PAGES_CACHE } from '$lib/constants';
 
 	let { children } = $props();
 
@@ -32,7 +33,7 @@
 	afterNavigate(async ({ to }) => {
 		if (to && typeof navigator !== 'undefined' && navigator.onLine) {
 			try {
-				const cache = await caches.open('pages-cache');
+				const cache = await caches.open(PAGES_CACHE);
 				const exists = await cache.match(to.url.pathname);
 				if (!exists) {
 					const res = await fetch(to.url.pathname);
