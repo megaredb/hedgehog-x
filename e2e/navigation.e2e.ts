@@ -157,6 +157,6 @@ test.describe('Навигация: дропдаун профиля (залоги
 
 		// Выход → редирект на главную
 		await menu.getByRole('menuitem', { name: 'Выйти' }).click();
-		await expect(page).toHaveURL(/localhost:4173\//);
+		await expect(page).toHaveURL('/');
 	});
 });

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/test';
+import { BASE_URL } from './config';
 import {
 	MOCK_SESSION,
 	MOCK_USER,
@@ -165,7 +166,7 @@ test.describe('Страница профиля: способы входа', () =
 					status: 200,
 					contentType: 'application/json',
 					body: JSON.stringify({
-						url: 'https://discord.com/api/oauth2/authorize?response_type=code&client_id=1463632713943748925&redirect_uri=http%3A%2F%2Flocalhost%3A4173%2Fapi%2Fauth%2Fcallback%2Fdiscord',
+						url: `https://discord.com/api/oauth2/authorize?response_type=code&client_id=1463632713943748925&redirect_uri=${encodeURIComponent(new URL('/api/auth/callback/discord', BASE_URL).href)}`,
 						redirect: true,
 						status: true
 					})
@@ -386,6 +387,6 @@ test.describe('Страница профиля: удаление аккаунт�
 		await dialog.getByRole('button', { name: 'Удалить безвозвратно' }).click();
 
 		// После удаления — редирект на главную
-		await expect(page).toHaveURL(/localhost:4173\//);
+		await expect(page).toHaveURL('/');
 	});
 });

@@ -63,7 +63,7 @@ test.describe('POST /api/user/delete (реальная БД)', () => {
 		// В production-режиме (vite preview / наш e2e-runner) better-auth
 		// использует префикс __Secure- для session cookie.
 		const cookieName = '__Secure-better-auth.session_token';
-		const res = await request.post('http://localhost:4173/api/user/delete', {
+		const res = await request.post('/api/user/delete', {
 			headers: { cookie: cookieName + '=' + cookie }
 		});
 		expect(res.status()).toBe(200);
@@ -78,14 +78,14 @@ test.describe('POST /api/user/delete (реальная БД)', () => {
 	});
 
 	test('GET возвращает 405', async ({ request }) => {
-		const res = await request.get('http://localhost:4173/api/user/delete');
+		const res = await request.get('/api/user/delete');
 		expect(res.status()).toBe(405);
 	});
 });
 
 test.describe('POST /api/user/delete без сессии', () => {
 	test('возвращает 401 Unauthorized без cookie', async ({ request }) => {
-		const res = await request.post('http://localhost:4173/api/user/delete');
+		const res = await request.post('/api/user/delete');
 		expect(res.status()).toBe(401);
 		const body = await res.json();
 		expect(body.error).toBe('Unauthorized');

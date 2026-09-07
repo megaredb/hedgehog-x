@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { MOCK_CATALOG, type MockBookDetail } from './fixtures/data';
+import { BASE_URL } from './config';
 
 /**
  * E2E: менеджер загрузок (/downloads).
@@ -34,7 +35,6 @@ import { MOCK_CATALOG, type MockBookDetail } from './fixtures/data';
 
 test.use({ serviceWorkers: 'block' });
 
-const BASE_URL = 'http://localhost:4173';
 const BOOK = MOCK_CATALOG;
 const VOLUME_1 = MOCK_CATALOG.volumes.find((v) => v.id === 'book-1-vol-1')!;
 const CH_1 = VOLUME_1.chapters.find((c) => c.id === 'book-1-ch-1')!; // «Встреча у ручья»

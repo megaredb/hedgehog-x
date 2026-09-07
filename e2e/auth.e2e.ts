@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/test';
+import { BASE_URL } from './config';
 
 /**
  * E2E: авторизация через Telegram (OIDC) и Discord (OAuth2).
@@ -36,7 +37,7 @@ test.describe('Авторизация через внешние провайде
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
-					url: `${TELEGRAM_OAUTH_URL}?response_type=code&client_id=8204202555&scope=openid+profile&redirect_uri=${encodeURIComponent('http://localhost:4173/api/auth/callback/telegram-oidc')}`,
+					url: `${TELEGRAM_OAUTH_URL}?response_type=code&client_id=8204202555&scope=openid+profile&redirect_uri=${encodeURIComponent(new URL('/api/auth/callback/telegram-oidc', BASE_URL).href)}`,
 					redirect: true
 				})
 			});
@@ -56,7 +57,7 @@ test.describe('Авторизация через внешние провайде
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
-					url: `${DISCORD_OAUTH_URL}?response_type=code&client_id=1463632713943748925&redirect_uri=${encodeURIComponent('http://localhost:4173/api/auth/callback/discord')}`,
+					url: `${DISCORD_OAUTH_URL}?response_type=code&client_id=1463632713943748925&redirect_uri=${encodeURIComponent(new URL('/api/auth/callback/discord', BASE_URL).href)}`,
 					redirect: true
 				})
 			});
