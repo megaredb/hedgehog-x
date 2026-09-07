@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { LogOut } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
-	import BoostyLogin from '$lib/components/auth/BoostyLogin.svelte';
+	import BoostyLoginModal from '$lib/components/auth/BoostyLoginModal.svelte';
+	import UserAvatar from '$lib/components/header/UserAvatar.svelte';
 	import { authClient } from '$lib/client/authClient';
-	import { useSession } from '$lib/client/session.svelte';
+	import { signOutAndRedirect, useSession } from '$lib/client/session.svelte';
 	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
 
 	const session = useSession();
@@ -89,12 +89,6 @@
 			isSubmitting = null;
 		}
 	}
-
-	async function signOut() {
-		await authClient.signOut();
-		await session.refetch();
-		await goto(resolve('/'));
-	}
 </script>
 
 <div class="flex min-h-full items-center justify-center p-6">
@@ -109,23 +103,13 @@
 
 		{#if session.user}
 			<div class="space-y-4 rounded-lg border border-border/60 bg-muted/30 p-5 text-center">
-				<div
-					class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary"
-				>
-					{#if session.user.image}
-						<img
-							src={session.user.image}
-							alt={session.user.name}
-							class="h-14 w-14 rounded-full object-cover"
-						/>
-					{:else}
-						<span class="text-lg font-bold">{session.user.name?.charAt(0).toUpperCase()}</span>
-					{/if}
+				<div class="flex justify-center">
+					<UserAvatar user={session.user} size="lg" />
 				</div>
 				<div>
 					<p class="font-semibold">{session.user.name}</p>
 				</div>
-				<Button variant="outline" class="w-full" onclick={signOut}>
+				<Button variant="outline" class="w-full" onclick={signOutAndRedirect}>
 					<LogOut class="h-4 w-4" />
 					Выйти
 				</Button>
@@ -180,13 +164,11 @@
 	</BaseModal>
 
 	<!-- Вход через Boosty: телефон + SMS-код -->
-	<BaseModal
+	<BoostyLoginModal
 		bind:open={boostyModalOpen}
 		title="Вход через Boosty"
 		description="Войдите по номеру телефона: получите SMS-код и подтвердите — аккаунт привяжется автоматически."
-		showCloseButton={true}
 		onClose={() => (boostyModalOpen = false)}
-	>
-		<BoostyLogin callbackURL={from} />
-	</BaseModal>
+		callbackURL={from}
+	/>
 </div>

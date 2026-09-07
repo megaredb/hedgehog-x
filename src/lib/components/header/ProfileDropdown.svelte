@@ -1,11 +1,9 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { User, Settings, LogOut, LogIn } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { authClient } from '$lib/client/authClient';
-	import { useSession } from '$lib/client/session.svelte';
+	import { signOutAndRedirect, useSession } from '$lib/client/session.svelte';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -31,12 +29,6 @@
 		const current = page.url.pathname;
 		return current === '/auth' ? '/' : current + page.url.search;
 	});
-
-	async function signOut() {
-		await authClient.signOut();
-		await session.refetch();
-		await goto(resolve('/'));
-	}
 </script>
 
 {#if session.user}
@@ -57,10 +49,7 @@
 				</a>
 			{/each}
 			<DropdownMenu.Separator />
-			<DropdownMenu.Item
-				class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-				onclick={signOut}
-			>
+			<DropdownMenu.Item variant="destructive" onclick={signOutAndRedirect}>
 				<LogOut class="h-4 w-4 mr-2" />
 				Выйти
 			</DropdownMenu.Item>

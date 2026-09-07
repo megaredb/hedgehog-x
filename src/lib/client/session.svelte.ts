@@ -1,3 +1,5 @@
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { authClient } from './authClient';
 import type { BetterFetchError } from '@better-fetch/fetch';
 
@@ -66,4 +68,13 @@ export function useSession() {
 		},
 		refetch: () => atom.get().refetch()
 	};
+}
+
+/**
+ * Выход из аккаунта и редирект на главную.
+ * Реактивная `useSession` уже слушает атом better-auth, поэтому отдельный refetch не нужен.
+ */
+export async function signOutAndRedirect() {
+	await authClient.signOut();
+	await goto(resolve('/'));
 }

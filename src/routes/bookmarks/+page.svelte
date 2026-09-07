@@ -1,9 +1,10 @@
 <script lang="ts">
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
 <div class="p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Закладки</h1>
-	<p class="text-muted-foreground mt-2">
-		Здесь будут отображаться ваши сохраненные книги и закладки.
-	</p>
+	<PageHeader
+		title="Закладки"
+		description="Здесь будут отображаться ваши сохраненные книги и закладки."
+	/>
 </div>

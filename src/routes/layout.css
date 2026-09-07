@@ -40,6 +40,7 @@
 	--accent-foreground: oklch(0.25 0.05 85);
 
 	--destructive: oklch(0.577 0.245 27.325);
+	--destructive-foreground: oklch(0.985 0 0);
 
 	/* БЫЛО: --border: oklch(0.922 0 0); -> СТАЛО: oklch(0.85 0.01 85) [Светлый теплый серый] */
 	--border: oklch(0.85 0.01 85);
@@ -79,6 +80,7 @@
 	--accent: oklch(0.269 0 0);
 	--accent-foreground: oklch(0.985 0 0);
 	--destructive: oklch(0.704 0.191 22.216);
+	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
 	--ring: oklch(0.556 0 0);
@@ -116,6 +118,7 @@
 	--color-input: var(--input);
 	--color-border: var(--border);
 	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent: var(--accent);
 	--color-muted-foreground: var(--muted-foreground);
@@ -154,6 +157,15 @@
 
 .layout-content {
 	@apply mx-auto w-full max-w-5xl px-4 md:px-8;
+}
+
+@utility no-scrollbar {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
 }
 
 @media (prefers-reduced-motion) {

@@ -3,6 +3,8 @@
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { LayoutGrid, List as ListIcon } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { cn } from '$lib/utils';
 
 	let { data } = $props();
 
@@ -39,24 +41,28 @@
 		<div
 			class="flex items-center gap-1 bg-muted/50 p-1 rounded-lg self-start sm:self-auto border border-border/50"
 		>
-			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'grid'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+			<Button
+				variant="ghost"
+				size="icon"
+				class={cn(
+					viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
+				)}
 				onclick={() => (viewMode = 'grid')}
 				aria-label="Сетка"
 			>
-				<LayoutGrid class="w-5 h-5" />
-			</button>
-			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'list'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+				<LayoutGrid class="size-5" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon"
+				class={cn(
+					viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
+				)}
 				onclick={() => (viewMode = 'list')}
 				aria-label="Список"
 			>
-				<ListIcon class="w-5 h-5" />
-			</button>
+				<ListIcon class="size-5" />
+			</Button>
 		</div>
 	</div>
 

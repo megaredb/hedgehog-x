@@ -78,16 +78,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	/* Скрываем scrollbar для Chrome, Safari, Opera */
-	.no-scrollbar::-webkit-scrollbar {
-		display: none;
-	}
-
-	/* Скрываем scrollbar для IE, Edge, Firefox */
-	.no-scrollbar {
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
-	}
-</style>

@@ -7,6 +7,11 @@
 	import * as Drawer from '$lib/components/ui/drawer/index.js';
 	import { cn } from '$lib/utils';
 
+	const currentTrack = $derived(audioStore.currentTrack);
+	const trackArtwork = $derived(currentTrack?.artwork ?? currentTrack?.images?.[0] ?? '/logo.webp');
+	const trackTitle = $derived(currentTrack?.title ?? 'Глава...');
+	const trackAlbum = $derived(currentTrack?.album ?? 'Том...');
+
 	let isDrawerOpen = $state(false);
 
 	onNavigate(() => {
@@ -14,7 +19,7 @@
 	});
 
 	const volumeHref = $derived.by(() => {
-		const t = audioStore.currentTrack;
+		const t = currentTrack;
 		if (!t?.bookId || !t?.volumeId) return undefined;
 		const targetPath = resolve(`/books/${t.bookId}/${t.volumeId}`);
 
@@ -24,6 +29,18 @@
 	});
 </script>
 
+{#snippet coverInfo()}
+	<img
+		class="h-10 w-10 rounded-sm object-cover border shrink-0"
+		src={trackArtwork}
+		alt={trackTitle}
+	/>
+	<div class="flex flex-col min-w-0">
+		<p class="truncate text-sm font-medium">{trackTitle}</p>
+		<p class="truncate text-xs text-muted-foreground">{trackAlbum}</p>
+	</div>
+{/snippet}
+
 {#snippet shortBookInfo()}
 	<!-- Book info — tapping navigates to the volume page -->
 	<div class="flex items-center gap-2 h-fit min-w-0">
@@ -32,34 +49,10 @@
 				href={volumeHref}
 				class="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
 			>
-				<img
-					class="h-10 w-10 rounded-sm object-cover border shrink-0"
-					src={audioStore.currentTrack?.artwork ??
-						audioStore.currentTrack?.images?.[0] ??
-						'/logo.webp'}
-					alt={audioStore.currentTrack?.title ?? 'Глава...'}
-				/>
-				<div class="flex flex-col min-w-0">
-					<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
-					<p class="truncate text-xs text-muted-foreground">
-						{audioStore.currentTrack?.album ?? 'Том...'}
-					</p>
-				</div>
+				{@render coverInfo()}
 			</a>
 		{:else}
-			<img
-				class="h-10 w-10 rounded-sm object-cover border shrink-0"
-				src={audioStore.currentTrack?.artwork ??
-					audioStore.currentTrack?.images?.[0] ??
-					'/logo.webp'}
-				alt={audioStore.currentTrack?.title ?? 'Глава...'}
-			/>
-			<div class="flex flex-col min-w-0">
-				<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
-				<p class="truncate text-xs text-muted-foreground">
-					{audioStore.currentTrack?.album ?? 'Том...'}
-				</p>
-			</div>
+			{@render coverInfo()}
 		{/if}
 	</div>
 {/snippet}
@@ -141,19 +134,17 @@
 							<!-- Cover art -->
 							<img
 								class="h-10 w-10 rounded-md object-cover shrink-0 border border-border/40 shadow-sm"
-								src={audioStore.currentTrack?.artwork ??
-									audioStore.currentTrack?.images?.[0] ??
-									'/logo.webp'}
-								alt={audioStore.currentTrack?.title ?? 'Глава...'}
+								src={trackArtwork}
+								alt={trackTitle}
 							/>
 
 							<!-- Track info — takes remaining space, truncates -->
 							<div class="flex flex-col min-w-0 flex-1 text-left">
 								<p class="truncate text-sm font-medium leading-tight">
-									{audioStore.currentTrack?.title ?? 'Глава...'}
+									{trackTitle}
 								</p>
 								<p class="truncate text-xs text-muted-foreground leading-tight">
-									{audioStore.currentTrack?.album ?? 'Том...'}
+									{trackAlbum}
 								</p>
 							</div>
 
@@ -174,36 +165,32 @@
 							{#if volumeHref}
 								<a href={volumeHref} class="hover:underline">
 									<Drawer.Title class="text-base font-semibold">
-										{audioStore.currentTrack?.album ?? 'Том...'}
+										{trackAlbum}
 									</Drawer.Title>
 								</a>
 							{:else}
 								<Drawer.Title class="text-base font-semibold">
-									{audioStore.currentTrack?.album ?? 'Том...'}
+									{trackAlbum}
 								</Drawer.Title>
 							{/if}
-							<Drawer.Description class="text-sm">
-								{audioStore.currentTrack?.title ?? 'Глава...'}
-							</Drawer.Description>
+							<Drawer.Description class="text-sm">{trackTitle}</Drawer.Description>
 						</Drawer.Header>
 
 						<!-- Large cover art — links to volume page -->
-						{#if audioStore.currentTrack?.artwork ?? audioStore.currentTrack?.images?.[0]}
-							{@const coverSrc =
-								audioStore.currentTrack?.artwork ?? audioStore.currentTrack?.images?.[0]}
+						{#if currentTrack?.artwork ?? currentTrack?.images?.[0]}
 							{#if volumeHref}
 								<a href={volumeHref} class="mx-auto block">
 									<img
 										class="w-48 h-48 rounded-xl object-cover shadow-lg border border-border/40"
-										src={coverSrc}
-										alt={audioStore.currentTrack?.title ?? 'Обложка'}
+										src={trackArtwork}
+										alt={currentTrack?.title ?? 'Обложка'}
 									/>
 								</a>
 							{:else}
 								<img
 									class="w-48 h-48 mx-auto rounded-xl object-cover shadow-lg border border-border/40"
-									src={coverSrc}
-									alt={audioStore.currentTrack?.title ?? 'Обложка'}
+									src={trackArtwork}
+									alt={currentTrack?.title ?? 'Обложка'}
 								/>
 							{/if}
 						{/if}

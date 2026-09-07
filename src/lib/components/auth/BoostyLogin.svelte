@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Button } from '$lib/components/ui/button';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import { cn } from '$lib/utils';
 	import { Search, ChevronDown } from '@lucide/svelte';
 	import {
 		boostySendCode,
@@ -180,9 +181,10 @@
 			{:else}
 				<!-- Кастомный select с поиском -->
 				<div class="relative">
-					<button
+					<Button
+						variant="outline"
+						class="w-full h-11 justify-between px-3"
 						type="button"
-						class="flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors hover:bg-muted/30 focus:border-ring"
 						disabled={step === 'busy'}
 						aria-haspopup="listbox"
 						aria-expanded={countryOpen}
@@ -202,7 +204,7 @@
 							{/if}
 						</span>
 						<ChevronDown class="size-4 shrink-0 text-muted-foreground" />
-					</button>
+					</Button>
 
 					{#if countryOpen}
 						<div
@@ -228,10 +230,11 @@
 											type="button"
 											role="option"
 											aria-selected={c.code === selectedCode}
-											class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/50 {c.code ===
-											selectedCode
-												? 'bg-muted/60'
-												: ''}"
+											class={cn(
+												buttonVariants({ variant: 'ghost' }),
+												'w-full justify-start text-left px-3 py-1.5 text-sm h-auto',
+												c.code === selectedCode && 'bg-muted/60'
+											)}
 											onclick={() => {
 												selectedCode = c.code;
 												countryOpen = false;

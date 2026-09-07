@@ -19,7 +19,10 @@
 	} from '$lib/client/providers';
 	import ConfirmModal from '$lib/components/overlay/ConfirmModal.svelte';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
-	import BoostyLogin from '$lib/components/auth/BoostyLogin.svelte';
+	import BoostyLoginModal from '$lib/components/auth/BoostyLoginModal.svelte';
+	import ProviderIcon from '$lib/components/auth/ProviderIcon.svelte';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import { getInitial } from '$lib/utils';
 	import {
 		DELETE_CONFIRM_TEXTS,
 		computeDeleteButtons,
@@ -191,8 +194,7 @@
 </script>
 
 <div class="mx-auto max-w-2xl p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
-	<p class="text-muted-foreground mt-2">Профиль, идентификатор и способы входа.</p>
+	<PageHeader title="Мой аккаунт" description="Профиль, идентификатор и способы входа." />
 
 	{#if session.isPending}
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>
@@ -250,7 +252,6 @@
 				{:else}
 					<div class="mt-4 space-y-3">
 						{#each AUTH_PROVIDERS as provider (provider.id)}
-							{@const Icon = provider.icon}
 							{@const linked = isLinked(provider.id)}
 							{@const accId = linkedAccountId(provider.id)}
 							{@const lastOne = isLastOne(provider.id)}
@@ -273,13 +274,13 @@
 										<div
 											class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted/60 font-semibold text-muted-foreground"
 										>
-											{username.charAt(0).toUpperCase()}
+											{getInitial(username)}
 										</div>
 									{:else}
 										<div
 											class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground"
 										>
-											<Icon class="size-5" style="color: {provider.brandColor};" />
+											<ProviderIcon {provider} class="size-5" />
 										</div>
 									{/if}
 									<div class="min-w-0">
@@ -397,8 +398,7 @@
 				</p>
 				<div class="mt-4">
 					<Button
-						variant="outline"
-						class="text-destructive hover:text-destructive"
+						variant="destructive-outline"
 						disabled={accounts.isPending !== null}
 						onclick={openDeleteModal}
 					>
@@ -426,8 +426,8 @@
 						{#each deleteButtons as btn (btn.key)}
 							{#if btn.confirm}
 								<Button
-									variant="outline"
-									class="w-full text-destructive hover:text-destructive"
+									variant="destructive-outline"
+									class="w-full"
 									disabled={deleting}
 									onclick={advanceDeleteStep}
 								>
@@ -448,15 +448,13 @@
 			</BaseModal>
 
 			<!-- Привязка Boosty: телефон + SMS-код -->
-			<BaseModal
+			<BoostyLoginModal
 				bind:open={boostyLinkOpen}
 				title="Привязать Boosty"
 				description="Войдите по номеру телефона Boosty — мы привяжем аккаунт автоматически."
-				showCloseButton={true}
 				onClose={() => (boostyLinkOpen = false)}
-			>
-				<BoostyLogin callbackURL="/profile" />
-			</BaseModal>
+				callbackURL="/profile"
+			/>
 
 			<!-- модалка подтверждения отвязки провайдера -->
 			<ConfirmModal

@@ -1,7 +1,7 @@
 <script lang="ts">
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
 <div class="p-6">
-	<h1 class="text-3xl font-bold tracking-tight">История</h1>
-	<p class="text-muted-foreground mt-2">Здесь будет отображаться история ваших прослушиваний.</p>
+	<PageHeader title="История" description="Здесь будет отображаться история ваших прослушиваний." />
 </div>
