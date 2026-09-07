@@ -1,4 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/test';
+import { mockBoosty, mockListAccounts } from './fixtures/mocks';
+import { BOOSTY_ACCOUNT } from './fixtures/data';
 
 /**
  * E2E: «Вход через Boosty» (телефон + SMS-код).
@@ -9,65 +11,10 @@ import { test, expect } from '@playwright/test';
  * авто-подтверждение 6-значного кода, ошибка неверного кода, подписка.
  */
 
-const PHONE_CODES = [
-	{ name: 'Russia', dialCode: '+7', code: 'RU', mask: '(XXX) XXX-XX-XX' },
-	{ name: 'Kazakhstan', dialCode: '+7', code: 'KZ' },
-	{ name: 'Ukraine', dialCode: '+380', code: 'UA' }
-];
-
-async function mockBoostyApis(
-	page: import('@playwright/test').Page,
-	opts: { confirmStatus?: number; confirmError?: string } = {}
-) {
-	await page.route('**/api/boosty/phone-codes', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ phoneCodes: PHONE_CODES })
-		});
-	});
-	await page.route('**/api/boosty/send-code', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ok: true,
-				deviceId: 'device-123',
-				verifyToken: 'verify-token-123',
-				sentTransport: 'gate'
-			})
-		});
-	});
-	await page.route('**/api/boosty/confirm-code', async (route) => {
-		const body = route.request().postDataJSON() as Record<string, unknown>;
-		if (opts.confirmStatus && opts.confirmStatus >= 400) {
-			await route.fulfill({
-				status: opts.confirmStatus,
-				contentType: 'application/json',
-				body: JSON.stringify({ error: opts.confirmError ?? 'Code is invalid' })
-			});
-			return;
-		}
-		expect(body.smsCode).toBe('123456');
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				ok: true,
-				user: { id: 'user-boosty', name: 'Boosty-пользователь', image: null }
-			})
-		});
-	});
-}
-
 test.describe('Вход через Boosty (телефон + SMS)', () => {
-	test.beforeEach(async ({ page }) => {
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
-		await page.route('**/api/auth/get-session', async (route) => {
-			await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
-		});
+	// Гость: get-session → null (страница входа доступна без сессии).
+	test.beforeEach(async ({ guest }) => {
+		void guest;
 	});
 
 	async function openDialog(page: import('@playwright/test').Page) {
@@ -81,12 +28,12 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 	test('кастомный select: Россия выбрана по умолчанию, русское название и флаг', async ({
 		page
 	}) => {
-		await mockBoostyApis(page);
+		await mockBoosty(page);
 		const dialog = await openDialog(page);
 		await expect(dialog).toContainText('Вход через Boosty');
 
 		// Триггер select показывает 🇷🇺 +7 Россия (русское название).
-		const trigger = dialog.getByRole('button', { name: /+7/ });
+		const trigger = dialog.getByRole('button', { name: /\+7/ });
 		await expect(trigger).toBeVisible();
 		await expect(trigger).toContainText('Россия');
 
@@ -101,7 +48,7 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 	});
 
 	test('полный номер (код страны + номер) уходит в send-code', async ({ page }) => {
-		await mockBoostyApis(page);
+		await mockBoosty(page);
 		let sentPhone = '';
 		await page.route('**/api/boosty/send-code', async (route) => {
 			sentPhone = (route.request().postDataJSON() as { phone?: string }).phone ?? '';
@@ -112,10 +59,11 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 			});
 		});
 		const dialog = await openDialog(page);
-		// Россия по умолчанию (+7): вводим национальный номер.
+		// Россия по умолчанию (+7): вводим национальный номер без кода страны
+		// (компонент сам конкатенирует dialCode + номер: dial + digits).
 		const phoneInput = dialog.locator('#boosty-phone');
 		await expect(phoneInput).toBeEnabled();
-		await phoneInput.fill('79999999999');
+		await phoneInput.fill('9999999999');
 		await dialog.getByRole('button', { name: 'Получить код' }).click();
 
 		await expect.poll(() => sentPhone).not.toBe('');
@@ -123,7 +71,7 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 	});
 
 	test('смена страны на Украину меняет код (+380)', async ({ page }) => {
-		await mockBoostyApis(page);
+		await mockBoosty(page);
 		let sentPhone = '';
 		await page.route('**/api/boosty/send-code', async (route) => {
 			sentPhone = (route.request().postDataJSON() as { phone?: string }).phone ?? '';
@@ -146,7 +94,7 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 	});
 
 	test('код подтверждается автоматически после 6 цифр (без кнопки)', async ({ page }) => {
-		await mockBoostyApis(page);
+		await mockBoosty(page);
 		let confirmBody: unknown = null;
 		let confirmCount = 0;
 		await page.route('**/api/boosty/confirm-code', async (route) => {
@@ -177,7 +125,7 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 	});
 
 	test('неверный код: сообщение об ошибке и поле можно ввести заново', async ({ page }) => {
-		await mockBoostyApis(page, { confirmStatus: 400, confirmError: 'invalid_code' });
+		await mockBoosty(page, { confirmStatus: 400, confirmError: 'invalid_code' });
 		const dialog = await openDialog(page);
 		await dialog.locator('#boosty-phone').fill('9999999999');
 		await dialog.getByRole('button', { name: 'Получить код' }).click();
@@ -192,50 +140,13 @@ test.describe('Вход через Boosty (телефон + SMS)', () => {
 });
 
 test.describe('Подписка HEDGEHOG.INC в Boosty', () => {
+	// Залогинен: get-session → MOCK_USER + MOCK_SESSION.
+	test.beforeEach(async ({ loggedIn }) => {
+		void loggedIn;
+	});
+
 	test('на /profile показывается активная подписка (название, цена, дата)', async ({ page }) => {
-		const mockUser = {
-			id: 'user-1',
-			name: 'Рамазан',
-			email: 'boosty-test@boosty.local',
-			image: null,
-			emailVerified: false,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString()
-		};
-		const mockSession = {
-			id: 's1',
-			userId: 'user-1',
-			token: 't1',
-			expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString()
-		};
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
-		await page.route('**/api/auth/get-session', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ session: mockSession, user: mockUser })
-			});
-		});
-		await page.route('**/api/auth/list-accounts', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify([
-					{
-						id: 'a1',
-						providerId: 'boosty',
-						accountId: 'boosty:abc',
-						userId: 'user-1',
-						createdAt: new Date().toISOString(),
-						updatedAt: new Date().toISOString()
-					}
-				])
-			});
-		});
+		await mockListAccounts(page, [BOOSTY_ACCOUNT]);
 		await page.route('**/api/boosty/subscription', async (route) => {
 			await route.fulfill({
 				status: 200,
@@ -257,7 +168,10 @@ test.describe('Подписка HEDGEHOG.INC в Boosty', () => {
 		await page.goto('/profile');
 		const section = page.getByText('Подписка HEDGEHOG.INC');
 		await expect(section).toBeVisible();
-		await expect(page).toContainText('ПОВЕЛИТЕЛЬ!');
-		await expect(page).toContainText('2 000');
+		// toContainText работает только с Locator — берём всё тело страницы,
+		// как исходный «page содержит текст».
+		const body = page.locator('body');
+		await expect(body).toContainText('ПОВЕЛИТЕЛЬ!');
+		await expect(body).toContainText('2 000');
 	});
 });

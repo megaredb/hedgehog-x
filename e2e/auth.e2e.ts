@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/test';
 
 /**
  * E2E: авторизация через Telegram (OIDC) и Discord (OAuth2).
@@ -18,11 +18,9 @@ const TELEGRAM_OAUTH_URL = 'https://oauth.telegram.org/auth';
 const DISCORD_OAUTH_URL = 'https://discord.com/api/oauth2/authorize';
 
 test.describe('Авторизация через внешние провайдеры', () => {
-	test.beforeEach(async ({ page }) => {
-		// Закрываем приветственное модальное окно, чтобы не перехватывало клики
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
+	// Гость: get-session → null (как если бы session-cookie не было).
+	test.beforeEach(async ({ guest }) => {
+		void guest;
 	});
 
 	test('страница /auth показывает кнопки входа через Telegram и Discord', async ({ page }) => {
@@ -71,42 +69,6 @@ test.describe('Авторизация через внешние провайде
 		await expect(page).toHaveURL(/discord\.com\/oauth2\/authorize/);
 	});
 
-	test('при залогиненном пользователе шапка показывает имя и есть кнопка выхода', async ({
-		page
-	}) => {
-		const mockUser = {
-			id: 'mock-user-1',
-			name: 'Еж Тестовый',
-			email: 'mock@telegram.oidc',
-			image: null,
-			emailVerified: false,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString()
-		};
-		const mockSession = {
-			id: 'mock-session-1',
-			userId: 'mock-user-1',
-			token: 'mock-token',
-			expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString()
-		};
-
-		await page.route('**/api/auth/get-session', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ session: mockSession, user: mockUser })
-			});
-		});
-
-		await page.goto('/auth');
-
-		// Имя пользователя видно на странице /auth (в профильном блоке) и в шапке
-		await expect(page.getByRole('main').getByText('Еж Тестовый')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
-	});
-
 	test('при ошибке авторизации (отмена у провайдера) показывается модалка', async ({ page }) => {
 		// Возврат с провайдера с error=access_denied
 		await page.goto('/auth?error=access_denied');
@@ -144,5 +106,22 @@ test.describe('Авторизация через внешние провайде
 
 		await dialog.getByRole('button', { name: 'Понятно' }).click();
 		await expect(dialog).not.toBeVisible();
+	});
+});
+
+test.describe('Авторизация: залогиненный пользователь', () => {
+	// Залогинен: get-session → MOCK_USER + MOCK_SESSION (имя «Еж Тестовый»).
+	test.beforeEach(async ({ loggedIn }) => {
+		void loggedIn;
+	});
+
+	test('при залогиненном пользователе шапка показывает имя и есть кнопка выхода', async ({
+		page
+	}) => {
+		await page.goto('/auth');
+
+		// Имя пользователя видно на странице /auth (в профильном блоке) и в шапке
+		await expect(page.getByRole('main').getByText('Еж Тестовый')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
 	});
 });

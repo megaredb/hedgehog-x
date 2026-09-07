@@ -1,4 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/test';
+import {
+	MOCK_SESSION,
+	MOCK_USER,
+	DISCORD_ACCOUNT,
+	TELEGRAM_ACCOUNT,
+	type MockLinkedAccount
+} from './fixtures/data';
+import { mockGetSession, mockListAccounts } from './fixtures/mocks';
 
 /**
  * E2E: страница профиля и управление способами входа.
@@ -6,236 +14,194 @@ import { test, expect } from '@playwright/test';
  * Тесты мокают сессию (get-session) и API аккаунтов (list-accounts,
  * unlink-account), т.к. реальные OAuth-провайдеры требуют регистрации
  * приложений и реальных учёток.
+ *
+ * Базовая сессия (get-session) приходит из фикстуры `loggedIn`; где нужен
+ * кастомный user (аватар/username провайдера), get-session переопределяется
+ * в теле теста — последний зарегистрированный page.route побеждает.
  */
 
-const mockUser = {
-	id: 'user-123',
-	name: 'Еж Тестовый',
-	email: '123456@telegram.oidc',
-	image: null,
-	emailVerified: false,
-	createdAt: new Date().toISOString(),
-	updatedAt: new Date().toISOString()
-};
-
-const mockSession = {
-	id: 'session-1',
-	userId: 'user-123',
-	token: 'mock-token',
-	expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-	createdAt: new Date().toISOString(),
-	updatedAt: new Date().toISOString()
-};
-
-async function mockLoggedIn(
+/** Мок списка способов входа для залогиненного теста. */
+async function mockLoggedInAccounts(
 	page: import('@playwright/test').Page,
-	accounts: unknown[],
-	user = mockUser
+	accounts: MockLinkedAccount[]
 ) {
-	await page.addInitScript(() => {
-		localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-	});
-	await page.route('**/api/auth/get-session', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ session: mockSession, user })
-		});
-	});
-	await page.route('**/api/auth/list-accounts', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify(accounts)
-		});
-	});
+	await mockListAccounts(page, accounts);
 }
 
-const telegramAccount = {
-	id: 'acc-tg-1',
-	providerId: 'telegram-oidc',
-	accountId: '123456789',
-	userId: 'user-123',
-	createdAt: new Date().toISOString(),
-	updatedAt: new Date().toISOString(),
-	scopes: ['openid', 'profile']
-};
-
-const discordAccount = {
-	id: 'acc-dc-1',
-	providerId: 'discord',
-	accountId: '987654321',
-	userId: 'user-123',
-	createdAt: new Date().toISOString(),
-	updatedAt: new Date().toISOString(),
-	scopes: ['identify', 'email']
-};
-
 test.describe('Страница профиля: способы входа', () => {
-	test('показывает ID, имя и ID Telegram-аккаунта', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
-		await page.goto('/profile');
+	test.describe('авторизованный пользователь', () => {
+		test.beforeEach(async ({ loggedIn }) => {
+			void loggedIn;
+		});
 
-		await expect(page.getByText('Мой аккаунт')).toBeVisible();
-		await expect(page.getByText('user-123')).toBeVisible();
-		await expect(page.getByText('Еж Тестовый').first()).toBeVisible();
-		// ID способа входа: «ID 123456789»
-		await expect(page.getByText('ID 123456789')).toBeVisible();
-	});
+		test('показывает ID, имя и ID Telegram-аккаунта', async ({ page }) => {
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
 
-	test('показывает аватар платформы в строке способа входа', async ({ page }) => {
-		const userWithAvatar = {
-			...mockUser,
-			telegramAvatar: 'https://t.me/i/userpic/320/hedgehog_test.jpg'
-		};
-		await mockLoggedIn(page, [telegramAccount], userWithAvatar);
-		await page.goto('/profile');
+			await expect(page.getByText('Мой аккаунт')).toBeVisible();
+			await expect(page.getByText(MOCK_USER.id)).toBeVisible();
+			await expect(page.getByText(MOCK_USER.name).first()).toBeVisible();
+			// ID способа входа: «ID 123456789»
+			await expect(page.getByText(`ID ${TELEGRAM_ACCOUNT.accountId}`)).toBeVisible();
+		});
 
-		// В строке Telegram вместо иконки — <img> с аватаром Telegram
-		const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
-		const avatarImg = telegramRow.locator('img');
-		await expect(avatarImg).toBeVisible();
-		await expect(avatarImg).toHaveAttribute('src', userWithAvatar.telegramAvatar);
-	});
-
-	test('показывает username способа входа, если он есть', async ({ page }) => {
-		const userWithUsername = {
-			...mockUser,
-			telegramOidcUsername: 'hedgehog_test'
-		};
-		await mockLoggedIn(page, [telegramAccount], userWithUsername);
-		await page.goto('/profile');
-
-		await expect(page.getByText('@hedgehog_test · ID 123456789')).toBeVisible();
-	});
-
-	test('если аватара нет, показывает первую букву username (фолбэк)', async ({ page }) => {
-		const userWithUsername = {
-			...mockUser,
-			telegramOidcUsername: 'hedgehog_test'
-		};
-		await mockLoggedIn(page, [telegramAccount], userWithUsername);
-		await page.goto('/profile');
-
-		// В строке Telegram вместо иконки/картинки — кружок с первой буквой username
-		const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
-		await expect(telegramRow.getByText('H', { exact: true })).toBeVisible();
-	});
-
-	test('если username нет, показывает first name из имени пользователя', async ({ page }) => {
-		const userNoUsername = {
-			...mockUser,
-			name: 'Еж Иванов',
-			telegramOidcUsername: null,
-			image: null
-		};
-		await mockLoggedIn(page, [telegramAccount], userNoUsername);
-		await page.goto('/profile');
-
-		// Фолбэк имени: «Еж · ID 123456789»
-		await expect(page.getByText('Еж · ID 123456789')).toBeVisible();
-	});
-
-	test('единственный способ входа нельзя отвязать (кнопка отключена)', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
-		await page.goto('/profile');
-
-		// Рядом с Telegram — кнопка «Отвязать» (заблокирована, т.к. способ последний)
-		const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
-		await expect(telegramRow.getByRole('button', { name: 'Отвязать' })).toBeDisabled();
-		// Discord не привязан — доступна кнопка «Привязать»
-		const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
-		await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeEnabled();
-	});
-
-	test('при нескольких способах виден ID Discord и можно отвязать', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount, discordAccount]);
-
-		// Отвязка Discord через API. Проверяем, что accountId — внешний ID
-		// провайдера (account.accountId), а НЕ внутренний id записи (acc-dc-1).
-		// Раньше клиент отправлял внутренний id → сервер отвечал
-		// «Account not found» (ACCOUNT_NOT_FOUND).
-		await page.route('**/api/auth/unlink-account', async (route) => {
-			const body = (route.request().postDataJSON() ?? {}) as {
-				providerId?: string;
-				accountId?: string;
+		test('показывает аватар платформы в строке способа входа', async ({ page }) => {
+			const userWithAvatar = {
+				...MOCK_USER,
+				telegramAvatar: 'https://t.me/i/userpic/320/hedgehog_test.jpg'
 			};
-			expect(body.providerId).toBe('discord');
-			expect(body.accountId).toBe('987654321');
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ status: true })
-			});
+			await mockGetSession(page, { user: userWithAvatar, session: MOCK_SESSION });
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
+
+			// В строке Telegram вместо иконки — <img> с аватаром Telegram
+			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			const avatarImg = telegramRow.locator('img');
+			await expect(avatarImg).toBeVisible();
+			await expect(avatarImg).toHaveAttribute('src', userWithAvatar.telegramAvatar);
 		});
 
-		await page.goto('/profile');
+		test('показывает username способа входа, если он есть', async ({ page }) => {
+			const userWithUsername = {
+				...MOCK_USER,
+				telegramOidcUsername: 'hedgehog_test'
+			};
+			await mockGetSession(page, { user: userWithUsername, session: MOCK_SESSION });
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
 
-		// ID Discord способа входа
-		await expect(page.getByText('ID 987654321')).toBeVisible();
-		// ID Telegram способа входа
-		await expect(page.getByText('ID 123456789')).toBeVisible();
+			await expect(page.getByText('@hedgehog_test · ID 123456789')).toBeVisible();
+		});
 
-		const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
-		await expect(discordRow.getByRole('button', { name: 'Отвязать' })).toBeEnabled();
+		test('если аватара нет, показывает первую букву username (фолбэк)', async ({ page }) => {
+			const userWithUsername = {
+				...MOCK_USER,
+				telegramOidcUsername: 'hedgehog_test'
+			};
+			await mockGetSession(page, { user: userWithUsername, session: MOCK_SESSION });
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
 
-		// Отвязка требует подтверждения в модалке
-		await discordRow.getByRole('button', { name: 'Отвязать' }).click();
-		const dialog = page.getByRole('dialog');
-		await expect(dialog).toContainText('Отвязать Discord?');
-		await dialog.getByRole('button', { name: 'Отвязать' }).click();
+			// В строке Telegram вместо иконки/картинки — кружок с первой буквой username
+			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			await expect(telegramRow.getByText('H', { exact: true })).toBeVisible();
+		});
 
-		// После отвязки Discord помечается как доступный для привязки
-		await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeVisible();
+		test('если username нет, показывает first name из имени пользователя', async ({ page }) => {
+			const userNoUsername = {
+				...MOCK_USER,
+				name: 'Еж Иванов',
+				telegramOidcUsername: null,
+				image: null
+			};
+			await mockGetSession(page, { user: userNoUsername, session: MOCK_SESSION });
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
+
+			// Фолбэк имени: «Еж · ID 123456789»
+			await expect(page.getByText('Еж · ID 123456789')).toBeVisible();
+		});
+
+		test('единственный способ входа нельзя отвязать (кнопка отключена)', async ({ page }) => {
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+			await page.goto('/profile');
+
+			// Рядом с Telegram — кнопка «Отвязать» (заблокирована, т.к. способ последний)
+			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			await expect(telegramRow.getByRole('button', { name: 'Отвязать' })).toBeDisabled();
+			// Discord не привязан — доступна кнопка «Привязать»
+			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeEnabled();
+		});
+
+		test('при нескольких способах виден ID Discord и можно отвязать', async ({ page }) => {
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT, DISCORD_ACCOUNT]);
+
+			// Отвязка Discord через API. Проверяем, что accountId — внешний ID
+			// провайдера (account.accountId), а НЕ внутренний id записи (acc-dc-1).
+			// Раньше клиент отправлял внутренний id → сервер отвечал
+			// «Account not found» (ACCOUNT_NOT_FOUND).
+			await page.route('**/api/auth/unlink-account', async (route) => {
+				const body = (route.request().postDataJSON() ?? {}) as {
+					providerId?: string;
+					accountId?: string;
+				};
+				expect(body.providerId).toBe('discord');
+				expect(body.accountId).toBe(DISCORD_ACCOUNT.accountId);
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({ status: true })
+				});
+			});
+
+			await page.goto('/profile');
+
+			// ID Discord способа входа
+			await expect(page.getByText(`ID ${DISCORD_ACCOUNT.accountId}`)).toBeVisible();
+			// ID Telegram способа входа
+			await expect(page.getByText(`ID ${TELEGRAM_ACCOUNT.accountId}`)).toBeVisible();
+
+			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			await expect(discordRow.getByRole('button', { name: 'Отвязать' })).toBeEnabled();
+
+			// Отвязка требует подтверждения в модалке
+			await discordRow.getByRole('button', { name: 'Отвязать' }).click();
+			const dialog = page.getByRole('dialog');
+			await expect(dialog).toContainText('Отвязать Discord?');
+			await dialog.getByRole('button', { name: 'Отвязать' }).click();
+
+			// После отвязки Discord помечается как доступный для привязки
+			await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeVisible();
+		});
+
+		test('привязка Discord вызывает /link-social с правильным провайдером', async ({ page }) => {
+			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
+
+			await page.route('**/api/auth/link-social', async (route) => {
+				const body = (route.request().postDataJSON() ?? {}) as { provider?: string };
+				expect(body.provider).toBe('discord');
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						url: 'https://discord.com/api/oauth2/authorize?response_type=code&client_id=1463632713943748925&redirect_uri=http%3A%2F%2Flocalhost%3A4173%2Fapi%2Fauth%2Fcallback%2Fdiscord',
+						redirect: true,
+						status: true
+					})
+				});
+			});
+
+			await page.goto('/profile');
+
+			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			await discordRow.getByRole('button', { name: 'Привязать' }).click();
+
+			await expect(page).toHaveURL(/discord.com/);
+		});
 	});
 
-	test('привязка Discord вызывает /link-social с правильным провайдером', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
-
-		await page.route('**/api/auth/link-social', async (route) => {
-			const body = (route.request().postDataJSON() ?? {}) as { provider?: string };
-			expect(body.provider).toBe('discord');
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({
-					url: 'https://discord.com/api/oauth2/authorize?response_type=code&client_id=1463632713943748925&redirect_uri=http%3A%2F%2Flocalhost%3A4173%2Fapi%2Fauth%2Fcallback%2Fdiscord',
-					redirect: true,
-					status: true
-				})
-			});
+	test.describe('гость', () => {
+		test.beforeEach(async ({ guest }) => {
+			void guest;
 		});
 
-		await page.goto('/profile');
-
-		const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
-		await discordRow.getByRole('button', { name: 'Привязать' }).click();
-
-		await expect(page).toHaveURL(/discord.com/);
-	});
-
-	test('когда пользователь не авторизован — редирект на страницу входа', async ({ page }) => {
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
+		test('когда пользователь не авторизован — редирект на страницу входа', async ({ page }) => {
+			await page.goto('/profile');
+			// Уводим на /auth с параметром from=/profile, чтобы после входа вернуться
+			await expect(page).toHaveURL(/\/auth\?from=/);
+			await expect(page.getByText('Вход в аккаунт')).toBeVisible();
 		});
-		await page.route('**/api/auth/get-session', async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ session: null, user: null })
-			});
-		});
-
-		await page.goto('/profile');
-		// Уводим на /auth с параметром from=/profile, чтобы после входа вернуться
-		await expect(page).toHaveURL(/\/auth\?from=/);
-		await expect(page.getByText('Вход в аккаунт')).toBeVisible();
 	});
 });
 
 test.describe('Страница профиля: удаление аккаунта', () => {
+	test.beforeEach(async ({ loggedIn }) => {
+		void loggedIn;
+	});
+
 	test('удаление требует четырёхступенчатого подтверждения и вызывает API', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
+		await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
 		let deleteCalled = 0;
 		await page.route('**/api/user/delete', async (route) => {
@@ -275,7 +241,7 @@ test.describe('Страница профиля: удаление аккаунт�
 	});
 
 	test('кнопка «отмена» закрывает модалку без удаления', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
+		await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
 		let deleteCalled = 0;
 		await page.route('**/api/user/delete', async (route) => {
@@ -304,7 +270,7 @@ test.describe('Страница профиля: удаление аккаунт�
 	});
 
 	test('закрытие кликом по оверлею позволяет открыть модалку снова', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
+		await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
 		let deleteCalled = 0;
 		await page.route('**/api/user/delete', async (route) => {
@@ -342,7 +308,7 @@ test.describe('Страница профиля: удаление аккаунт�
 	});
 
 	test('кнопка подтверждения каждый раз на новом месте (4 шага)', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
+		await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
 		let deleteCalled = 0;
 		await page.route('**/api/user/delete', async (route) => {
@@ -400,7 +366,7 @@ test.describe('Страница профиля: удаление аккаунт�
 	});
 
 	test('после удаления аккаунта пользователь переходит на главную', async ({ page }) => {
-		await mockLoggedIn(page, [telegramAccount]);
+		await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
 		await page.route('**/api/user/delete', async (route) => {
 			await route.fulfill({
