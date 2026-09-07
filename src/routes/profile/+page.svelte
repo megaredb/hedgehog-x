@@ -22,6 +22,7 @@
 	import BoostyLoginModal from '$lib/components/auth/BoostyLoginModal.svelte';
 	import ProviderIcon from '$lib/components/auth/ProviderIcon.svelte';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import { segmentTitle } from '$lib/route-titles';
 	import { getInitial } from '$lib/utils';
 	import {
 		DELETE_CONFIRM_TEXTS,
@@ -194,7 +195,10 @@
 </script>
 
 <div class="mx-auto max-w-2xl p-6">
-	<PageHeader title="Мой аккаунт" description="Профиль, идентификатор и способы входа." />
+	<PageHeader
+		title={segmentTitle('profile')!}
+		description="Профиль, идентификатор и способы входа."
+	/>
 
 	{#if session.isPending}
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>

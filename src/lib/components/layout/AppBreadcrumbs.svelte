@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { ROUTE_TITLES, segmentTitle } from '$lib/route-titles';
 
 	let segments = $derived(page.url.pathname.split('/').filter(Boolean));
 
@@ -29,10 +30,14 @@
 
 	let breadcrumbs = $derived(
 		segments.map((segment, i) => {
-			let title = segment.charAt(0).toUpperCase() + segment.slice(1);
-			if (segment === 'books') title = 'Книги';
-			else if (segment === bookId) title = bookQuery.data?.title || 'Загрузка...';
+			// Динамические сегменты (id книги/тома) — заголовок из данных в Dexie,
+			// пока данные не загружены — плейсхолдер загрузки.
+			let title: string;
+			if (segment === bookId) title = bookQuery.data?.title || 'Загрузка...';
 			else if (segment === volumeId) title = volumeQuery.data?.title || 'Загрузка...';
+			// Статические сегменты — единый источник названий; неизвестный сегмент
+			// (не должен встречаться на текущих маршрутах) показываем как есть.
+			else title = segmentTitle(segment) ?? segment;
 
 			return {
 				segment,
@@ -53,7 +58,7 @@
 			<Breadcrumb.Root>
 				<Breadcrumb.List class="flex-nowrap whitespace-nowrap">
 					<Breadcrumb.Item>
-						<Breadcrumb.Link href="/">Главная</Breadcrumb.Link>
+						<Breadcrumb.Link href="/">{ROUTE_TITLES['']}</Breadcrumb.Link>
 					</Breadcrumb.Item>
 
 					{#each breadcrumbs as bc, i (bc.segment)}

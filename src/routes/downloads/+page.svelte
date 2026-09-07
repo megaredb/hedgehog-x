@@ -6,6 +6,7 @@
 	import * as Accordion from '$lib/components/ui/accordion';
 	import * as Empty from '$lib/components/ui/empty';
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
+	import { segmentTitle } from '$lib/route-titles';
 	import DownloadVolumeGroup from '$lib/components/downloads/DownloadVolumeGroup.svelte';
 	import { HardDriveDownload, XCircle } from '@lucide/svelte';
 	import { SvelteMap } from 'svelte/reactivity';
@@ -64,7 +65,7 @@
 <div class="p-6 max-w-4xl mx-auto">
 	<div class="mb-8">
 		<PageHeader
-			title="Загрузки"
+			title={segmentTitle('downloads')!}
 			description="Менеджер загрузок. Здесь вы можете управлять сохраненными аудиокнигами для оффлайн-прослушивания."
 		>
 			{#snippet icon()}
