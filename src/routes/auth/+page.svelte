@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { LogOut } from '@lucide/svelte';
+	import { Info, LogOut } from '@lucide/svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Button } from '$lib/components/ui/button';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
 	import BoostyLoginModal from '$lib/components/auth/BoostyLoginModal.svelte';
@@ -150,8 +151,25 @@
 				{/each}
 
 				<p class="text-center text-xs text-muted-foreground">
-					Входя через Telegram, вы соглашаетесь на передачу имени, username и фото профиля.<br /> Входя
-					через Discord — на передачу имени и аватара.
+					<Tooltip.Root>
+						<Tooltip.Trigger
+							class="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						>
+							<Info class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+							О передаче данных при входе
+						</Tooltip.Trigger>
+						<Tooltip.Content side="top" sideOffset={8} class="w-64 text-left">
+							<p>Входя через платформу, вы соглашаетесь на передачу и хранение в вашем профиле:</p>
+							<ul class="mt-1 list-disc space-y-0.5 pl-4">
+								<li>Telegram — имя, username и аватар;</li>
+								<li>Discord — имя, username и аватар;</li>
+								<li>Boosty — имя и аватар;</li>
+							</ul>
+							<p class="mt-1">
+								Номер телефона Boosty используется только для входа — мы его не сохраняем.
+							</p>
+						</Tooltip.Content>
+					</Tooltip.Root>
 				</p>
 			</div>
 		{/if}
