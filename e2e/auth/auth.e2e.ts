@@ -16,14 +16,48 @@
  *  6. Залогиненный: имя в шапке (Shell) + карточка на /auth с «Выйти».
  */
 
+import type { Page } from '@playwright/test';
 import { test, expect } from '../fixtures/test';
 import { BASE_URL } from '../config';
-import { MOCK_USER } from '../fixtures/data';
+import { MOCK_SESSION, MOCK_USER, type MockUser } from '../fixtures/data';
+import { mockGetSession } from '../fixtures/mocks';
 import { AuthPage } from './auth.page';
 import { Shell } from '../shared/shell.page';
+import { authAvatarCases, authFromCases } from './auth.cases';
 
 const TELEGRAM_OAUTH_URL = 'https://oauth.telegram.org/auth';
 const DISCORD_OAUTH_URL = 'https://discord.com/api/oauth2/authorize';
+
+/** MOCK_USER + переопределения полей (для мока get-session под ветку). */
+function buildUser(fields: Partial<MockUser>): MockUser {
+	return { ...MOCK_USER, ...fields };
+}
+
+/**
+ * Перехватывает POST /api/auth/sign-in/social (мок ответа — редирект на
+ * oauth.telegram.org) и внешний хост, чтобы не навигировать реально. Тело
+ * запроса накапливается в возвращаемом объекте и проверяется в теле теста
+ * через expect.poll (ассерты вне route-колбэка).
+ */
+function mockTelegramSignIn(page: Page): Record<string, unknown> {
+	const body: Record<string, unknown> = {};
+	page.route('**/api/auth/sign-in/social', async (route) => {
+		Object.assign(body, route.request().postDataJSON() ?? {});
+		const callback = encodeURIComponent(new URL('/api/auth/callback/telegram-oidc', BASE_URL).href);
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: `${TELEGRAM_OAUTH_URL}?response_type=code&client_id=8204202555&scope=openid+profile&redirect_uri=${callback}`,
+				redirect: true
+			})
+		});
+	});
+	page.route('https://oauth.telegram.org/**', (route) =>
+		route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body></body></html>' })
+	);
+	return body;
+}
 
 test.describe('Авторизация через внешние провайдеры', () => {
 	// Гость: get-session → null (как если бы session-cookie не было).
@@ -166,4 +200,105 @@ test.describe('Авторизация: залогиненный пользова
 		await expect(auth.userName(MOCK_USER.name)).toBeVisible();
 		await expect(auth.signOutButton).toBeVisible();
 	});
+});
+
+// ─── Гостевая страница: шапка, Boosty, тултип согласия ────────────────────────
+
+test.describe('auth: гостевая страница /auth', () => {
+	test.beforeEach(async ({ guest }) => {
+		void guest;
+	});
+
+	test('виден заголовок «Вход в аккаунт» и подзаголовок-описание', async ({ page }) => {
+		const auth = new AuthPage(page);
+		await auth.goto();
+
+		await expect(auth.heading).toBeVisible();
+		await expect(auth.description).toBeVisible();
+	});
+
+	test('видна кнопка «Войти через Boosty»', async ({ page }) => {
+		const auth = new AuthPage(page);
+		await auth.goto();
+
+		await expect(auth.boostyButton).toBeVisible();
+	});
+
+	test('тултип согласия открывается по наведению: заголовок, провайдеры и телефон', async ({
+		page
+	}) => {
+		const auth = new AuthPage(page);
+		await auth.goto();
+
+		// bits-ui Tooltip открывается с задержкой (~200 мс) — ждём авто-ожиданием.
+		await auth.openConsent();
+
+		const content = auth.consentContent;
+		await expect(content).toBeVisible();
+		// Заголовок карточки тултипа.
+		await expect(content).toContainText('Передача данных при входе');
+		// Упоминаются все три провайдера.
+		await expect(content).toContainText('Telegram');
+		await expect(content).toContainText('Discord');
+		await expect(content).toContainText('Boosty');
+		// Фраза про телефон: «…мы его не сохраняем».
+		await expect(content).toContainText('не сохраняем');
+	});
+});
+
+// ─── Залогиненный: аватар (img / инициал) и ссылка на профиль ─────────────────
+
+test.describe('auth: залогиненный — аватар и ссылка на профиль', () => {
+	test.beforeEach(async ({ loggedIn }) => {
+		void loggedIn;
+	});
+
+	// Ветки аватара карточки: image → <img>, иначе — инициал.
+	for (const c of authAvatarCases) {
+		test(`карточка залогиненного: аватар — ${c.id}`, async ({ page }) => {
+			await mockGetSession(page, { user: buildUser({ image: c.image }), session: MOCK_SESSION });
+			const auth = new AuthPage(page);
+			await auth.goto();
+
+			// Карточка с именем видна.
+			await expect(auth.userName(MOCK_USER.name)).toBeVisible();
+
+			if (c.expectImg) {
+				await expect(auth.avatarImage).toHaveCount(1);
+				await expect(auth.avatarImage).toHaveAttribute('src', c.image as string);
+			} else {
+				await expect(auth.avatarImage).toHaveCount(0);
+				await expect(auth.avatarInitial(c.initial as string)).toBeVisible();
+			}
+		});
+	}
+
+	test('внизу карточки есть ссылка «странице профиля» → /profile', async ({ page }) => {
+		const auth = new AuthPage(page);
+		await auth.goto();
+
+		await expect(auth.profileLink).toBeVisible();
+		await expect(auth.profileLink).toHaveAttribute('href', '/profile');
+	});
+});
+
+// ─── Санитизация параметра ?from (callbackURL в sign-in/social) ───────────────
+
+test.describe('auth: параметр ?from санитизируется', () => {
+	test.beforeEach(async ({ guest }) => {
+		void guest;
+	});
+
+	for (const c of authFromCases) {
+		test(`?from=${c.id}: callbackURL → ${c.expectCallback}`, async ({ page }) => {
+			const body = mockTelegramSignIn(page);
+			const auth = new AuthPage(page);
+
+			await auth.goto(`/auth?from=${c.from}`);
+			await auth.telegramButton.click();
+
+			// callbackURL берём из реального тела sign-in/social (ассерт вне route).
+			await expect.poll(() => body.callbackURL).toBe(c.expectCallback);
+		});
+	}
 });

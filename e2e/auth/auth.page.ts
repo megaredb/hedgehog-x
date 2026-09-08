@@ -35,6 +35,11 @@ export class AuthPage {
 		return this.page.getByRole('heading', { name: AUTH_TITLE });
 	}
 
+	/** Подзаголовок-описание под h1 («Войдите через одну из платформ…»). */
+	get description(): Locator {
+		return this.page.getByText(/Войдите через одну из платформ/);
+	}
+
 	// ─── Способы входа (гость) ──────────────────────────────────────────────────
 
 	/** Кнопка «Войти через <label>» (label = Telegram/Discord/Boosty). */
@@ -57,7 +62,47 @@ export class AuthPage {
 		return this.providerButton('Boosty');
 	}
 
+	// ─── Тултип согласия на передачу данных ─────────────────────────────────────
+
+	/** Триггер тултипа «О передаче данных при входе» (bits-ui Tooltip). */
+	get consentTrigger(): Locator {
+		return this.page.getByText('О передаче данных при входе');
+	}
+
+	/** Открыть тултип согласия по наведению на триггер (авто-ожидание открытия). */
+	async openConsent(): Promise<void> {
+		await this.consentTrigger.hover();
+	}
+
+	/** Контент тултипа согласия (bits-ui Tooltip.Content → data-slot tooltip-content). */
+	get consentContent(): Locator {
+		return this.page.locator('[data-slot="tooltip-content"]');
+	}
+
 	// ─── Залогиненное состояние на /auth ───────────────────────────────────────
+
+	/** Аватар (UserAvatar) в карточке залогиненного внутри <main>. */
+	get avatar(): Locator {
+		return this.page.getByRole('main').locator('[data-slot="avatar"]');
+	}
+
+	/**
+	 * <img> аватара в карточке (data-slot avatar-image) — присутствует только
+	 * когда у user есть image; иначе UserAvatar рисует инициал (fallback).
+	 */
+	get avatarImage(): Locator {
+		return this.avatar.locator('[data-slot="avatar-image"]');
+	}
+
+	/** Инициал-фолбэк аватара (кружок с первой буквой имени, когда image нет). */
+	avatarInitial(char: string): Locator {
+		return this.avatar.getByText(char, { exact: true });
+	}
+
+	/** Ссылка «странице профиля» внизу карточки залогиненного (href = /profile). */
+	get profileLink(): Locator {
+		return this.page.getByRole('link', { name: 'странице профиля' });
+	}
 
 	/** Имя пользователя в карточке залогиненного (внутри <main>). */
 	userName(name: string): Locator {
