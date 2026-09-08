@@ -318,10 +318,11 @@ test.describe('Страница профиля: удаление аккаунт�
 		const dialog = page.getByRole('dialog');
 		await expect(dialog).toBeVisible();
 
-		// Закрываем кликом по оверлею: это полноэкранная подложка (fixed inset-0)
-		// без роли/доступного имени, поэтому кликаем в угол вьюпорта, где
-		// центрированная модалка гарантированно отсутствует.
-		await page.mouse.click(5, 5);
+		// Закрываем кликом по оверлею: полноэкранная подложка (fixed inset-0) имеет
+		// data-атрибут-хук data-slot="dialog-overlay"; кликаем по его краю через
+		// locator с auto-wait, чтобы Playwright дождался появления оверлея и анимации,
+		// а не гнался с ней.
+		await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } });
 		await expect(dialog).not.toBeVisible();
 
 		// Повторно открываем — модалка должна появиться снова (баг: требовалась перезагрузка)
