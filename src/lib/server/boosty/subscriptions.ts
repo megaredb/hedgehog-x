@@ -1,5 +1,5 @@
 import { boostyHeaders, refreshTokens } from '$lib/server/boosty/phone-client';
-import { BOOSTY_ENDPOINTS, HEDGEHOG_OWNER_ID } from '$lib/server/config';
+import { BOOSTY_ENDPOINTS, BOOSTY_FETCH_TIMEOUT_MS, HEDGEHOG_OWNER_ID } from '$lib/server/config';
 
 /**
  * Подписки пользователя Boosty: проверка подписки на блог HEDGEHOG.INC.
@@ -29,7 +29,9 @@ export interface HedgehogSubscriptionStatus {
 	isFeePaid: boolean;
 	/** Приостановлена ли подписка. */
 	isPaused: boolean;
-	/** Ошибка запроса к Boosty (если была). */
+	/** Произошла ли ошибка при проверке подписки (апстрим Boosty/сеть). */
+	isError: boolean;
+	/** Пользовательское сообщение об ошибке (без сырых деталей апстрима). */
 	error: string | null;
 }
 
@@ -64,7 +66,8 @@ async function fetchSubscriptions(params: {
 		headers: boostyHeaders(params.deviceId, {
 			locale: 'ru_RU',
 			extra: { authorization: 'Bearer ' + tokens.accessToken }
-		})
+		}),
+		signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 	});
 	if (!res.ok) {
 		throw new Error('Boosty subscriptions: HTTP ' + res.status);
@@ -89,6 +92,7 @@ const EMPTY_STATUS: HedgehogSubscriptionStatus = {
 	onTime: null,
 	isFeePaid: false,
 	isPaused: false,
+	isError: false,
 	error: null
 };
 
@@ -116,15 +120,20 @@ export async function getHedgehogSubscription(params: {
 				onTime: target.onTime ?? null,
 				isFeePaid: target.isFeePaid ?? false,
 				isPaused: target.isPaused ?? false,
+				isError: false,
 				error: null
 			},
 			newRefreshToken
 		};
 	} catch (e) {
+		// Ошибка апстрима: явный признак isError + логирование. Не маскируем
+		// сбой под «подписка неактивна» (раньше было linked:true + error).
+		console.error('[boosty/subscriptions] failed to check subscription', e);
 		return {
 			status: {
 				...EMPTY_STATUS,
-				error: e instanceof Error ? e.message : String(e)
+				isError: true,
+				error: 'Не удалось проверить подписку Boosty'
 			},
 			newRefreshToken: null
 		};

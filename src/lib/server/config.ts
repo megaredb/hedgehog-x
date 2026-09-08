@@ -6,8 +6,8 @@ import { env } from '$env/dynamic/private';
  */
 
 // ─── Блог HEDGEHOG.INC (env-overridable) ─────────────────────────────────────
-export const HEDGEHOG_BLOG_URL = env.HEDGEHOG_BLOG_URL?.trim() || 'hedgehoginc';
-
+// Идентификация блога — строго по числовому owner.id (имя/слаг могут меняться),
+// поэтому URL-слаг блога не храним и не используем.
 const ownerId = Number.parseInt(env.HEDGEHOG_OWNER_ID ?? '', 10);
 export const HEDGEHOG_OWNER_ID = Number.isFinite(ownerId) ? ownerId : 1876162;
 
@@ -30,6 +30,9 @@ export const BOOSTY_ENDPOINTS = {
 	phoneCodes: `${BOOSTY_ORIGIN}/app/extra-config/phone-codes/`
 } as const;
 
+/** Таймаут внешних HTTP-запросов к Boosty (мс) — защита от зависшего апстрима. */
+export const BOOSTY_FETCH_TIMEOUT_MS = 12_000;
+
 // ─── Сессия better-auth (Boosty-вход) ────────────────────────────────────────
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 дней (для cookie maxAge)
 export const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
@@ -38,3 +41,16 @@ export const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
 export const USER_ID_PREFIX = 'u_';
 export const ACCOUNT_ID_PREFIX = 'a_';
 export const SESSION_ID_PREFIX = 's_';
+
+// ─── Секрет better-auth ────────────────────────────────────────────────────────
+/**
+ * Валидированный секрет better-auth. Обязателен для подписи session-cookie
+ * (HMAC-SHA256): без него Boosty-вход не сможет выставить валидную cookie.
+ */
+export function getBetterAuthSecret(): string {
+	const secret = env.BETTER_AUTH_SECRET?.trim();
+	if (!secret) {
+		throw new Error('BETTER_AUTH_SECRET is required');
+	}
+	return secret;
+}

@@ -25,6 +25,7 @@
 import {
 	BOOSTY_AVATAR_URL_PREFIX,
 	BOOSTY_ENDPOINTS,
+	BOOSTY_FETCH_TIMEOUT_MS,
 	BOOSTY_ORIGIN,
 	BOOSTY_REFERER,
 	BOOSTY_USER_AGENT
@@ -42,6 +43,27 @@ export interface BoostyTokens {
 	accessToken: string;
 	refreshToken: string;
 	expiresIn: number;
+}
+
+/** Ошибка ответа Boosty с HTTP-статусом (для различения 4xx/5xx на сервере). */
+export class BoostyApiError extends Error {
+	readonly status: number;
+	constructor(message: string, status: number) {
+		super(message);
+		this.name = 'BoostyApiError';
+		this.status = status;
+	}
+}
+
+/** Канонический E.164 номер: '+' + только цифры (пробелы/скобки/дефисы убираем). */
+export function normalizePhone(input: unknown): string {
+	const digits = String(input ?? '').replace(/\D/g, '');
+	return digits ? '+' + digits : '';
+}
+
+/** Валидный E.164: '+' + 10–15 цифр (country code + национальный номер). */
+export function isE164Phone(phone: string): boolean {
+	return /^\+[0-9]{10,15}$/.test(phone);
 }
 
 /**
@@ -85,7 +107,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
 	if (!res.ok) {
 		const obj = (json ?? {}) as { error?: string; error_description?: string };
 		const msg = obj.error_description || obj.error || 'HTTP ' + res.status;
-		throw new Error(msg);
+		throw new BoostyApiError(msg, res.status);
 	}
 	return json as T;
 }
@@ -100,7 +122,8 @@ export async function sendPhoneCode(phone: string, deviceId: string): Promise<Bo
 	const res = await fetch(BOOSTY_ENDPOINTS.sendCode, {
 		method: 'POST',
 		headers: formHeaders(deviceId),
-		body
+		body,
+		signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 	});
 	const data = await parseResponse<{
 		data?: { phoneCode?: { code?: string; expiresIn?: number; sentTransport?: string | null } };
@@ -132,7 +155,8 @@ export async function confirmPhoneCode(params: {
 	const res = await fetch(BOOSTY_ENDPOINTS.confirmCode, {
 		method: 'PUT',
 		headers: formHeaders(deviceId),
-		body
+		body,
+		signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 	});
 	const data = await parseResponse<{
 		refresh_token?: string;
@@ -164,7 +188,8 @@ export async function refreshTokens(params: {
 	const res = await fetch(BOOSTY_ENDPOINTS.refreshToken, {
 		method: 'POST',
 		headers: formHeaders(deviceId),
-		body
+		body,
+		signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 	});
 	const data = await parseResponse<{
 		refresh_token?: string;
@@ -205,7 +230,8 @@ export async function fetchBoostyProfile(params: {
 		headers: boostyHeaders(params.deviceId, {
 			locale: 'ru_RU',
 			extra: { authorization: 'Bearer ' + params.accessToken }
-		})
+		}),
+		signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 	});
 	if (!res.ok) return { id: null, avatarUrl: null };
 	const data = (await res.json().catch(() => null)) as { signedQuery?: string } | null;

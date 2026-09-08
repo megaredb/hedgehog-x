@@ -4,6 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { telegram } from 'better-auth-telegram';
 import { getRequestEvent } from '$app/server';
+import { building, dev } from '$app/environment';
 import { db } from '$lib/server/db';
 
 // Динамический baseURL: лучше-auth сам определяет origin из запроса
@@ -17,15 +18,23 @@ import { db } from '$lib/server/db';
 //     (строка, без пробелов; порт включается в элемент, как 'localhost:5173').
 //   BETTER_AUTH_FALLBACK_URL — URL, используемый, когда origin не определяется
 //     из запроса (опционально).
-// Если BETTER_AUTH_ALLOWED_HOSTS не задан — baseURL не передаётся, и
-// лучше-auth сам выводит origin из запроса.
+// В production список хостов обязателен (fail-fast ниже); в dev можно
+// оставить пустым — better-auth выведет origin из запроса.
 const allowedHosts = env.BETTER_AUTH_ALLOWED_HOSTS
 	? env.BETTER_AUTH_ALLOWED_HOSTS.split(',')
 			.map((h) => h.trim())
 			.filter((h) => h.length > 0)
-	: undefined;
+	: [];
 
-const baseURL = allowedHosts?.length
+// Fail-fast в production: без явного списка доверенных хостов better-auth
+// выводит origin из каждого запроса, что ослабляет origin-check (защиту от
+// подделки Origin/CSRF). В dev origin часто меняется (localhost, mkcert-домены),
+// поэтому список обязателен только в production-рантайме (не в сборке).
+if (!dev && !building && allowedHosts.length === 0) {
+	throw new Error('BETTER_AUTH_ALLOWED_HOSTS must be set in production');
+}
+
+const baseURL = allowedHosts.length
 	? { allowedHosts, fallback: env.BETTER_AUTH_FALLBACK_URL }
 	: undefined;
 
@@ -51,7 +60,10 @@ function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): 
 		const userId = sub.slice(botId.length);
 		return userId.length > 0 ? userId : null;
 	}
-	// Фолбэк: отрезаем первые 12 цифр (стандартная длина bot_id в sub).
+	// Фолбэк без TELEGRAM_BOT_TOKEN: sub Telegram OIDC имеет формат
+	// `{bot_id}{user_id}`. Без токена bot_id от user_id не отделить, поэтому
+	// отрезаем первые 12 цифр как эвристику (стандартная длина bot_id в sub).
+	// Проверка длины гарантирует непустой остаток, иначе возвращаем null.
 	return sub.length > 12 ? sub.slice(12) : null;
 }
 

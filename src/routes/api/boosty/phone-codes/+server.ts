@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { boostyHeaders } from '$lib/server/boosty/phone-client';
-import { BOOSTY_ENDPOINTS } from '$lib/server/config';
+import { BOOSTY_ENDPOINTS, BOOSTY_FETCH_TIMEOUT_MS } from '$lib/server/config';
+import { checkRateLimit, PHONE_CODES_RATE_LIMIT } from '$lib/server/rate-limit';
 
 /**
  * GET /api/boosty/phone-codes
@@ -14,11 +15,24 @@ import { BOOSTY_ENDPOINTS } from '$lib/server/config';
  *
  * Ответ: { phoneCodes: Array<{ name: string; dialCode: string; code: string; mask?: string }> }
  */
-export const GET = async () => {
+export const GET = async ({ getClientAddress }) => {
+	const limit = checkRateLimit(
+		`phone-codes:ip:${getClientAddress()}`,
+		PHONE_CODES_RATE_LIMIT.ipLimit,
+		PHONE_CODES_RATE_LIMIT.windowMs
+	);
+	if (!limit.ok) {
+		return json(
+			{ error: 'Слишком много запросов. Попробуйте позже.' },
+			{ status: 429, headers: { 'Retry-After': String(limit.retryAfterSec) } }
+		);
+	}
+
 	try {
 		const deviceId = randomUUID();
 		const res = await fetch(BOOSTY_ENDPOINTS.phoneCodes, {
-			headers: boostyHeaders(deviceId)
+			headers: boostyHeaders(deviceId),
+			signal: AbortSignal.timeout(BOOSTY_FETCH_TIMEOUT_MS)
 		});
 		if (!res.ok) {
 			return json({ error: 'Boosty phone-codes: HTTP ' + res.status }, { status: 502 });

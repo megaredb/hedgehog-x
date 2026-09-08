@@ -1,6 +1,6 @@
 {
-  "id": "5aa484c5-4fd9-4680-8296-18f57f9b8c7f",
-  "prevId": "1f82dc3d-7558-4cbc-8146-2fb2535d0ef7",
+  "id": "b276af7b-b9a4-4404-a304-43006beaf416",
+  "prevId": "1afa1ce5-75bf-4b62-8a2c-880e5a8cfc93",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -42,11 +42,34 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "bookmarks_user_id_idx": {
+          "name": "bookmarks_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "bookmarks_user_id_user_id_fk": {
           "name": "bookmarks_user_id_user_id_fk",
@@ -123,23 +146,24 @@
         },
         "status": {
           "name": "status",
-          "type": "varchar(50)",
+          "type": "book_status",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'ongoing'"
         },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
@@ -148,7 +172,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "books_theme_color_hex_check": {
+          "name": "books_theme_color_hex_check",
+          "value": "\"books\".\"theme_color\" IS NULL OR \"books\".\"theme_color\" ~ '^[0-9a-fA-F]{6}$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.chapter_likes": {
@@ -171,7 +200,7 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
@@ -268,18 +297,34 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "chapters_volume_id_idx": {
+          "name": "chapters_volume_id_idx",
+          "columns": [
+            {
+              "expression": "volume_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "chapters_volume_id_volumes_id_fk": {
           "name": "chapters_volume_id_volumes_id_fk",
@@ -346,18 +391,34 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "illustrations_volume_id_idx": {
+          "name": "illustrations_volume_id_idx",
+          "columns": [
+            {
+              "expression": "volume_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "illustrations_volume_id_volumes_id_fk": {
           "name": "illustrations_volume_id_volumes_id_fk",
@@ -413,7 +474,7 @@
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
@@ -480,7 +541,7 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
@@ -577,18 +638,34 @@
           "name": "created_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "volumes_book_id_idx": {
+          "name": "volumes_book_id_idx",
+          "columns": [
+            {
+              "expression": "book_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "volumes_book_id_books_id_fk": {
           "name": "volumes_book_id_books_id_fk",
@@ -904,6 +981,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "boosty_avatar": {
+          "name": "boosty_avatar",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "boosty_name": {
+          "name": "boosty_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -990,7 +1079,17 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.book_status": {
+      "name": "book_status",
+      "schema": "public",
+      "values": [
+        "ongoing",
+        "completed",
+        "paused"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},

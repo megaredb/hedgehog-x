@@ -71,6 +71,11 @@ export const CONFIRM_CODE_RATE_LIMIT = {
 	ipLimit: 20 // попыток с одного IP в окне
 } as const;
 
+export const PHONE_CODES_RATE_LIMIT = {
+	windowMs: 15 * 60 * 1000, // 15 минут
+	ipLimit: 60 // запросов с одного IP в окне
+} as const;
+
 /**
  * Проверяет лимиты шага входа Boosty сразу по двум ключам (номер + IP).
  * Возвращает `ok: false` при превышении любого из них.
