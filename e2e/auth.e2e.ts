@@ -43,10 +43,21 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
+		// Перехватываем внешний хост, чтобы не навигировать на реальный oauth.telegram.org
+		let externalUrl = '';
+		await page.route('https://oauth.telegram.org/**', (route) => {
+			externalUrl = route.request().url();
+			return route.fulfill({
+				status: 200,
+				contentType: 'text/html',
+				body: '<html><body></body></html>'
+			});
+		});
+
 		await page.goto('/auth');
 		await page.getByRole('button', { name: 'Войти через Telegram' }).click();
 
-		await expect(page).toHaveURL(new RegExp(TELEGRAM_OAUTH_URL.replace('.', '\\.')));
+		await expect.poll(() => externalUrl).toContain('oauth.telegram.org/auth');
 	});
 
 	test('клик по Discord запускает OAuth2-редирект на discord.com', async ({ page }) => {
@@ -63,11 +74,22 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
+		// Перехватываем внешний хост discord.com, чтобы не навигировать на реальный discord.com
+		let externalUrl = '';
+		await page.route('https://discord.com/**', (route) => {
+			externalUrl = route.request().url();
+			return route.fulfill({
+				status: 200,
+				contentType: 'text/html',
+				body: '<html><body></body></html>'
+			});
+		});
+
 		await page.goto('/auth');
 		await page.getByRole('button', { name: 'Войти через Discord' }).click();
 
-		// Discord сам редиректит на https://discord.com/oauth2/authorize (без /api)
-		await expect(page).toHaveURL(/discord\.com\/oauth2\/authorize/);
+		// Мок sign-in/social возвращает URL discord.com (Discord сам редиректит /api → /oauth2/authorize)
+		await expect.poll(() => externalUrl).toContain('discord.com/api/oauth2/authorize');
 	});
 
 	test('при ошибке авторизации (отмена у провайдера) показывается модалка', async ({ page }) => {

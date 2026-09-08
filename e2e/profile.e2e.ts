@@ -39,7 +39,7 @@ test.describe('Страница профиля: способы входа', () =
 			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 			await page.goto('/profile');
 
-			await expect(page.getByText('Мой аккаунт')).toBeVisible();
+			await expect(page.getByRole('heading', { name: 'Мой аккаунт' })).toBeVisible();
 			await expect(page.getByText(MOCK_USER.id)).toBeVisible();
 			await expect(page.getByText(MOCK_USER.name).first()).toBeVisible();
 			// ID способа входа: «ID 123456789»
@@ -173,12 +173,23 @@ test.describe('Страница профиля: способы входа', () =
 				});
 			});
 
+			// Перехватываем внешний хост discord.com, чтобы не навигировать на реальный discord.com
+			let externalUrl = '';
+			await page.route('https://discord.com/**', (route) => {
+				externalUrl = route.request().url();
+				return route.fulfill({
+					status: 200,
+					contentType: 'text/html',
+					body: '<html><body></body></html>'
+				});
+			});
+
 			await page.goto('/profile');
 
 			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
 			await discordRow.getByRole('button', { name: 'Привязать' }).click();
 
-			await expect(page).toHaveURL(/discord.com/);
+			await expect.poll(() => externalUrl).toContain('discord.com');
 		});
 	});
 
@@ -191,7 +202,7 @@ test.describe('Страница профиля: способы входа', () =
 			await page.goto('/profile');
 			// Уводим на /auth с параметром from=/profile, чтобы после входа вернуться
 			await expect(page).toHaveURL(/\/auth\?from=/);
-			await expect(page.getByText('Вход в аккаунт')).toBeVisible();
+			await expect(page.getByRole('heading', { name: 'Вход в аккаунт' })).toBeVisible();
 		});
 	});
 });
