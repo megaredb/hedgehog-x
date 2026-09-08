@@ -1,19 +1,26 @@
-import { test, expect } from './fixtures/test';
-import { BASE_URL } from './config';
-
 /**
- * E2E: авторизация через Telegram (OIDC) и Discord (OAuth2).
+ * E2E: страница входа (/auth) — новый стиль:
+ *  - page-object AuthPage (e2e/auth/auth.page.ts) для кнопок/состояний/модалок;
+ *  - каркас (имя в шапке, «Выйти») проверяется через общий Shell
+ *    (e2e/shared/shell.page.ts) — локальное состояние сессии мокается фикстурой
+ *    loggedIn из e2e/fixtures/test.ts.
  *
- * Полный OAuth-флоу (oauth.telegram.org / discord.com → callback → сессия)
- * требует реальных приложений с настроенными Redirect URI, поэтому в e2e
- * мы проверяем:
- *  1. Страница /auth рендерит кнопки «Войти через Telegram» и «Войти через
- *     Discord».
- *  2. Клик отправляет корректный запрос sign-in/social с правильным
- *     провайдером и редиректит на страницу авторизации провайдера.
- *  3. При залогиненном состоянии (мок get-session) шапка показывает имя
- *     пользователя, а на /auth — кнопку «Выйти».
+ * Покрытие перенесено из старого плоского e2e/auth.e2e.ts (удалён) без потери
+ * ни одного ассерта:
+ *  1. /auth рендерит кнопки «Войти через Telegram» и «Войти через Discord».
+ *  2. Клик по Telegram → sign-in/social уходит с провайдером и редиректит на
+ *     oauth.telegram.org (внешний хост перехватывается, НЕ навигируется реально).
+ *  3. Клик по Discord → то же для discord.com (провайдер discord в теле запроса).
+ *  4. Ошибка у провайдера (?error=access_denied) → модалка с сообщением.
+ *  5. Ошибка sign-in/social → модалка «Не удалось войти».
+ *  6. Залогиненный: имя в шапке (Shell) + карточка на /auth с «Выйти».
  */
+
+import { test, expect } from '../fixtures/test';
+import { BASE_URL } from '../config';
+import { MOCK_USER } from '../fixtures/data';
+import { AuthPage } from './auth.page';
+import { Shell } from '../shared/shell.page';
 
 const TELEGRAM_OAUTH_URL = 'https://oauth.telegram.org/auth';
 const DISCORD_OAUTH_URL = 'https://discord.com/api/oauth2/authorize';
@@ -25,9 +32,10 @@ test.describe('Авторизация через внешние провайде
 	});
 
 	test('страница /auth показывает кнопки входа через Telegram и Discord', async ({ page }) => {
-		await page.goto('/auth');
-		await expect(page.getByRole('button', { name: 'Войти через Telegram' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Войти через Discord' })).toBeVisible();
+		const auth = new AuthPage(page);
+		await auth.goto();
+		await expect(auth.telegramButton).toBeVisible();
+		await expect(auth.discordButton).toBeVisible();
 	});
 
 	test('клик по Telegram запускает OIDC-редирект на oauth.telegram.org', async ({ page }) => {
@@ -54,8 +62,9 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
-		await page.goto('/auth');
-		await page.getByRole('button', { name: 'Войти через Telegram' }).click();
+		const auth = new AuthPage(page);
+		await auth.goto();
+		await auth.telegramButton.click();
 
 		await expect.poll(() => externalUrl).toContain('oauth.telegram.org/auth');
 	});
@@ -87,8 +96,9 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
-		await page.goto('/auth');
-		await page.getByRole('button', { name: 'Войти через Discord' }).click();
+		const auth = new AuthPage(page);
+		await auth.goto();
+		await auth.discordButton.click();
 
 		// sign-in/social ушёл с провайдером discord
 		await expect.poll(() => provider).toBe('discord');
@@ -97,16 +107,16 @@ test.describe('Авторизация через внешние провайде
 	});
 
 	test('при ошибке авторизации (отмена у провайдера) показывается модалка', async ({ page }) => {
-		// Возврат с провайдера с error=access_denied
-		await page.goto('/auth?error=access_denied');
+		const auth = new AuthPage(page);
+		await auth.goto('/auth?error=access_denied');
 
-		const dialog = page.getByRole('dialog');
+		const dialog = auth.dialog;
 		await expect(dialog).toBeVisible();
 		await expect(dialog).toContainText('Не удалось войти');
 		await expect(dialog).toContainText('Вы отменили авторизацию. Вход не выполнен.');
 
 		// Закрываем модалку
-		await dialog.getByRole('button', { name: 'Понятно' }).click();
+		await auth.dialogButton('Понятно').click();
 		await expect(dialog).not.toBeVisible();
 
 		// Параметр error убран из URL
@@ -124,14 +134,15 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
-		await page.goto('/auth');
-		await page.getByRole('button', { name: 'Войти через Telegram' }).click();
+		const auth = new AuthPage(page);
+		await auth.goto();
+		await auth.telegramButton.click();
 
-		const dialog = page.getByRole('dialog');
+		const dialog = auth.dialog;
 		await expect(dialog).toBeVisible();
 		await expect(dialog).toContainText('Не удалось войти');
 
-		await dialog.getByRole('button', { name: 'Понятно' }).click();
+		await auth.dialogButton('Понятно').click();
 		await expect(dialog).not.toBeVisible();
 	});
 });
@@ -142,13 +153,17 @@ test.describe('Авторизация: залогиненный пользова
 		void loggedIn;
 	});
 
-	test('при залогиненном пользователе шапка показывает имя и есть кнопка выхода', async ({
-		page
-	}) => {
-		await page.goto('/auth');
+	test('залогиненный видит имя в шапке (Shell) и карточку /auth с «Выйти»', async ({ page }) => {
+		const shell = new Shell(page);
+		const auth = new AuthPage(page);
 
-		// Имя пользователя видно на странице /auth (в профильном блоке) и в шапке
-		await expect(page.getByRole('main').getByText('Еж Тестовый')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+		await auth.goto('/auth');
+
+		// Имя пользователя видно в шапке (Shell — ProfileDropdown в сайдбаре).
+		await expect(shell.sidebar.getByText(MOCK_USER.name)).toBeVisible();
+
+		// И на /auth в карточке залогиненного: имя + кнопка «Выйти».
+		await expect(auth.userName(MOCK_USER.name)).toBeVisible();
+		await expect(auth.signOutButton).toBeVisible();
 	});
 });
