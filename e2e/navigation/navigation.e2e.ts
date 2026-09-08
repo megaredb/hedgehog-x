@@ -1,29 +1,22 @@
-import { test, expect } from './fixtures/test';
+import { test, expect } from '../fixtures/test';
+import { NAV_ITEMS, Shell } from '../shared/shell.page';
 
 /**
- * E2E: навигация приложения.
+ * E2E: навигация приложения (каркас, рендерится на каждой странице).
  *
- * Покрывает общий каркас UI:
- *  1. Десктопный сайдбар (≥1024px): логотип HEDGEHOG.INC + все пункты меню.
- *  2. Мобильный хедер (<1024px): бургер «Toggle Menu» открывает Sheet с
- *     навигацией, клик по пункту закрывает меню.
+ * Все действия и точки поиска идут через page-object Shell (e2e/shared/shell.page.ts),
+ * который оборачивает AppNavigation / ProfileDropdown / ThemeSwitchButton /
+ * AppBreadcrumbs из +layout.svelte. Селекторы — по ролям/текстам, без CSS-классов.
+ *
+ * Покрытие (перенесено из старого плоского e2e/navigation.e2e.ts без потери
+ * ни одного ассерта):
+ *  1. Десктопный сайдбар (≥1024px): логотип + все пункты меню + «Войти» (гость).
+ *  2. Гость: клик по «Войти» → /auth?from=…
  *  3. Переключатель темы: клик добавляет/снимает класс `.dark` на <html>.
- *  4. Дропдаун профиля: гость видит «Войти» → /auth; залогиненный видит имя
- *     и «Выйти» (мок sign-out) → редирект на главную.
- *  5. Хлебные крошки (AppBreadcrumbs) на вложенной странице содержат «Главная».
- *
- * Селекторы — по ролям/текстам (getByRole/getByText), без CSS-классов.
+ *  4. Хлебные крошки на вложенной странице содержат «Главная».
+ *  5. Мобильный хедер (<1024px): бургер открывает Sheet, клик по пункту закрывает.
+ *  6. Залогиненный: дропдаун с именем и «Выйти» → редирект на главную.
  */
-
-const SIDEBAR_LINKS = [
-	'Каталог',
-	'Закладки',
-	'История',
-	'Загрузки',
-	'Сообщество',
-	'Поддержать',
-	'О сайте'
-] as const;
 
 test.describe('Навигация: десктопный сайдбар', () => {
 	test.beforeEach(async ({ guest }) => {
@@ -31,68 +24,67 @@ test.describe('Навигация: десктопный сайдбар', () => {
 	});
 
 	test('гость на главной видит логотип и все пункты меню в сайдбаре', async ({ page }) => {
-		await page.goto('/');
+		const shell = new Shell(page);
+		await shell.goto('/');
 
-		const sidebar = page.locator('aside');
-		await expect(sidebar).toBeVisible();
-
-		// Логотип
-		await expect(sidebar.getByText('HEDGEHOG.INC')).toBeVisible();
+		await expect(shell.sidebar).toBeVisible();
+		await expect(shell.logo).toBeVisible();
 
 		// Пункты меню обеих групп: Библиотека + Информация
-		for (const label of SIDEBAR_LINKS) {
-			await expect(sidebar.getByRole('link', { name: label })).toBeVisible();
+		for (const label of NAV_ITEMS) {
+			await expect(shell.navItem(label)).toBeVisible();
 		}
 
 		// Гость: в нижнем блоке — ссылка «Войти»
-		await expect(sidebar.getByRole('link', { name: 'Войти' })).toBeVisible();
+		await expect(shell.signInLink).toBeVisible();
 	});
 
 	test('гость: клик по «Войти» ведёт на страницу входа', async ({ page }) => {
-		await page.goto('/');
+		const shell = new Shell(page);
+		await shell.goto('/');
 
-		await page.locator('aside').getByRole('link', { name: 'Войти' }).click();
+		await shell.signInLink.click();
 
 		// /auth с параметром from, чтобы после входа вернуться на главную
 		await expect(page).toHaveURL(/\/auth\?from=/);
 	});
 
 	test('переключатель темы добавляет и снимает класс .dark на <html>', async ({ page }) => {
+		const shell = new Shell(page);
 		// Стартуем с гарантированно светлой темой (mode-watcher хранит выбор в localStorage)
 		await page.addInitScript(() => {
 			localStorage.setItem('mode-watcher-mode', 'light');
 		});
 
-		await page.goto('/');
+		await shell.goto('/');
 
-		const html = page.locator('html');
-		await expect(html).not.toHaveClass(/dark/);
+		await expect(shell.html).not.toHaveClass(/dark/);
 
-		const themeToggle = page.getByRole('button', { name: 'Переключить тему' });
+		const themeToggle = shell.themeToggle;
 		await expect(themeToggle).toBeVisible();
 
 		// Клик → тёмная тема
 		await themeToggle.click();
-		await expect(html).toHaveClass(/dark/);
+		await expect(shell.html).toHaveClass(/dark/);
 
 		// Повторный клик → светлая тема
 		await themeToggle.click();
-		await expect(html).not.toHaveClass(/dark/);
+		await expect(shell.html).not.toHaveClass(/dark/);
 	});
 
 	test('хлебные крошки видны на вложенной странице и содержат «Главная»', async ({ page }) => {
-		await page.goto('/about');
+		const shell = new Shell(page);
+		await shell.goto('/about');
 
-		const breadcrumb = page.getByRole('navigation', { name: 'breadcrumb' });
-		await expect(breadcrumb).toBeVisible();
+		await expect(shell.breadcrumb).toBeVisible();
 
-		const homeCrumb = breadcrumb.getByRole('link', { name: 'Главная' });
+		const homeCrumb = shell.breadcrumbRoot;
 		await expect(homeCrumb).toBeVisible();
 		await expect(homeCrumb).toHaveAttribute('href', '/');
 
 		// На главной (`/`) крошек нет — segments пустой
-		await page.goto('/');
-		await expect(page.getByRole('navigation', { name: 'breadcrumb' })).toHaveCount(0);
+		await shell.goto('/');
+		await expect(shell.breadcrumb).toHaveCount(0);
 	});
 });
 
@@ -104,26 +96,26 @@ test.describe('Навигация: мобильный хедер (< 1024px)', ()
 	});
 
 	test('бургер открывает Sheet с навигацией, клик по пункту закрывает', async ({ page }) => {
-		await page.goto('/');
+		const shell = new Shell(page);
+		await shell.goto('/');
 
 		// Сайдбар скрыт на мобильном — пунктов меню в дереве доступности нет
-		await expect(page.getByRole('link', { name: 'Каталог' })).toHaveCount(0);
+		await expect(shell.navItem('Каталог')).toHaveCount(0);
 
 		// Бургер (aria-label из sr-only текста «Toggle Menu»)
-		const burger = page.getByRole('button', { name: 'Toggle Menu' });
+		const burger = shell.mobileBurger;
 		await expect(burger).toBeVisible();
-		await burger.click();
 
 		// Открылся Sheet (bits-ui Dialog, role=dialog) с навигацией
-		const dialog = page.getByRole('dialog');
+		const dialog = await shell.openMobileMenu();
 		await expect(dialog).toBeVisible();
-		for (const label of SIDEBAR_LINKS) {
+		for (const label of NAV_ITEMS) {
 			await expect(dialog.getByRole('link', { name: label })).toBeVisible();
 		}
 
 		// Клик по пункту меню закрывает Sheet и ведёт на страницу
 		await dialog.getByRole('link', { name: 'О сайте' }).click();
-		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(shell.mobileSheet).toHaveCount(0);
 		await expect(page).toHaveURL(/\/about$/);
 	});
 });
@@ -134,6 +126,7 @@ test.describe('Навигация: дропдаун профиля (залоги
 	});
 
 	test('залогиненный видит имя в дропдауне; «Выйти» редиректит на главную', async ({ page }) => {
+		const shell = new Shell(page);
 		// Мок sign-out (better-auth POST /api/auth/sign-out)
 		await page.route('**/api/auth/sign-out', (route) =>
 			route.fulfill({
@@ -143,20 +136,19 @@ test.describe('Навигация: дропдаун профиля (залоги
 			})
 		);
 
-		await page.goto('/');
+		await shell.goto('/');
 
-		const sidebar = page.locator('aside');
 		// Имя пользователя в триггере дропдауна
-		await expect(sidebar.getByText('Еж Тестовый')).toBeVisible();
+		await expect(shell.sidebar.getByText('Еж Тестовый')).toBeVisible();
 
 		// Открываем дропдаун
-		await sidebar.getByRole('button', { name: /Еж Тестовый/ }).click();
-		const menu = page.getByRole('menu');
-		await expect(menu.getByRole('menuitem', { name: 'Мой аккаунт' })).toBeVisible();
-		await expect(menu.getByRole('menuitem', { name: 'Выйти' })).toBeVisible();
+		const menu = await shell.openProfileMenu('Еж Тестовый');
+		await expect(menu).toBeVisible();
+		await expect(shell.profileMenuItem('Мой аккаунт')).toBeVisible();
+		await expect(shell.profileMenuItem('Выйти')).toBeVisible();
 
 		// Выход → редирект на главную
-		await menu.getByRole('menuitem', { name: 'Выйти' }).click();
+		await shell.signOut('Еж Тестовый');
 		await expect(page).toHaveURL('/');
 	});
 });

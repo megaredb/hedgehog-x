@@ -50,6 +50,6 @@ export const STUB_PAGES = [
 
 /**
  * Все статические маршруты, доступные гостю, для проверки согласованности
- * h1 и хлебных крошек с `ROUTE_TITLES` (см. titles.e2e.ts).
+ * h1 и хлебных крошек с `ROUTE_TITLES` (см. e2e/titles/titles.e2e.ts).
  */
 export const GUEST_STATIC_PAGES = [...STUB_PAGES, '/downloads', '/about', '/auth'] as const;

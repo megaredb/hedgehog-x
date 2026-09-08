@@ -18,7 +18,12 @@ import type { Page } from '@playwright/test';
 import { test, expect } from './profile.fixtures';
 import { BASE_URL } from '../config';
 import { segmentTitle } from '../../src/lib/route-titles';
-import { mockBoosty, mockGetSession, mockListAccounts } from '../fixtures/mocks';
+import {
+	mockBoosty,
+	mockGetSession,
+	mockListAccounts,
+	mockBoostySubscription
+} from '../fixtures/mocks';
 import {
 	BOOSTY_ACCOUNT,
 	DISCORD_ACCOUNT,
@@ -34,8 +39,7 @@ import {
 	noSubscriptionCase,
 	providerRowCases,
 	subscriptionActiveCases,
-	unlinkedRowCases,
-	type SubscriptionBody
+	unlinkedRowCases
 } from './profile.cases';
 
 // ─── Локальные хелперы ────────────────────────────────────────────────────────
@@ -43,17 +47,6 @@ import {
 /** MOCK_USER + переопределения полей (для мока get-session). */
 function buildUser(fields: Partial<MockUser>): MockUser {
 	return { ...MOCK_USER, ...fields };
-}
-
-/** Мок GET /api/boosty/subscription → 200 с заданным телом. */
-async function mockSubscription(page: Page, body: SubscriptionBody): Promise<void> {
-	await page.route('**/api/boosty/subscription', (route) =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify(body)
-		})
-	);
 }
 
 /** Счётчик вызовов /api/auth/list-accounts: 1-й возвращает only, дальше — withExtra. */
@@ -398,7 +391,7 @@ test.describe('профиль: подписка Boosty', () => {
 	for (const c of subscriptionActiveCases) {
 		test(`подписка — ${c.id}`, async ({ page, profilePage }) => {
 			await mockListAccounts(page, [BOOSTY_ACCOUNT]);
-			await mockSubscription(page, c.body);
+			await mockBoostySubscription(page, c.body);
 			await profilePage.goto();
 
 			const sub = profilePage.subscription;
@@ -415,7 +408,7 @@ test.describe('профиль: подписка Boosty', () => {
 	// Нет подписки → текст + ссылка «Оформить на boosty.to».
 	test('подписка — нет подписки, есть ссылка на boosty.to', async ({ page, profilePage }) => {
 		await mockListAccounts(page, [BOOSTY_ACCOUNT]);
-		await mockSubscription(page, noSubscriptionCase.body);
+		await mockBoostySubscription(page, noSubscriptionCase.body);
 		await profilePage.goto();
 
 		const sub = profilePage.subscription;
@@ -441,7 +434,7 @@ test.describe('профиль: подписка Boosty', () => {
 	// Ошибка загрузки подписки.
 	test('подписка — ошибка загрузки показывается', async ({ page, profilePage }) => {
 		await mockListAccounts(page, [BOOSTY_ACCOUNT]);
-		await mockSubscription(page, {
+		await mockBoostySubscription(page, {
 			linked: true,
 			subscribed: false,
 			levelName: null,

@@ -141,6 +141,38 @@ export async function mockBoosty(page: Page, options: MockBoostyOptions = {}): P
 	}
 }
 
+/**
+ * Тело GET /api/boosty/subscription — форма HedgehogSubscriptionStatus
+ * (см. src/lib/server/boosty/subscriptions.ts). Значения сверены с реальным
+ * эндпоинтом и e2e/profile/profile.cases.ts.
+ */
+export interface BoostySubscriptionBody {
+	linked: boolean;
+	subscribed: boolean;
+	levelName: string | null;
+	priceRub: number | null;
+	periodMonths: number | null;
+	nextPayTime: number | null;
+	onTime: number | null;
+	isFeePaid: boolean;
+	isPaused: boolean;
+	error: string | null;
+}
+
+/**
+ * Мок GET /api/boosty/subscription → 200 с заданным телом (статус подписки
+ * HEDGEHOG.INC). Используется на /profile: подписка рендерится только когда
+ * привязан boosty-аккаунт (см. mockListAccounts + BOOSTY_ACCOUNT).
+ */
+export async function mockBoostySubscription(
+	page: Page,
+	body: BoostySubscriptionBody
+): Promise<void> {
+	await page.route('**/api/boosty/subscription', (route) =>
+		route.fulfill({ status: 200, ...JSON_HEADERS, body: JSON.stringify(body) })
+	);
+}
+
 // ─── Аудиоплеер ────────────────────────────────────────────────────────────────
 
 /**
