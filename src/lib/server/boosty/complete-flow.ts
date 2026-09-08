@@ -125,11 +125,20 @@ export async function completeBoostyLogin(params: {
 		}
 
 		// 3. Доп.поля юзера: аватар Boosty для карточки провайдера + маркер
-		// последнего входа. lastLoginProvider ставим при создании сессии
-		// (НЕ skipSession) — и для нового юзера, и при повторном входе.
+		// последнего входа. lastLoginProvider и user.image ставим при создании
+		// сессии (НЕ skipSession) — и для нового юзера, и при повторном входе:
+		// «аватар профиля = платформа последнего входа», консистентно с
+		// OAuth-хуком (auth.ts session.create.after) для Discord/Telegram.
+		// При «привязке» (skipSession) image не трогаем — последний вход
+		// остаётся текущей сессии/провайдера.
 		const userPatch: Record<string, unknown> = {};
 		if (boostyAvatarHint) userPatch.boostyAvatar = boostyAvatarHint;
-		if (!skipSession) userPatch.lastLoginProvider = PROVIDER_ID;
+		if (!skipSession) {
+			userPatch.lastLoginProvider = PROVIDER_ID;
+			// Аватар Boosty может отсутствовать (null) — тогда image = null,
+			// профильная картинка не остаётся от прошлого OAuth-входа.
+			userPatch.image = boostyAvatarHint ?? null;
+		}
 		if (Object.keys(userPatch).length > 0) {
 			await tx
 				.update(user)
