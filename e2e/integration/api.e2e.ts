@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import { unquote } from './fixtures/utils';
+import { unquote } from '../fixtures/utils';
 
 loadEnv();
 
@@ -17,7 +17,7 @@ loadEnv();
  *    (ошибки приходят ДО обращения к Boosty / реальной отправки SMS);
  *  - GET /api/boosty/phone-codes ходит в boosty.to напрямую — вне e2e.
  * Удаление аккаунта (POST /api/user/delete) уже покрыто
- * в delete-account.integration.e2e.ts — здесь не дублируется.
+ * в e2e/integration/delete-account.e2e.ts — здесь не дублируется.
  *
  * Требует .env (DATABASE_URL/BETTER_AUTH_SECRET) и доступной Postgres — иначе skip.
  */

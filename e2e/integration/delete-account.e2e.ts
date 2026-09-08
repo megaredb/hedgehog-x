@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import postgres from 'postgres';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { config as loadEnv } from 'dotenv';
-import { unquote } from './fixtures/utils';
+import { unquote } from '../fixtures/utils';
 import {
 	buildSessionCookieValueEncoded,
 	sessionCookieName
-} from '../src/lib/server/boosty/token-utils';
+} from '../../src/lib/server/boosty/token-utils';
 
 // Playwright-процесс не читает .env автоматически (это делает Vite через
 // $env/dynamic/private). Загружаем вручную, чтобы тест увидел DATABASE_URL

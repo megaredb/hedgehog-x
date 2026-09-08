@@ -339,12 +339,15 @@ drizzle/
 - **Внешние сервисы всегда мокаются** (Telegram/Discord/Boosty — через
   `page.route`); OAuth-редиректы проверяются по URL, без реальных провайдеров.
 - **Skip-гарды с проверкой доступности БД**: интеграционные тесты
-  (`api.integration.e2e.ts`, `delete-account.integration.e2e.ts`) — `test.skip(!hasEnv, …)`
+  (`e2e/integration/api.e2e.ts`, `e2e/integration/delete-account.e2e.ts`) —
+  `test.skip(!hasEnv, …)`
   без `.env`/Postgres; `loadEnv()` из `dotenv`.
 - **Unit — только для чистой логики** (`pnpm test:unit`, `node --test`), без
   БД/браузера: `delete-confirm`, `token-utils`, `rate-limit`, `html-audio`
   (чистые функции), `utils`, `route-titles`, `mappers`.
-- Новые e2e — в `e2e/*.e2e.ts`, импортировать `test` из `./fixtures/test`;
+- Новые e2e — в feature-подпапках `e2e/<feature>/*.e2e.ts`
+  (`profile catalog player downloads navigation titles auth boosty showcase pages
+integration`), импортировать `test` из `../fixtures/test`;
   относительные пути (в конфиге `use.baseURL`). Анимации глушить инъекцией стилей.
 
 ### 4.8. Безопасность
