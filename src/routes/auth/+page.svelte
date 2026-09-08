@@ -105,8 +105,8 @@
 		<div class="space-y-2 text-center">
 			<h1 class="text-2xl font-bold tracking-tight">Вход в аккаунт</h1>
 			<p class="text-sm text-muted-foreground">
-				Войдите через Telegram или Discord, чтобы синхронизировать прогресс прослушивания, закладки
-				и загрузки между устройствами.
+				Войдите через одну из платформ, чтобы синхронизировать прогресс прослушивания, закладки и
+				загрузки между устройствами.
 			</p>
 		</div>
 
@@ -150,7 +150,7 @@
 				{/each}
 
 				<p class="text-center text-xs text-muted-foreground">
-					Входя через Telegram, вы соглашаетесь на передачу имени, username и фото профиля. Входя
+					Входя через Telegram, вы соглашаетесь на передачу имени, username и фото профиля.<br /> Входя
 					через Discord — на передачу имени и аватара.
 				</p>
 			</div>
