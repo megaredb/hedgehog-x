@@ -158,16 +158,39 @@
 							<Info class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
 							О передаче данных при входе
 						</Tooltip.Trigger>
-						<Tooltip.Content side="top" sideOffset={8} class="w-64 text-left">
-							<p>Входя через платформу, вы соглашаетесь на передачу и хранение в вашем профиле:</p>
-							<ul class="mt-1 list-disc space-y-0.5 pl-4">
-								<li>Telegram — имя, username и аватар;</li>
-								<li>Discord — имя, username и аватар;</li>
-								<li>Boosty — имя и аватар;</li>
-							</ul>
-							<p class="mt-1">
-								Номер телефона Boosty используется только для входа — мы его не сохраняем.
+						<Tooltip.Content
+							side="top"
+							sideOffset={8}
+							class="flex w-[20rem] max-w-[min(20rem,calc(100vw-1rem))] flex-col items-start gap-2 rounded-lg border border-border/60 bg-popover px-4 py-3 text-left text-sm leading-relaxed text-popover-foreground shadow-lg"
+							arrowClasses="bg-popover fill-popover"
+						>
+							<p class="inline-flex items-center gap-1.5 font-semibold">
+								<Info class="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+								Передача данных при входе
 							</p>
+							<p class="text-popover-foreground">
+								Входя через платформу, вы соглашаетесь на передачу и хранение в профиле следующих
+								данных.
+							</p>
+							<ul class="space-y-1 text-sm">
+								<li>
+									<span class="font-medium text-popover-foreground">Telegram</span>
+									<span class="text-muted-foreground"> — имя, username и аватар</span>
+								</li>
+								<li>
+									<span class="font-medium text-popover-foreground">Discord</span>
+									<span class="text-muted-foreground"> — имя, username и аватар</span>
+								</li>
+								<li>
+									<span class="font-medium text-popover-foreground">Boosty</span>
+									<span class="text-muted-foreground"> — имя и аватар</span>
+								</li>
+							</ul>
+							<div class="border-t border-border/60 pt-2">
+								<p class="text-xs text-muted-foreground">
+									Номер телефона Boosty используется только для входа — мы его не сохраняем.
+								</p>
+							</div>
 						</Tooltip.Content>
 					</Tooltip.Root>
 				</p>
