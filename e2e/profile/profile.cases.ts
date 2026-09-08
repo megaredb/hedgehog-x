@@ -32,42 +32,43 @@ export interface LastLoginCase {
 
 const TG_AVATAR = 'https://t.me/i/userpic/320/hedgehog_test.jpg';
 const DC_AVATAR = 'https://cdn.discordapp.com/avatars/987654321/a1b2c3.webp';
-const BOOSTY_AVATAR = 'https://img.boosty.to/avatar/hedgehoginc.jpg';
 
 /**
  * Все ветки последнего входа: три провайдера (Telegram/Discord/Boosty) +
- * негативные (image нет; image есть, но не совпадает ни с одним аватаром
- * платформы → строка «Последний вход» не показывается).
+ * негативные (поле lastLoginProvider не задано → строки нет; значение не
+ * соответствует ни одному известному провайдеру → строки нет). Провайдер
+ * теперь хранится явно в user.lastLoginProvider (см. auth.ts / complete-flow.ts),
+ * а не выводится из сравнения user.image с аватарами платформ.
  */
 export const lastLoginCases: LastLoginCase[] = [
 	{
 		id: 'telegram',
 		providerLabel: 'Telegram',
-		userFields: { telegramAvatar: TG_AVATAR, image: TG_AVATAR },
+		userFields: { lastLoginProvider: 'telegram-oidc' },
 		expectLastLogin: true
 	},
 	{
 		id: 'discord',
 		providerLabel: 'Discord',
-		userFields: { discordAvatar: DC_AVATAR, image: DC_AVATAR },
+		userFields: { lastLoginProvider: 'discord' },
 		expectLastLogin: true
 	},
 	{
 		id: 'boosty',
 		providerLabel: 'Boosty',
-		userFields: { boostyAvatar: BOOSTY_AVATAR, image: BOOSTY_AVATAR },
+		userFields: { lastLoginProvider: 'boosty' },
 		expectLastLogin: true
 	},
 	{
-		id: 'no-image',
+		id: 'no-field',
 		providerLabel: '',
-		userFields: { image: null },
+		userFields: {},
 		expectLastLogin: false
 	},
 	{
-		id: 'image-mismatch',
+		id: 'unknown-provider',
 		providerLabel: '',
-		userFields: { image: 'https://example.com/unrelated.png' },
+		userFields: { lastLoginProvider: 'github' },
 		expectLastLogin: false
 	}
 ];

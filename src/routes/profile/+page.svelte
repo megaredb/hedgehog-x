@@ -12,6 +12,7 @@
 	} from '$lib/client/boosty';
 	import {
 		AUTH_PROVIDERS,
+		getProvider,
 		providerAvatar,
 		providerUsername,
 		providerDisplayName,
@@ -92,15 +93,15 @@
 		return accounts.accounts.length <= 1 && isLinked(providerId);
 	}
 
-	// Платформа последнего входа: user.image обновляется при каждом входе
-	// и совпадает с аватаром одной из платформ.
+	// Платформа последнего входа хранится явно в user.lastLoginProvider
+	// (обновляется на сервере при каждом входе — см. auth.ts / complete-flow.ts),
+	// поэтому не выводим её из сравнения user.image с аватарами провайдеров.
 	function lastLoginProvider(): string | null {
 		const user = session.user;
-		if (!user?.image) return null;
-		for (const p of AUTH_PROVIDERS) {
-			if (providerAvatar(p.id, user) === user.image) return p.id;
-		}
-		return null;
+		const lp = user?.lastLoginProvider;
+		if (!lp) return null;
+		// Возвращаем, только если это известный провайдер; иначе — null.
+		return getProvider(lp) ? lp : null;
 	}
 
 	// Реактивно: провайдер последнего входа (null — если не определился).

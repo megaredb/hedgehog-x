@@ -69,6 +69,8 @@ export type SessionUser = {
 	discordUsername?: string | null;
 	boostyAvatar?: string | null;
 	boostyName?: string | null;
+	/** Провайдер последнего входа (providerId из user.lastLoginProvider). */
+	lastLoginProvider?: string | null;
 	[key: string]: unknown;
 } | null;
 

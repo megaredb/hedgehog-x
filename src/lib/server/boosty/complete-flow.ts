@@ -124,11 +124,16 @@ export async function completeBoostyLogin(params: {
 			});
 		}
 
-		// 3. Доп.поля юзера (аватар Boosty) для карточки провайдера.
-		if (boostyAvatarHint) {
+		// 3. Доп.поля юзера: аватар Boosty для карточки провайдера + маркер
+		// последнего входа. lastLoginProvider ставим при создании сессии
+		// (НЕ skipSession) — и для нового юзера, и при повторном входе.
+		const userPatch: Record<string, unknown> = {};
+		if (boostyAvatarHint) userPatch.boostyAvatar = boostyAvatarHint;
+		if (!skipSession) userPatch.lastLoginProvider = PROVIDER_ID;
+		if (Object.keys(userPatch).length > 0) {
 			await tx
 				.update(user)
-				.set({ boostyAvatar: boostyAvatarHint, updatedAt: new Date() })
+				.set({ ...userPatch, updatedAt: new Date() })
 				.where(eq(user.id, userId));
 		}
 

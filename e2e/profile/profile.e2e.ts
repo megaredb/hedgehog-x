@@ -78,7 +78,8 @@ test.describe('профиль: доступ и карточка', () => {
 	});
 
 	// Сценарий 2: залогиненный видит имя, ID и «последний вход: <платформа>».
-	// Все ветки (Telegram/Discord/Boosty + нет image + image не совпадает).
+	// Все ветки: Telegram/Discord/Boosty из user.lastLoginProvider + негативные
+	// (поле не задано / значение не соответствует провайдеру → строки нет).
 	for (const c of lastLoginCases) {
 		test(`залогинен: карточка и «последний вход» — ${c.id}`, async ({ page, profilePage }) => {
 			await mockGetSession(page, { user: buildUser(c.userFields), session: MOCK_SESSION });

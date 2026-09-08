@@ -88,7 +88,11 @@ export const auth = betterAuth({
 			discordUsername: { type: 'string' },
 			// Аватар и имя из Boosty — отдельно для карточки Boosty-способа входа.
 			boostyAvatar: { type: 'string' },
-			boostyName: { type: 'string' }
+			boostyName: { type: 'string' },
+			// Провайдер последнего входа (providerId: discord / telegram-oidc / boosty).
+			// Обновляется на сервере при каждом входе — надёжнее, чем выводить
+			// «последний вход» из сравнения user.image с аватарами провайдеров.
+			lastLoginProvider: { type: 'string' }
 		}
 	},
 	socialProviders: {
@@ -126,8 +130,8 @@ export const auth = betterAuth({
 	databaseHooks: {
 		// После каждого входа/линковки через OAuth-провайдера обновляем
 		// user.image (аватар профиля) аватаром последней использованной
-		// платформы. Провайдер определяется по URL запроса:
-		// /api/auth/callback/{provider}.
+		// платформы И user.lastLoginProvider — провайдер последнего входа.
+		// Провайдер определяется по URL запроса: /api/auth/callback/{provider}.
 		session: {
 			create: {
 				after: async (session, context) => {
@@ -153,6 +157,8 @@ export const auth = betterAuth({
 						if (!url.includes('/callback/')) return;
 						const providerId = url.split('/callback/')[1]?.split('?')[0];
 						if (!providerId || !ctx?.context) return;
+						// Обновляем lastLoginProvider для известных OAuth-провайдеров.
+						if (providerId !== 'discord' && providerId !== 'telegram-oidc') return;
 						const { internalAdapter } = ctx.context;
 						const user = await internalAdapter?.findUserById(session.userId);
 						if (!user) return;
@@ -163,11 +169,15 @@ export const auth = betterAuth({
 									? 'telegramAvatar'
 									: null;
 						const image = avatarField ? user[avatarField] : null;
+						// Собираем изменения: аватар (если изменился) + провайдер
+						// последнего входа (обновляем всегда — и при повторном входе).
+						const patch: Record<string, unknown> = { lastLoginProvider: providerId };
 						if (typeof image === 'string' && image.length > 0 && image !== user.image) {
-							await internalAdapter.updateUser(session.userId, { image });
+							patch.image = image;
 						}
+						await internalAdapter.updateUser(session.userId, patch);
 					} catch (e) {
-						console.warn('[auth] failed to sync profile image', e);
+						console.warn('[auth] failed to sync profile image/lastLoginProvider', e);
 					}
 				}
 			}

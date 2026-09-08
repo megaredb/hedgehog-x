@@ -15,6 +15,8 @@ interface SessionData {
 		telegramOidcUsername?: string | null;
 		discordAvatar?: string | null;
 		discordUsername?: string | null;
+		// Провайдер последнего входа (providerId: discord / telegram-oidc / boosty).
+		lastLoginProvider?: string | null;
 	} | null;
 }
 
