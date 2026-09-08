@@ -29,6 +29,10 @@ function getRandomShuffleIndex(queueLength: number, currentIndex: number): numbe
 function calculateQueueIndex(params: QueueNavigationParams & { direction: 1 | -1 }): number {
 	const { queue, currentQueueIndex, shuffleEnabled, repeatMode, direction } = params;
 	if (queue.length === 0) return -1;
+	// Repeat one: повторяем текущий трек, не уходя на следующий/предыдущий.
+	if (repeatMode === 'one' && currentQueueIndex >= 0 && currentQueueIndex < queue.length) {
+		return currentQueueIndex;
+	}
 	if (shuffleEnabled) {
 		if (queue.length === 1) return repeatMode === 'none' ? -1 : 0;
 		return getRandomShuffleIndex(queue.length, currentQueueIndex);
@@ -129,7 +133,9 @@ class AudioStore {
 	play(): void {
 		if (this.isLoading) return;
 		this.isPlaying = true;
-		htmlAudio.play().catch(() => {});
+		htmlAudio.play().catch((error) => {
+			this.setError(error instanceof Error ? error.message : 'Не удалось воспроизвести аудио');
+		});
 	}
 
 	pause(): void {
@@ -149,7 +155,8 @@ class AudioStore {
 	seek(time: number): void {
 		// Для live-потока перемотка запрещена (duration = Infinity/NaN).
 		if (this.duration && htmlAudio.isLive(this.duration)) return;
-		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
+		const valid =
+			this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : Math.max(0, time);
 		this.currentTime = valid;
 		this.progress = this.duration > 0 ? (valid / this.duration) * 100 : 0;
 		// Directly seek the audio element so fast drags are applied immediately.
@@ -254,9 +261,9 @@ class AudioStore {
 	}
 
 	removeFromQueue(trackId: string): void {
-		const idx = this.queue.findIndex((s) => s.id === trackId);
+		const idx = this.queue.findIndex((s) => String(s.id) === trackId);
 		if (idx === -1) return;
-		this.queue = this.queue.filter((s) => s.id !== trackId);
+		this.queue = this.queue.filter((s) => String(s.id) !== trackId);
 		if (idx < this.currentQueueIndex) this.currentQueueIndex--;
 	}
 
@@ -274,8 +281,15 @@ class AudioStore {
 
 	addTracksToEndOfQueue(tracks: Track[]): void {
 		if (!tracks?.length) return;
-		const ids = new Set(this.queue.map((s) => s.id));
-		const newTracks = tracks.filter((t) => !ids.has(t.id));
+		// Дедупликация только по реально заданному id (в строковом виде);
+		// треки без id добавляются как есть.
+		const existingIds = new Set(
+			this.queue
+				.map((s) => s.id)
+				.filter((id): id is string | number => id !== undefined)
+				.map((id) => String(id))
+		);
+		const newTracks = tracks.filter((t) => t.id === undefined || !existingIds.has(String(t.id)));
 		if (newTracks.length) this.queue = [...this.queue, ...newTracks];
 	}
 
@@ -329,8 +343,12 @@ class AudioStore {
 	shuffle(): void {
 		if (!this.queue.length || this.queue.length < 2 || !this.currentTrack) return;
 		const rest = this.queue.filter((_, i) => i !== this.currentQueueIndex);
-		const shuffled = rest.sort(() => Math.random() - 0.5);
-		this.queue = [this.currentTrack, ...shuffled];
+		// Корректный Fisher-Yates (равномерное распределение, без bias sort-ом).
+		for (let i = rest.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[rest[i], rest[j]] = [rest[j], rest[i]];
+		}
+		this.queue = [this.currentTrack, ...rest];
 		this.currentQueueIndex = 0;
 		this.shuffleEnabled = true;
 	}

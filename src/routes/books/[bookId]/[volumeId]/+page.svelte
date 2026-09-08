@@ -73,7 +73,7 @@
 </script>
 
 <svelte:head>
-	<title>{volumeQuery.data?.title || 'Том'} | Главы</title>
+	<title>{volumeQuery.data?.title || 'Том'} — HEDGEHOG.INC</title>
 </svelte:head>
 
 <main class="layout-content py-4 md:py-8">

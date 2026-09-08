@@ -26,4 +26,4 @@ http:
     preview-frontend-service:
       loadBalancer:
         servers:
-          - url: 'http://host.docker.internal:5174'
+          - url: 'http://host.docker.internal:4173'

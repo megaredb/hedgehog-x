@@ -72,7 +72,7 @@
 				max={200}
 				min={25}
 				step={5}
-				bind:value={speedPercent}
+				value={speedPercent}
 				onValueChange={(e) => {
 					handleSliderChange(e);
 				}}

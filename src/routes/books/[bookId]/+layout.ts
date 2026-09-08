@@ -15,9 +15,17 @@ export const load: LayoutLoad = async ({ params, fetch }) => {
 		// страницы данными из локального Dexie кэша.
 		syncService.syncBookDetails(bookId, fetch).catch(console.error);
 
-		// Параллельно стягиваем приватные данные юзера (лайки, прогресс)
-		// Эндпоинт сам поймет, если юзер не залогинен, и ничего не вернет.
-		syncService.syncUserData(fetch).catch(console.error);
+		// Приватные данные юзера (лайки, прогресс, закладки) синхронизируем ТОЛЬКО
+		// для авторизованного пользователя: для анонима /api/user/sync возвращает
+		// пустые массивы, и hydrate(..., 'all') стёр бы локальный прогресс.
+		import('$lib/client/authClient')
+			.then(({ authClient }) => authClient.getSession())
+			.then(({ data }) => {
+				if (data?.user) {
+					return syncService.syncUserData(fetch);
+				}
+			})
+			.catch(console.error);
 	}
 
 	// Отдаем bookId вниз, чтобы страницы знали, что они рендерят

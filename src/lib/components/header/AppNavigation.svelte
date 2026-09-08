@@ -67,7 +67,7 @@
 		{#each groups as group (group.title)}
 			<div class="space-y-1">
 				<span
-					class="px-2 text-xxs font-bold uppercase tracking-wider text-muted-foreground/60 select-none"
+					class="px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground/60 select-none"
 				>
 					{group.title}
 				</span>

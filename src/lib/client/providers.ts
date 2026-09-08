@@ -69,6 +69,8 @@ export type SessionUser = {
 	discordUsername?: string | null;
 	boostyAvatar?: string | null;
 	boostyName?: string | null;
+	/** Провайдер последнего входа (providerId из user.lastLoginProvider). */
+	lastLoginProvider?: string | null;
 	[key: string]: unknown;
 } | null;
 
@@ -89,10 +91,8 @@ export function providerUsername(providerId: string, user: SessionUser): string 
 }
 
 /**
- * Текст для отображения в профиле этого провайдера:
- * аватар ещё есть платформа, иначе — username (или first name/имя),
- * если username нет.
- * Приоритет: username провайдера → имя (name) → null.
+ * Текст для отображения в профиле этого провайдера.
+ * Приоритет: username провайдера → первое слово name → null.
  */
 export function providerDisplayName(providerId: string, user: SessionUser): string | null {
 	const username = providerUsername(providerId, user);

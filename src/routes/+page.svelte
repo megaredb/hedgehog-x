@@ -11,6 +11,7 @@
 	import { ChevronUp, ChevronDown } from '@lucide/svelte';
 	import { fade } from 'svelte/transition';
 	import { VIDEO_BG_STORE_KEY } from '$lib/constants';
+	import { segmentTitle } from '$lib/route-titles';
 
 	// Определяем стартовый индекс прямо при инициализации (работает и на сервере!)
 	// Это предотвращает hydration_mismatch.
@@ -101,7 +102,7 @@
 </script>
 
 <svelte:head>
-	<title>Hedgehog X - Главная</title>
+	<title>{segmentTitle('')} — HEDGEHOG.INC</title>
 </svelte:head>
 
 <!-- flex-1 заставляет контейнер заполнить всю доступную высоту -->

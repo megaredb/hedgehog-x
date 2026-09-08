@@ -111,6 +111,9 @@ export function useAccounts() {
 				error = 'Не удалось удалить аккаунт';
 				return false;
 			}
+			// Сбрасываем сессию: иначе клиент продолжит показывать удалённого
+			// пользователя, а cookie сессии останется валидной.
+			await authClient.signOut();
 			accounts = [];
 			return true;
 		} catch (e) {

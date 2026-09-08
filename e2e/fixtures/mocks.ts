@@ -7,7 +7,7 @@
  * обратном регистрации.
  */
 
-import { expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import {
 	MOCK_CATALOG,
 	PHONE_CODES,
@@ -97,20 +97,20 @@ export interface MockBoostyOptions {
 	confirmStatus?: number;
 	/** Сообщение ошибки confirm-code (по умолчанию 'Code is invalid'). */
 	confirmError?: string;
-	/** Код, который мок ожидает в успешном confirm-code (по умолчанию '123456'). */
-	smsCode?: string;
 }
 
 /**
  * Мок флоу «Вход через Boosty»:
  *  - GET  /api/boosty/phone-codes  → { phoneCodes: PHONE_CODES };
  *  - POST /api/boosty/send-code    → { ok, deviceId, verifyToken, sentTransport };
- *  - POST /api/boosty/confirm-code → ошибка (confirmStatus >= 400) либо успех,
- *    причём при успехе проверяется, что пришёл ожидаемый smsCode.
+ *  - POST /api/boosty/confirm-code → ошибка, только если задан confirmStatus >= 400.
+ *
+ * Успешный confirm-code здесь намеренно не мокается: тест, проверяющий
+ * подтверждение кода, регистрирует собственный обработчик «поверх» и сам
+ * захватывает тело запроса (см. boosty-login.e2e.ts) — так ассерты по телу
+ * остаются в теле теста, а не внутри page.route-колбэка.
  */
 export async function mockBoosty(page: Page, options: MockBoostyOptions = {}): Promise<void> {
-	const smsCode = options.smsCode ?? '123456';
-
 	await page.route('**/api/boosty/phone-codes', (route) =>
 		route.fulfill({
 			status: 200,
@@ -130,26 +130,47 @@ export async function mockBoosty(page: Page, options: MockBoostyOptions = {}): P
 			})
 		})
 	);
-	await page.route('**/api/boosty/confirm-code', async (route) => {
-		if (options.confirmStatus && options.confirmStatus >= 400) {
-			await route.fulfill({
+	if (options.confirmStatus && options.confirmStatus >= 400) {
+		await page.route('**/api/boosty/confirm-code', (route) =>
+			route.fulfill({
 				status: options.confirmStatus,
 				...JSON_HEADERS,
 				body: JSON.stringify({ error: options.confirmError ?? 'Code is invalid' })
-			});
-			return;
-		}
-		const body = route.request().postDataJSON() as { smsCode?: string };
-		expect(body.smsCode).toBe(smsCode);
-		await route.fulfill({
-			status: 200,
-			...JSON_HEADERS,
-			body: JSON.stringify({
-				ok: true,
-				user: { id: 'user-boosty', name: 'Boosty-пользователь', image: null }
 			})
-		});
-	});
+		);
+	}
+}
+
+/**
+ * Тело GET /api/boosty/subscription — форма HedgehogSubscriptionStatus
+ * (см. src/lib/server/boosty/subscriptions.ts). Значения сверены с реальным
+ * эндпоинтом и e2e/profile/profile.cases.ts.
+ */
+export interface BoostySubscriptionBody {
+	linked: boolean;
+	subscribed: boolean;
+	levelName: string | null;
+	priceRub: number | null;
+	periodMonths: number | null;
+	nextPayTime: number | null;
+	onTime: number | null;
+	isFeePaid: boolean;
+	isPaused: boolean;
+	error: string | null;
+}
+
+/**
+ * Мок GET /api/boosty/subscription → 200 с заданным телом (статус подписки
+ * HEDGEHOG.INC). Используется на /profile: подписка рендерится только когда
+ * привязан boosty-аккаунт (см. mockListAccounts + BOOSTY_ACCOUNT).
+ */
+export async function mockBoostySubscription(
+	page: Page,
+	body: BoostySubscriptionBody
+): Promise<void> {
+	await page.route('**/api/boosty/subscription', (route) =>
+		route.fulfill({ status: 200, ...JSON_HEADERS, body: JSON.stringify(body) })
+	);
 }
 
 // ─── Аудиоплеер ────────────────────────────────────────────────────────────────

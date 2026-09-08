@@ -44,6 +44,7 @@
 			<img
 				src={book.bgImage}
 				alt={book.title}
+				aria-hidden="true"
 				class="absolute inset-0 h-full w-full object-cover transition-transform duration-[10s] ease-out"
 				class:scale-105={currentIndex === i}
 				class:scale-100={currentIndex !== i}
@@ -53,6 +54,7 @@
 			<video
 				bind:this={videoElements[i]}
 				src={book.bgVideo}
+				aria-hidden="true"
 				loop
 				muted
 				playsinline

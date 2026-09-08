@@ -27,7 +27,7 @@
 	let deviceId = $state('');
 	let verifyToken = $state('');
 	let countdown = $state(0);
-	let resendTimer: ReturnType<typeof setTimeout> | undefined;
+	let resendTimer: ReturnType<typeof setInterval> | undefined;
 
 	// Страны из API Boosty + русские названия.
 	let countries = $state<BoostyPhoneCode[]>([]);
@@ -35,6 +35,8 @@
 	let selectedCode = $state('RU');
 	let countryOpen = $state(false);
 	let countryQuery = $state('');
+	let highlightedIndex = $state(-1);
+	let countryListEl = $state<HTMLElement | null>(null);
 	let codeInput = $state<HTMLInputElement | null>(null);
 
 	const ruNames = new Intl.DisplayNames('ru', { type: 'region' });
@@ -74,6 +76,56 @@
 				c.dialCode.replace(/\s/g, '').includes(q.replace(/\s/g, ''))
 		);
 	});
+
+	function toggleCountryList() {
+		countryQuery = '';
+		countryOpen = !countryOpen;
+		if (countryOpen) {
+			const idx = selectedCountry ? filteredCountries.findIndex((c) => c.code === selectedCode) : 0;
+			highlightedIndex = idx >= 0 ? idx : 0;
+		} else {
+			highlightedIndex = -1;
+		}
+	}
+
+	function selectCountry(code: string) {
+		selectedCode = code;
+		countryOpen = false;
+		highlightedIndex = -1;
+	}
+
+	function scrollHighlightedIntoView() {
+		countryListEl
+			?.querySelector<HTMLElement>(`[data-country-index="${highlightedIndex}"]`)
+			?.scrollIntoView({ block: 'nearest' });
+	}
+
+	function handleCountryKeydown(e: KeyboardEvent) {
+		if (!countryOpen || filteredCountries.length === 0) return;
+
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			highlightedIndex = (highlightedIndex + 1) % filteredCountries.length;
+			scrollHighlightedIntoView();
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			highlightedIndex =
+				(highlightedIndex - 1 + filteredCountries.length) % filteredCountries.length;
+			scrollHighlightedIntoView();
+		} else if (e.key === 'Enter') {
+			// Если фокус на option — нативный click кнопки сам выберет страну.
+			if ((e.target as HTMLElement | null)?.getAttribute('role') === 'option') return;
+			const c = filteredCountries[highlightedIndex];
+			if (c) {
+				e.preventDefault();
+				selectCountry(c.code);
+			}
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			countryOpen = false;
+			highlightedIndex = -1;
+		}
+	}
 
 	async function loadCountries() {
 		countriesLoading = true;
@@ -191,10 +243,8 @@
 						aria-label={selectedCountry
 							? selectedCountry.dialCode + ' ' + selectedCountry.ruName
 							: 'Выбор страны'}
-						onclick={() => {
-							countryQuery = '';
-							countryOpen = !countryOpen;
-						}}
+						onclick={toggleCountryList}
+						onkeydown={handleCountryKeydown}
 					>
 						<span class="flex min-w-0 items-center gap-2">
 							{#if selectedCountry}
@@ -217,28 +267,37 @@
 									type="text"
 									placeholder="Поиск страны…"
 									value={countryQuery}
-									oninput={(e) => (countryQuery = e.currentTarget.value)}
+									oninput={(e) => {
+										countryQuery = e.currentTarget.value;
+										highlightedIndex = 0;
+									}}
+									onkeydown={handleCountryKeydown}
 									class="h-8 min-w-0 flex-1 bg-transparent text-sm outline-none"
 								/>
 							</div>
-							<div class="max-h-56 overflow-y-auto py-1" role="listbox">
+							<div
+								class="max-h-56 overflow-y-auto py-1"
+								role="listbox"
+								tabindex="-1"
+								bind:this={countryListEl}
+								onkeydown={handleCountryKeydown}
+							>
 								{#if filteredCountries.length === 0}
 									<div class="px-3 py-2 text-sm text-muted-foreground">Ничего не найдено</div>
 								{:else}
-									{#each filteredCountries as c (c.code + c.dialCode)}
+									{#each filteredCountries as c, i (c.code + c.dialCode)}
 										<button
 											type="button"
 											role="option"
 											aria-selected={c.code === selectedCode}
+											data-country-index={i}
 											class={cn(
 												buttonVariants({ variant: 'ghost' }),
 												'w-full justify-start text-left px-3 py-1.5 text-sm h-auto',
-												c.code === selectedCode && 'bg-muted/60'
+												c.code === selectedCode && 'bg-muted/60',
+												i === highlightedIndex && c.code !== selectedCode && 'bg-muted/40'
 											)}
-											onclick={() => {
-												selectedCode = c.code;
-												countryOpen = false;
-											}}
+											onclick={() => selectCountry(c.code)}
 										>
 											<span class="text-lg leading-none">{flagEmoji(c.code)}</span>
 											<span class="font-medium">{c.dialCode}</span>

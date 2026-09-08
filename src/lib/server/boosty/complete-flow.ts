@@ -58,102 +58,121 @@ export async function completeBoostyLogin(params: {
 	// Стабильный ключ аккаунта boosty.
 	const accountKey = PROVIDER_ID + ':' + boostyUserId;
 
-	// 1. Ищем существующий аккаунт boosty этого юзера Boosty.
-	const existing = await db
-		.select({ id: account.id, userId: account.userId })
-		.from(account)
-		.where(eq(account.accountId, accountKey))
-		.limit(1);
-	const matched = existing[0];
+	// Создание user/account/session выполняется в одной транзакции: при
+	// одновременном входе с одного Boosty-аккаунта не должны появляться
+	// дублирующиеся локальные user/account/session записи.
+	return await db.transaction(async (tx) => {
+		// 1. Ищем существующий аккаунт boosty этого юзера Boosty.
+		const existing = await tx
+			.select({ id: account.id, userId: account.userId })
+			.from(account)
+			.where(eq(account.accountId, accountKey))
+			.limit(1);
+		const matched = existing[0];
 
-	// Если аккаунт boosty уже привязан к ДРУГОМУ локальному юзеру — конфликт.
-	if (matched && linkToUserId && matched.userId !== linkToUserId) {
-		throw new Error('Этот аккаунт Boosty уже привязан к другому пользователю');
-	}
+		// Если аккаунт boosty уже привязан к ДРУГОМУ локальному юзеру — конфликт.
+		if (matched && linkToUserId && matched.userId !== linkToUserId) {
+			throw new Error('Этот аккаунт Boosty уже привязан к другому пользователю');
+		}
 
-	let userId: string;
-	if (matched) {
-		// Повторный вход/привязка — используем существующего локального юзера.
-		userId = matched.userId;
-	} else if (linkToUserId) {
-		// Привязка boosty к уже вошедшему юзеру.
-		userId = linkToUserId;
-	} else {
-		// Новый локальный пользователь (первый вход через Boosty).
-		const email = boostyEmail(String(boostyUserId));
-		const name = nameHint?.trim() || 'Boosty-пользователь';
-		const now = new Date();
-		const created = await db
-			.insert(user)
-			.values({
-				id: USER_ID_PREFIX + randomBytes(16).toString('hex'),
-				name,
-				email,
-				emailVerified: true,
-				image: imageHint ?? null,
-				createdAt: now,
-				updatedAt: now
-			})
-			.returning({ id: user.id });
-		userId = created[0]?.id;
-		if (!userId) throw new Error('failed to create user');
-	}
+		let userId: string;
+		if (matched) {
+			// Повторный вход/привязка — используем существующего локального юзера.
+			userId = matched.userId;
+		} else if (linkToUserId) {
+			// Привязка boosty к уже вошедшему юзеру.
+			userId = linkToUserId;
+		} else {
+			// Новый локальный пользователь (первый вход через Boosty).
+			const email = boostyEmail(String(boostyUserId));
+			const name = nameHint?.trim() || 'Boosty-пользователь';
+			const now = new Date();
+			const created = await tx
+				.insert(user)
+				.values({
+					id: USER_ID_PREFIX + randomBytes(16).toString('hex'),
+					name,
+					email,
+					emailVerified: true,
+					image: imageHint ?? null,
+					createdAt: now,
+					updatedAt: now
+				})
+				.returning({ id: user.id });
+			userId = created[0]?.id;
+			if (!userId) throw new Error('failed to create user');
+		}
 
-	// 2. Аккаунт boosty: обновляем refresh_token и device_id (ротация).
-	if (matched) {
-		await db
-			.update(account)
-			.set({ refreshToken, scope: 'device_id=' + deviceId, updatedAt: new Date() })
-			.where(eq(account.id, matched.id));
-	} else {
-		const nowA = new Date();
-		await db.insert(account).values({
-			id: ACCOUNT_ID_PREFIX + randomBytes(12).toString('hex'),
-			accountId: accountKey,
-			providerId: PROVIDER_ID,
-			userId,
-			refreshToken,
-			accessToken: null,
-			scope: 'device_id=' + deviceId,
-			createdAt: nowA,
-			updatedAt: nowA
-		});
-	}
+		// 2. Аккаунт boosty: обновляем refresh_token и device_id (ротация).
+		if (matched) {
+			await tx
+				.update(account)
+				.set({ refreshToken, scope: 'device_id=' + deviceId, updatedAt: new Date() })
+				.where(eq(account.id, matched.id));
+		} else {
+			const nowA = new Date();
+			await tx.insert(account).values({
+				id: ACCOUNT_ID_PREFIX + randomBytes(12).toString('hex'),
+				accountId: accountKey,
+				providerId: PROVIDER_ID,
+				userId,
+				refreshToken,
+				accessToken: null,
+				scope: 'device_id=' + deviceId,
+				createdAt: nowA,
+				updatedAt: nowA
+			});
+		}
 
-	// 3. Доп.поля юзера (аватар Boosty) для карточки провайдера.
-	if (boostyAvatarHint) {
-		await db
-			.update(user)
-			.set({ boostyAvatar: boostyAvatarHint, updatedAt: new Date() })
-			.where(eq(user.id, userId));
-	}
+		// 3. Доп.поля юзера: аватар Boosty для карточки провайдера + маркер
+		// последнего входа. lastLoginProvider и user.image ставим при создании
+		// сессии (НЕ skipSession) — и для нового юзера, и при повторном входе:
+		// «аватар профиля = платформа последнего входа», консистентно с
+		// OAuth-хуком (auth.ts session.create.after) для Discord/Telegram.
+		// При «привязке» (skipSession) image не трогаем — последний вход
+		// остаётся текущей сессии/провайдера.
+		const userPatch: Record<string, unknown> = {};
+		if (boostyAvatarHint) userPatch.boostyAvatar = boostyAvatarHint;
+		if (!skipSession) {
+			userPatch.lastLoginProvider = PROVIDER_ID;
+			// Аватар Boosty может отсутствовать (null) — тогда image = null,
+			// профильная картинка не остаётся от прошлого OAuth-входа.
+			userPatch.image = boostyAvatarHint ?? null;
+		}
+		if (Object.keys(userPatch).length > 0) {
+			await tx
+				.update(user)
+				.set({ ...userPatch, updatedAt: new Date() })
+				.where(eq(user.id, userId));
+		}
 
-	// 4. Сессия better-auth: token — то, что подписываем в cookie.
-	// (пропускается при «привязке» — юзер уже вошёл.)
-	let sessionToken: string | null = null;
-	let expiresAt: Date | null = null;
-	if (!skipSession) {
-		sessionToken = randomBytes(32).toString('base64url');
-		expiresAt = new Date(Date.now() + SESSION_TTL_MS); // 7 дней
-		const nowS = new Date();
-		await db.insert(session).values({
-			id: SESSION_ID_PREFIX + randomBytes(16).toString('hex'),
-			token: sessionToken,
-			expiresAt,
-			createdAt: nowS,
-			updatedAt: nowS,
-			userId
-		});
-	}
+		// 4. Сессия better-auth: token — то, что подписываем в cookie.
+		// (пропускается при «привязке» — юзер уже вошёл.)
+		let sessionToken: string | null = null;
+		let expiresAt: Date | null = null;
+		if (!skipSession) {
+			sessionToken = randomBytes(32).toString('base64url');
+			expiresAt = new Date(Date.now() + SESSION_TTL_MS); // 7 дней
+			const nowS = new Date();
+			await tx.insert(session).values({
+				id: SESSION_ID_PREFIX + randomBytes(16).toString('hex'),
+				token: sessionToken,
+				expiresAt,
+				createdAt: nowS,
+				updatedAt: nowS,
+				userId
+			});
+		}
 
-	const row = await db.select().from(user).where(eq(user.id, userId)).limit(1);
-	const u = row[0];
-	if (!u) throw new Error('user row not found after upsert');
-	return {
-		userId: u.id,
-		name: u.name,
-		image: u.image ?? null,
-		sessionToken,
-		sessionExpiresAt: expiresAt
-	};
+		const row = await tx.select().from(user).where(eq(user.id, userId)).limit(1);
+		const u = row[0];
+		if (!u) throw new Error('user row not found after upsert');
+		return {
+			userId: u.id,
+			name: u.name,
+			image: u.image ?? null,
+			sessionToken,
+			sessionExpiresAt: expiresAt
+		};
+	});
 }

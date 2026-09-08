@@ -17,7 +17,7 @@
 	const formattedCurrentTime = $derived(formatDuration(audioStore.currentTime));
 	const formattedRemaining = $derived(formatDuration(audioStore.duration - audioStore.currentTime));
 
-	const timeValue = $derived(() => {
+	const timeValue = $derived.by(() => {
 		if (isLiveStream && remaining) return 'LIVE';
 		if (isLiveStream && !remaining) return formattedCurrentTime;
 		return remaining ? formattedRemaining : formattedCurrentTime;
@@ -41,5 +41,5 @@
 	{#if showLiveIcon}
 		<Radio class="size-3 animate-pulse" />
 	{/if}
-	{timeValue()}
+	{timeValue}
 </time>

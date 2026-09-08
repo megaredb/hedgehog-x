@@ -15,7 +15,7 @@
 	bind:this={ref}
 	data-slot="breadcrumb"
 	aria-label="breadcrumb"
-	class={cn('cn-breadcrumb', className)}
+	class={cn('text-muted-foreground flex w-full items-center gap-1.5 text-sm', className)}
 	{...restProps}
 >
 	{@render children?.()}

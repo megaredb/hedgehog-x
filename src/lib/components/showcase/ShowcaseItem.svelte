@@ -4,6 +4,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Play } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
+	import { db } from '$lib/client/db';
+	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 
 	let {
 		book,
@@ -14,6 +16,14 @@
 		index: number;
 		onVisible: (idx: number) => void;
 	} = $props();
+
+	// Ссылку «Слушать» показываем только если в Dexie есть реальная книга с таким id,
+	// иначе витрина остаётся чисто визуальной (без гарантированного 404).
+	const catalogBook = useDexie(
+		() => db.books.get(book.id),
+		() => undefined,
+		() => [book.id]
+	);
 
 	function handleInView(isVisible: boolean) {
 		if (isVisible) {
@@ -37,14 +47,25 @@
 		</p>
 
 		<div class="flex flex-wrap items-center gap-4 pt-4">
-			<Button
-				size="lg"
-				href={resolve(`/books/${book.id}`)}
-				class="rounded-full px-8 text-base font-semibold shadow-lg shadow-primary/20"
-			>
-				<Play class="w-5 h-5 mr-2" />
-				Слушать
-			</Button>
+			{#if catalogBook.data}
+				<Button
+					size="lg"
+					href={resolve(`/books/${book.id}`)}
+					class="rounded-full px-8 text-base font-semibold shadow-lg shadow-primary/20"
+				>
+					<Play class="w-5 h-5 mr-2" />
+					Слушать
+				</Button>
+			{:else}
+				<Button
+					size="lg"
+					disabled
+					class="rounded-full px-8 text-base font-semibold shadow-lg shadow-primary/20"
+				>
+					<Play class="w-5 h-5 mr-2" />
+					Скоро
+				</Button>
+			{/if}
 		</div>
 	</div>
 </section>

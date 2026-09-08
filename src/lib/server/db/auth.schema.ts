@@ -18,6 +18,7 @@ export const user = pgTable("user", {
   discordUsername: text("discord_username"),
   boostyAvatar: text("boosty_avatar"),
   boostyName: text("boosty_name"),
+  lastLoginProvider: text("last_login_provider"),
 });
 
 export const session = pgTable(
