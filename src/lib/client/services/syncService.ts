@@ -119,6 +119,24 @@ export const syncService = {
 
 			const userData = await res.json();
 
+			// Guard от data-loss: для неавторизованного пользователя (или когда у
+			// пользователя просто нет данных) `/api/user/sync` возвращает пустые
+			// массивы. Гидрировать их с purgeScope='all' нельзя — это стёрло бы
+			// локальный прогресс/лайки/закладки гостя в Dexie.
+			const isEmpty =
+				!userData ||
+				((!Array.isArray(userData.chapterLikes) || userData.chapterLikes.length === 0) &&
+					(!Array.isArray(userData.volumeLikes) || userData.volumeLikes.length === 0) &&
+					(!Array.isArray(userData.listeningProgress) || userData.listeningProgress.length === 0) &&
+					(!Array.isArray(userData.bookmarks) || userData.bookmarks.length === 0));
+
+			if (isEmpty) {
+				console.log(
+					'Синхронизация user-данных пропущена: пустой ответ (неавторизован или нет данных).'
+				);
+				return;
+			}
+
 			await Promise.all([
 				hydrate('chapterLikes', userData.chapterLikes || [], 'all'),
 				hydrate('volumeLikes', userData.volumeLikes || [], 'all'),

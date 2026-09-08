@@ -45,6 +45,19 @@ type FadeVolumeParams = {
 	duration: number;
 };
 
+/**
+ * Приводит URL к абсолютному виду. Нужно для корректного сравнения
+ * `audio.src` (браузер всегда нормализует в абсолютный URL) с исходным
+ * значением, которое может быть относительным путём.
+ */
+function normalizeAudioUrl(url: string): string {
+	try {
+		return new URL(url, location.origin).href;
+	} catch {
+		return url;
+	}
+}
+
 class HtmlAudio {
 	private audio: HTMLAudioElement | null = null;
 	private isInitialized = false;
@@ -203,7 +216,7 @@ class HtmlAudio {
 				this.currentBlobUrl = finalUrl;
 			}
 
-			if (audio.src === finalUrl || (audio.src === url && finalUrl === url)) {
+			if (normalizeAudioUrl(audio.src) === normalizeAudioUrl(finalUrl)) {
 				if (audio.currentTime !== startTime && !isLiveStream) audio.currentTime = startTime;
 				return;
 			}
@@ -355,15 +368,6 @@ class HtmlAudio {
 		updateVolume();
 	}
 
-	getVolume(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.volume;
-			}) ?? 0
-		);
-	}
-
 	setMuted(muted: boolean): void {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
@@ -377,23 +381,6 @@ class HtmlAudio {
 				this.fadeVolume({ audio, targetVolume: this.lastVolume, duration: 200 });
 			}
 		});
-	}
-
-	getDuration(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.duration;
-			}) ?? 0
-		);
-	}
-	getCurrentTime(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.currentTime;
-			}) ?? 0
-		);
 	}
 
 	setCurrentTime(time: number): void {
@@ -423,43 +410,12 @@ class HtmlAudio {
 		this.eventTarget.removeEventListener(type, callback, options);
 	}
 
-	getSource(): string {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.src;
-			}) ?? ''
-		);
-	}
-	isPaused(): boolean {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.paused;
-			}) ?? true
-		);
-	}
-
-	getBufferedRanges(): TimeRanges | null {
-		if (!this.isClient() || !this.audio) return null;
-		return this.audio.buffered;
-	}
-
 	setPlaybackRate(rate: number): void {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
 			if (this.isLive(audio.duration)) return;
 			audio.playbackRate = clampPlaybackRate(rate);
 		});
-	}
-
-	getPlaybackRate(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.playbackRate;
-			}) ?? 1
-		);
 	}
 
 	isLive(duration: number): boolean {

@@ -59,7 +59,7 @@
 </script>
 
 <svelte:head>
-	<title>Менеджер загрузок | Hedgehog.inc</title>
+	<title>{segmentTitle('downloads')} — HEDGEHOG.INC</title>
 </svelte:head>
 
 <div class="p-6 max-w-4xl mx-auto">

@@ -20,7 +20,7 @@
 	<span
 		class={cn(
 			'font-extrabold tracking-tight bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-transparent',
-			size === 'md' ? 'text-lg' : 'text-md'
+			size === 'md' ? 'text-lg' : 'text-base'
 		)}
 	>
 		HEDGEHOG.INC

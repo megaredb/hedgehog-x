@@ -77,7 +77,7 @@
 			boostyLinkOpen = true;
 			return;
 		}
-		const url = await accounts.link(providerId, '/profile');
+		const url = await accounts.link(providerId, resolve('/profile'));
 		if (url) {
 			// Редирект на страницу авторизации провайдера (Discord/Telegram)
 			window.location.href = url;
@@ -190,9 +190,13 @@
 		deleteModalOpen = false;
 		deleting = false;
 		await session.refetch();
-		window.location.href = resolve('/');
+		await goto(resolve('/'));
 	}
 </script>
+
+<svelte:head>
+	<title>{segmentTitle('profile')} — HEDGEHOG.INC</title>
+</svelte:head>
 
 <div class="mx-auto max-w-2xl p-6">
 	<PageHeader
@@ -457,7 +461,7 @@
 				title="Привязать Boosty"
 				description="Войдите по номеру телефона Boosty — мы привяжем аккаунт автоматически."
 				onClose={() => (boostyLinkOpen = false)}
-				callbackURL="/profile"
+				callbackURL={resolve('/profile')}
 			/>
 
 			<!-- модалка подтверждения отвязки провайдера -->

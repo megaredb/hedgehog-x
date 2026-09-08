@@ -77,7 +77,7 @@
 				class={className}
 				max={100}
 				min={0}
-				bind:value={volumePercent}
+				value={volumePercent}
 				onValueChange={(e) => {
 					handleSliderChange(e);
 				}}

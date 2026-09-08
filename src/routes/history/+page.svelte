@@ -3,6 +3,10 @@
 	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
+<svelte:head>
+	<title>{segmentTitle('history')} — HEDGEHOG.INC</title>
+</svelte:head>
+
 <div class="p-6">
 	<PageHeader
 		title={segmentTitle('history')!}

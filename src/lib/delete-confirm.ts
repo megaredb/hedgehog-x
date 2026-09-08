@@ -29,6 +29,12 @@ export interface DeleteButton {
 	confirm: boolean;
 }
 
+/** Приводит позицию подтверждения к корректному целому 0..3. */
+function normalizeConfirmPos(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+	return Math.min(3, Math.max(0, Math.floor(value)));
+}
+
 /**
  * Строит 4 кнопки: 3 «отмены» + 1 «подтверждение» на позиции confirmPos.
  * Тексты «отмен» идут по кругу из пула со сдвигом от шага к шагу.
@@ -36,10 +42,11 @@ export interface DeleteButton {
 export function computeDeleteButtons(confirmText: string, confirmPos: number): DeleteButton[] {
 	const pool = DELETE_CANCEL_TEXTS;
 	const buttons: DeleteButton[] = [];
-	const start = confirmPos;
+	const pos = normalizeConfirmPos(confirmPos);
+	const start = pos;
 	let cancelIdx = 0;
-	for (let pos = 0; pos < 4; pos++) {
-		if (pos === confirmPos) {
+	for (let i = 0; i < 4; i++) {
+		if (i === pos) {
 			buttons.push({ key: 'ok', label: confirmText, confirm: true });
 		} else {
 			const label = pool[(start + cancelIdx) % pool.length];
@@ -55,6 +62,7 @@ export function computeDeleteButtons(confirmText: string, confirmPos: number): D
  * (сдвиг 1..3, не 0). Возвращает 0..3.
  */
 export function nextDeleteConfirmPos(currentPos: number): number {
+	const pos = normalizeConfirmPos(currentPos);
 	const shift = 1 + Math.floor(Math.random() * 3); // 1..3
-	return (currentPos + shift) % 4;
+	return (pos + shift) % 4;
 }

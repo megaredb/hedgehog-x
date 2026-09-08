@@ -9,6 +9,7 @@
 	import { authClient } from '$lib/client/authClient';
 	import { signOutAndRedirect, useSession } from '$lib/client/session.svelte';
 	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
+	import { segmentTitle } from '$lib/route-titles';
 
 	const session = useSession();
 
@@ -18,10 +19,14 @@
 	let boostyModalOpen = $state(false);
 
 	const from = $derived.by(() => {
-		const raw = page.url.searchParams.get('from') ?? resolve('/');
+		const raw = page.url.searchParams.get('from');
+		// Разрешаем только внутренние относительные пути: начинается с "/",
+		// но не с "//" (иначе это protocol-relative внешний URL). Всё остальное
+		// (абсолютные URL, javascript: и т.п.) уводим на главную.
+		const safe = raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : resolve('/');
 		// Страница входа — туда возвращаться нельзя (цикл). Уводим на главную.
-		if (raw === resolve('/auth')) return resolve('/');
-		return raw;
+		if (safe === resolve('/auth')) return resolve('/');
+		return safe;
 	});
 
 	// Если провайдер вернул нас с ошибкой (отмена авторизации, access_denied
@@ -90,6 +95,10 @@
 		}
 	}
 </script>
+
+<svelte:head>
+	<title>{segmentTitle('auth')} — HEDGEHOG.INC</title>
+</svelte:head>
 
 <div class="flex min-h-full items-center justify-center p-6">
 	<div class="w-full max-w-sm space-y-6">

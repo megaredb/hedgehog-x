@@ -6,9 +6,7 @@ export function inview(node: HTMLElement, callback: (isVisible: boolean) => void
 	const observer = new IntersectionObserver(
 		(entries) => {
 			entries.forEach((entry) => {
-				if (entry.isIntersecting) {
-					callback(true);
-				}
+				callback(entry.isIntersecting);
 			});
 		},
 		{

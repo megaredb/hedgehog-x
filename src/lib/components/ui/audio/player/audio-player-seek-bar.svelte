@@ -12,13 +12,13 @@
 
 	const isLiveStream = $derived(htmlAudio.isLive(audioStore.duration));
 
-	const progress = $derived(() => {
+	const progress = $derived.by(() => {
 		if (isLiveStream) return 100;
 		if (!audioStore.duration) return 0;
 		return (audioStore.currentTime / audioStore.duration) * 100;
 	});
 
-	const bufferedProgress = $derived(() => {
+	const bufferedProgress = $derived.by(() => {
 		if (isLiveStream) return 100;
 		if (!audioStore.duration) return 0;
 		return (audioStore.bufferedTime / audioStore.duration) * 100;
@@ -58,8 +58,8 @@
 <AudioSeekSlider
 	class={cn('min-w-20 flex-1', className)}
 	disabled={isLiveStream}
-	value={progress()}
-	bufferValue={bufferedProgress()}
+	value={progress}
+	bufferValue={bufferedProgress}
 	onValueChange={handleValueChange}
 	onMouseMove={handleMouseMove}
 	onTouchStart={handleTouchStart}
