@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
 import postgres from 'postgres';
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { config as loadEnv } from 'dotenv';
+import { unquote } from './fixtures/utils';
+import {
+	buildSessionCookieValueEncoded,
+	sessionCookieName
+} from '../src/lib/server/boosty/token-utils';
 
 // Playwright-процесс не читает .env автоматически (это делает Vite через
 // $env/dynamic/private). Загружаем вручную, чтобы тест увидел DATABASE_URL
@@ -16,27 +21,28 @@ loadEnv();
  * Требует доступной Postgres (DATABASE_URL из .env). Без неё — skip.
  */
 
-// .env хранит значения в кавычках ("..."), а dotenv v16 их не срезает —
-// в отличие от Vite ($env/dynamic/private), который срезает. Нормализуем.
-function unquote(v: string | undefined): string | undefined {
-	if (!v) return v;
-	if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-		return v.slice(1, -1);
-	}
-	return v;
-}
-
-const rawDbUrl = process.env.DATABASE_URL;
-const DATABASE_URL = unquote(rawDbUrl) ?? 'postgres://root:mysecretpassword@localhost:5432/local';
+const DATABASE_URL =
+	unquote(process.env.DATABASE_URL) ?? 'postgres://root:mysecretpassword@localhost:5432/local';
 const secret = unquote(process.env.BETTER_AUTH_SECRET);
 
-test.skip(!secret, 'BETTER_AUTH_SECRET не задан — пропускаем интеграционный тест');
-
-/** Подпись cookie better-auth: encodeURIComponent(token + '.' + base64(HMAC-SHA256(secret, token))) */
-function signedCookieValue(token: string, secret: string): string {
-	const sig = createHmac('sha256', secret).update(token).digest('base64');
-	return encodeURIComponent(token + '.' + sig);
+// Проверяем фактическую доступность Postgres (SELECT 1): если БД не поднята,
+// тест честно пропускается, а не падает на первом запросе в beforeAll.
+let postgresAvailable = false;
+if (secret) {
+	try {
+		const probe = postgres(DATABASE_URL, { connect_timeout: 3, max: 1 });
+		await probe`select 1`;
+		await probe.end();
+		postgresAvailable = true;
+	} catch {
+		postgresAvailable = false;
+	}
 }
+
+test.skip(
+	!postgresAvailable,
+	'BETTER_AUTH_SECRET не задан или Postgres недоступна — пропускаем интеграционный тест'
+);
 
 test.describe('POST /api/user/delete (реальная БД)', () => {
 	const email = 'e2e-delete-' + randomUUID() + '@test.local';
@@ -46,6 +52,11 @@ test.describe('POST /api/user/delete (реальная БД)', () => {
 
 	test.beforeAll(async () => {
 		sql = postgres(DATABASE_URL);
+		// Сырой SQL дублирует Drizzle-схему better-auth (src/lib/server/db/auth.schema.ts),
+		// чтобы не тянуть ORM в тест. Колонки соответствуют таблицам:
+		//   user    (id, name, email, email_verified, created_at, updated_at);
+		//   account (id, account_id, provider_id, user_id, created_at, updated_at);
+		//   session (id, token, expires_at, created_at, updated_at, user_id).
 		const now = new Date();
 		await sql`delete from "user" where email = ${email}`.catch(() => {});
 		await sql`insert into "user" (id, name, email, email_verified, created_at, updated_at) values (${userId}, 'E2E Delete', ${email}, true, ${now}, ${now})`;
@@ -59,10 +70,10 @@ test.describe('POST /api/user/delete (реальная БД)', () => {
 	});
 
 	test('удаляет пользователя и каскадно account/session', async ({ request }) => {
-		const cookie = signedCookieValue(sessionToken, secret!);
-		// В production-режиме (vite preview / наш e2e-runner) better-auth
-		// использует префикс __Secure- для session cookie.
-		const cookieName = '__Secure-better-auth.session_token';
+		// Значение и имя cookie считаются так же, как лучше-auth в production
+		// (см. src/lib/server/boosty/token-utils.ts): префикс __Secure-.
+		const cookie = buildSessionCookieValueEncoded(sessionToken, secret!);
+		const cookieName = sessionCookieName(true);
 		const res = await request.post('/api/user/delete', {
 			headers: { cookie: cookieName + '=' + cookie }
 		});

@@ -1,6 +1,7 @@
-import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { MOCK_CATALOG } from './fixtures/data';
+import { openPage } from './fixtures/utils';
+import { formatDuration } from '$lib/html-audio';
 
 /**
  * E2E: каталог аудиокниг (страницы /books/book-1 и /books/book-1/:volumeId).
@@ -15,26 +16,16 @@ import { MOCK_CATALOG } from './fixtures/data';
  *  2. Переключатель «Сетка»/«Список» (aria-label) меняет вид: описания томов
  *     показываются только в режиме «Список».
  *  3. Страница тома: список глав с названиями и длительностями (m:ss,
- *     формат совпадает с formatDuration из src/lib/html-audio.ts).
+ *     формат — formatDuration из src/lib/html-audio.ts).
  *  4. Клик по главе запускает воспроизведение: появляется GlobalPlayer
  *     (кнопки «Пауза»/«Следующий» + заголовок главы в плеере).
  *
  * Селекторы — роли/aria-label/тексты, без CSS-классов. Бесконечные
- * CSS-анимации глушатся addStyleTag ПОСЛЕ goto (см. e2e/showcase.e2e.ts).
+ * CSS-анимации глушатся addStyleTag ПОСЛЕ goto (openPage из fixtures/utils.ts).
  */
-
-const KILL_ANIMATIONS =
-	'*,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}';
 
 const VOLUME_1 = MOCK_CATALOG.volumes.find((v) => v.id === 'book-1-vol-1')!;
 const VOLUME_2 = MOCK_CATALOG.volumes.find((v) => v.id === 'book-1-vol-2')!;
-
-/** Длительность в m:ss — та же арифметика, что в formatDuration компонента. */
-function formatMss(seconds: number): string {
-	const m = Math.floor(seconds / 60);
-	const s = Math.floor(seconds % 60);
-	return `${m}:${s < 10 ? '0' : ''}${s}`;
-}
 
 /**
  * «Герметичный» мок HTMLMediaElement живёт в фикстуре `audio`
@@ -43,12 +34,6 @@ function formatMss(seconds: number): string {
  * audioStore и не зависит от нестабильного реального медиа-пайплайна. В тестах
  * с воспроизведением включается фикстура `audio` (см. ниже).
  */
-
-/** Переход на страницу и отключение CSS-анимаций/переходов ПОСЛЕ загрузки. */
-async function openPage(page: Page, path: string): Promise<void> {
-	await page.goto(path);
-	await page.addStyleTag({ content: KILL_ANIMATIONS });
-}
 
 test.describe('Каталог: страница книги /books/book-1', () => {
 	test.beforeEach(async ({ catalog }) => {
@@ -106,7 +91,7 @@ test.describe('Каталог: страница тома /books/book-1/book-1-vo
 				page.getByRole('button', { name: `Воспроизвести: ${chapter.title}`, exact: true })
 			).toBeVisible();
 			await expect(
-				page.getByText(formatMss(chapter.durationSeconds), { exact: true })
+				page.getByText(formatDuration(chapter.durationSeconds), { exact: true })
 			).toBeVisible();
 		}
 

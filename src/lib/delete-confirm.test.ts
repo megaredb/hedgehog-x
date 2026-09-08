@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	DELETE_CONFIRM_TEXTS,
@@ -50,17 +50,23 @@ test('nextDeleteConfirmPos: новое место всегда отличает�
 	}
 });
 
-test('nextDeleteConfirmPos: со временем покрывает все 4 позиции', () => {
-	// Цепочка из достаточно многих переходов от любой стартовой точки
-	// должна побывать во всех позициях (сдвиги 1..3 — граф связный).
-	const seen = new Set<number>();
-	let pos = 0;
-	for (let i = 0; i < 100; i++) {
-		pos = nextDeleteConfirmPos(pos);
-		seen.add(pos);
-		if (seen.size === 4) break;
+test('nextDeleteConfirmPos: сдвиг всегда 1..3, результат != текущему (детерминированно)', () => {
+	// nextDeleteConfirmPos выбирает сдвиг 1..3 через Math.random. Фиксируем
+	// random так, чтобы проверить точную арифметику для всех комбинаций
+	// (pos, shift) — без зависимости от случайности.
+	try {
+		for (let pos = 0; pos < 4; pos++) {
+			for (let shift = 1; shift <= 3; shift++) {
+				// Math.random()=(shift-1)/3 → floor(random*3)=shift-1 → сдвиг = shift.
+				mock.method(Math, 'random', () => (shift - 1) / 3);
+				const next = nextDeleteConfirmPos(pos);
+				assert.equal(next, (pos + shift) % 4, `pos=${pos}, shift=${shift}`);
+				assert.notEqual(next, pos);
+			}
+		}
+	} finally {
+		mock.restoreAll();
 	}
-	assert.equal(seen.size, 4, 'цепочка не покрыла все позиции: ' + [...seen].join(','));
 });
 
 test('DELETE_CONFIRM_TEXTS: 4 шага подтверждения', () => {

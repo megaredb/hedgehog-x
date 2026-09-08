@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/test';
 import { ROUTE_TITLES } from '../src/lib/route-titles';
 import { mockListAccounts } from './fixtures/mocks';
+import { GUEST_STATIC_PAGES } from './fixtures/utils';
 
 /**
  * E2E: единый источник заголовков (ROUTE_TITLES) согласует h1 страниц и
@@ -11,17 +12,6 @@ import { mockListAccounts } from './fixtures/mocks';
  * текст, отличный от карты — тест упадёт. ROUTE_TITLES — изотропный модуль
  * без алиасов, поэтому импортируется относительным путём из e2e.
  */
-
-const GUEST_STATIC_PAGES = [
-	'/bookmarks',
-	'/community',
-	'/history',
-	'/settings',
-	'/support',
-	'/downloads',
-	'/about',
-	'/auth'
-] as const;
 
 test.describe('ROUTE_TITLES: h1 страницы и крошки согласованы (гость)', () => {
 	test.beforeEach(async ({ guest }) => {

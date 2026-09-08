@@ -61,9 +61,11 @@ test.describe('Авторизация через внешние провайде
 	});
 
 	test('клик по Discord запускает OAuth2-редирект на discord.com', async ({ page }) => {
+		// В route-колбэке только захватываем тело запроса — ассерты вынесены
+		// ниже, после действия (иначе при несовпадении тест зависает, а не падает).
+		let provider = '';
 		await page.route('**/api/auth/sign-in/social', async (route) => {
-			const body = (route.request().postDataJSON() ?? {}) as { provider?: string };
-			expect(body.provider).toBe('discord');
+			provider = ((route.request().postDataJSON() ?? {}) as { provider?: string }).provider ?? '';
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -88,6 +90,8 @@ test.describe('Авторизация через внешние провайде
 		await page.goto('/auth');
 		await page.getByRole('button', { name: 'Войти через Discord' }).click();
 
+		// sign-in/social ушёл с провайдером discord
+		await expect.poll(() => provider).toBe('discord');
 		// Мок sign-in/social возвращает URL discord.com (Discord сам редиректит /api → /oauth2/authorize)
 		await expect.poll(() => externalUrl).toContain('discord.com/api/oauth2/authorize');
 	});

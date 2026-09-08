@@ -1,30 +1,25 @@
 import { test, expect } from './fixtures/test';
+import { ROUTE_TITLES } from '../src/lib/route-titles';
+import { STUB_PAGES } from './fixtures/utils';
 
 /**
  * E2E: статические страницы приложения (гость).
  *
  *  1. Заглушки /bookmarks, /community, /history, /settings, /support рендерят
- *     свой заголовок через PageHeader (<h1>).
+ *     свой заголовок через PageHeader (<h1>) — текст из ROUTE_TITLES.
  *  2. /about: заголовки «О сайте», «Автор контента», «Разработчики», авторы
  *     megared/mk-rn и кнопки «GitHub» с корректными внешними ссылками.
  *
  * Все страницы доступны гостю (без сессии).
  */
 
-const STUB_PAGES = [
-	{ path: '/bookmarks', title: 'Закладки' },
-	{ path: '/community', title: 'Сообщество' },
-	{ path: '/history', title: 'История' },
-	{ path: '/settings', title: 'Настройки' },
-	{ path: '/support', title: 'Поддержать' }
-] as const;
-
 test.describe('Страницы-заглушки (PageHeader)', () => {
 	test.beforeEach(async ({ guest }) => {
 		void guest;
 	});
 
-	for (const { path, title } of STUB_PAGES) {
+	for (const path of STUB_PAGES) {
+		const title = ROUTE_TITLES[path.slice(1)];
 		test(`${path} рендерит заголовок «${title}»`, async ({ page }) => {
 			await page.goto(path);
 			await expect(page.getByRole('heading', { name: title, level: 1 })).toBeVisible();

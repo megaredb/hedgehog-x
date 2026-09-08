@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
 import { MOCK_CATALOG } from './fixtures/data';
+import { openPage } from './fixtures/utils';
 
 /**
  * E2E: аудиоплеер (GlobalPlayer) на странице тома /books/book-1/book-1-vol-1.
@@ -28,9 +29,6 @@ import { MOCK_CATALOG } from './fixtures/data';
  * playerSecondaryButtons + комментарий к нему).
  */
 
-const KILL_ANIMATIONS =
-	'*,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}';
-
 const BOOK = MOCK_CATALOG;
 const VOLUME = BOOK.volumes.find((v) => v.id === 'book-1-vol-1')!;
 const [CHAPTER_1, CHAPTER_2] = VOLUME.chapters;
@@ -38,15 +36,9 @@ const [CHAPTER_1, CHAPTER_2] = VOLUME.chapters;
 const PLAY_NAME = (title: string) => `Воспроизвести: ${title}`;
 const PAUSE_NAME = (title: string) => `Пауза: ${title}`;
 
-/** Переход на страницу тома + отключение CSS-анимаций/переходов ПОСЛЕ goto. */
-async function openVolumePage(page: Page): Promise<void> {
-	await page.goto(`/books/${BOOK.id}/${VOLUME.id}`);
-	await page.addStyleTag({ content: KILL_ANIMATIONS });
-}
-
 /** Ждём список глав и запускаем воспроизведение первой главы тома. */
 async function startPlayback(page: Page): Promise<void> {
-	await openVolumePage(page);
+	await openPage(page, `/books/${BOOK.id}/${VOLUME.id}`);
 	const firstChapter = page.getByRole('button', { name: PLAY_NAME(CHAPTER_1.title), exact: true });
 	await expect(firstChapter).toBeVisible();
 	await firstChapter.click();
@@ -212,7 +204,7 @@ test.describe('Аудиоплеер (GlobalPlayer)', () => {
 	});
 
 	test('у строки главы есть кнопка «Скачать» (Download) с тултипом', async ({ page }) => {
-		await openVolumePage(page);
+		await openPage(page, `/books/${BOOK.id}/${VOLUME.id}`);
 
 		// В строке главы ровно две кнопки: воспроизведение и скачивание
 		const chapterRow = page

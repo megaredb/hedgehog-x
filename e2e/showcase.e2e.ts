@@ -1,5 +1,5 @@
-import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/test';
+import { openPage } from './fixtures/utils';
 
 /**
  * E2E: главная страница (/) — витрина книг из mockShowcase.
@@ -17,15 +17,6 @@ import { test, expect } from './fixtures/test';
  * (addInitScript срабатывает до появления DOM, поэтому addStyleTag).
  */
 
-/** Переход на главную + отключение CSS-анимаций/переходов на индикаторах. */
-async function openHome(page: Page, url = '/'): Promise<void> {
-	await page.goto(url);
-	await page.addStyleTag({
-		content:
-			'*,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important}'
-	});
-}
-
 test.describe('Главная: витрина книг (mockShowcase)', () => {
 	test.beforeEach(async ({ guest }) => {
 		void guest;
@@ -34,7 +25,7 @@ test.describe('Главная: витрина книг (mockShowcase)', () => {
 	test('секции книг рендерятся; на первой виден «Пролистать вниз», «вверх» — нет', async ({
 		page
 	}) => {
-		await openHome(page);
+		await openPage(page, '/');
 
 		// Обе книги витрины отрисованы (h1-заголовки секций)
 		await expect(page.getByRole('heading', { name: 'Реинкарнация безработного' })).toBeVisible();
@@ -48,7 +39,7 @@ test.describe('Главная: витрина книг (mockShowcase)', () => {
 	test('клик по «Пролистать вниз» включает «Пролистать вверх» и меняет ?book=', async ({
 		page
 	}) => {
-		await openHome(page);
+		await openPage(page, '/');
 		await expect(page).not.toHaveURL(/book=/);
 
 		await page.getByTitle('Пролистать вниз').click();
@@ -62,7 +53,7 @@ test.describe('Главная: витрина книг (mockShowcase)', () => {
 	});
 
 	test('клик по «Пролистать вверх» возвращает к первой книге', async ({ page }) => {
-		await openHome(page, '/?book=overlord');
+		await openPage(page, '/?book=overlord');
 		// Стартовый индекс берётся из URL: показывается вторая книга
 		await expect(page.getByTitle('Пролистать вверх')).toBeVisible();
 

@@ -29,6 +29,15 @@ async function mockLoggedInAccounts(
 	await mockListAccounts(page, accounts);
 }
 
+/**
+ * Строка способа входа по id провайдера. Профиль помечает каждую строку
+ * атрибутом `data-provider` (см. src/routes/profile/+page.svelte) — стабильный
+ * селектор вместо хрупких CSS-цепочек `div.rounded-xl.border`.
+ */
+function providerRow(page: import('@playwright/test').Page, providerId: string) {
+	return page.locator(`[data-provider="${providerId}"]`);
+}
+
 test.describe('Страница профиля: способы входа', () => {
 	test.describe('авторизованный пользователь', () => {
 		test.beforeEach(async ({ loggedIn }) => {
@@ -56,7 +65,7 @@ test.describe('Страница профиля: способы входа', () =
 			await page.goto('/profile');
 
 			// В строке Telegram вместо иконки — <img> с аватаром Telegram
-			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			const telegramRow = providerRow(page, 'telegram-oidc');
 			const avatarImg = telegramRow.locator('img');
 			await expect(avatarImg).toBeVisible();
 			await expect(avatarImg).toHaveAttribute('src', userWithAvatar.telegramAvatar);
@@ -84,7 +93,7 @@ test.describe('Страница профиля: способы входа', () =
 			await page.goto('/profile');
 
 			// В строке Telegram вместо иконки/картинки — кружок с первой буквой username
-			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			const telegramRow = providerRow(page, 'telegram-oidc');
 			await expect(telegramRow.getByText('H', { exact: true })).toBeVisible();
 		});
 
@@ -108,10 +117,10 @@ test.describe('Страница профиля: способы входа', () =
 			await page.goto('/profile');
 
 			// Рядом с Telegram — кнопка «Отвязать» (заблокирована, т.к. способ последний)
-			const telegramRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Telegram' });
+			const telegramRow = providerRow(page, 'telegram-oidc');
 			await expect(telegramRow.getByRole('button', { name: 'Отвязать' })).toBeDisabled();
 			// Discord не привязан — доступна кнопка «Привязать»
-			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			const discordRow = providerRow(page, 'discord');
 			await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeEnabled();
 		});
 
@@ -122,13 +131,13 @@ test.describe('Страница профиля: способы входа', () =
 			// провайдера (account.accountId), а НЕ внутренний id записи (acc-dc-1).
 			// Раньше клиент отправлял внутренний id → сервер отвечал
 			// «Account not found» (ACCOUNT_NOT_FOUND).
+			// В route только захватываем тело; ассерты — после действия.
+			let unlinkBody: { providerId?: string; accountId?: string } | null = null;
 			await page.route('**/api/auth/unlink-account', async (route) => {
-				const body = (route.request().postDataJSON() ?? {}) as {
+				unlinkBody = (route.request().postDataJSON() ?? {}) as {
 					providerId?: string;
 					accountId?: string;
 				};
-				expect(body.providerId).toBe('discord');
-				expect(body.accountId).toBe(DISCORD_ACCOUNT.accountId);
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -143,7 +152,7 @@ test.describe('Страница профиля: способы входа', () =
 			// ID Telegram способа входа
 			await expect(page.getByText(`ID ${TELEGRAM_ACCOUNT.accountId}`)).toBeVisible();
 
-			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			const discordRow = providerRow(page, 'discord');
 			await expect(discordRow.getByRole('button', { name: 'Отвязать' })).toBeEnabled();
 
 			// Отвязка требует подтверждения в модалке
@@ -154,14 +163,20 @@ test.describe('Страница профиля: способы входа', () =
 
 			// После отвязки Discord помечается как доступный для привязки
 			await expect(discordRow.getByRole('button', { name: 'Привязать' })).toBeVisible();
+
+			// Тело запроса отвязки: внешний id провайдера, а не внутренний id записи
+			await expect.poll(() => unlinkBody?.providerId).toBe('discord');
+			expect(unlinkBody?.accountId).toBe(DISCORD_ACCOUNT.accountId);
 		});
 
 		test('привязка Discord вызывает /link-social с правильным провайдером', async ({ page }) => {
 			await mockLoggedInAccounts(page, [TELEGRAM_ACCOUNT]);
 
+			// В route только захватываем тело; ассерт провайдера — после действия.
+			let linkProvider = '';
 			await page.route('**/api/auth/link-social', async (route) => {
-				const body = (route.request().postDataJSON() ?? {}) as { provider?: string };
-				expect(body.provider).toBe('discord');
+				linkProvider =
+					((route.request().postDataJSON() ?? {}) as { provider?: string }).provider ?? '';
 				await route.fulfill({
 					status: 200,
 					contentType: 'application/json',
@@ -186,9 +201,11 @@ test.describe('Страница профиля: способы входа', () =
 
 			await page.goto('/profile');
 
-			const discordRow = page.locator('div.rounded-xl.border').filter({ hasText: 'Discord' });
+			const discordRow = providerRow(page, 'discord');
 			await discordRow.getByRole('button', { name: 'Привязать' }).click();
 
+			// link-social ушёл с провайдером discord
+			await expect.poll(() => linkProvider).toBe('discord');
 			await expect.poll(() => externalUrl).toContain('discord.com');
 		});
 	});
@@ -301,8 +318,10 @@ test.describe('Страница профиля: удаление аккаунт�
 		const dialog = page.getByRole('dialog');
 		await expect(dialog).toBeVisible();
 
-		// Закрываем кликом по оверлею (затемняющий фон вне модалки)
-		await page.locator('[data-slot="dialog-overlay"]').click({ position: { x: 5, y: 5 } });
+		// Закрываем кликом по оверлею: это полноэкранная подложка (fixed inset-0)
+		// без роли/доступного имени, поэтому кликаем в угол вьюпорта, где
+		// центрированная модалка гарантированно отсутствует.
+		await page.mouse.click(5, 5);
 		await expect(dialog).not.toBeVisible();
 
 		// Повторно открываем — модалка должна появиться снова (баг: требовалась перезагрузка)

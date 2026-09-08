@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
+import postgres from 'postgres';
+import { unquote } from './fixtures/utils';
 
 loadEnv();
 
@@ -20,20 +22,28 @@ loadEnv();
  * Требует .env (DATABASE_URL/BETTER_AUTH_SECRET) и доступной Postgres — иначе skip.
  */
 
-// .env хранит значения в кавычках ("..."), а dotenv v16 их не срезает —
-// в отличие от Vite ($env/dynamic/private). Нормализуем для проверки.
-function unquote(v: string | undefined): string | undefined {
-	if (!v) return v;
-	if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-		return v.slice(1, -1);
+const DATABASE_URL = unquote(process.env.DATABASE_URL);
+const hasEnv = Boolean(DATABASE_URL) && Boolean(unquote(process.env.BETTER_AUTH_SECRET));
+
+// Проверяем фактическую доступность Postgres (SELECT 1), а не только наличие
+// переменных окружения: если БД не поднята, интеграционные тесты падают с
+// ошибкой подключения, а не честно пропускаются.
+let postgresAvailable = false;
+if (hasEnv) {
+	try {
+		const probe = postgres(DATABASE_URL!, { connect_timeout: 3, max: 1 });
+		await probe`select 1`;
+		await probe.end();
+		postgresAvailable = true;
+	} catch {
+		postgresAvailable = false;
 	}
-	return v;
 }
 
-const hasEnv =
-	Boolean(unquote(process.env.DATABASE_URL)) && Boolean(unquote(process.env.BETTER_AUTH_SECRET));
-
-test.skip(!hasEnv, 'Нет DATABASE_URL/BETTER_AUTH_SECRET — пропускаем интеграционные тесты');
+test.skip(
+	!postgresAvailable,
+	'Нет DATABASE_URL/BETTER_AUTH_SECRET или Postgres недоступна — пропускаем интеграционные тесты'
+);
 
 test.describe('GET /api/books (реальный сервер)', () => {
 	test('возвращает 200 и JSON-массив книг (может быть пустым)', async ({ request }) => {

@@ -267,6 +267,7 @@
 							{@const username = providerUsername(provider.id, session.user)}
 							{@const displayName = providerDisplayName(provider.id, session.user)}
 							<div
+								data-provider={provider.id}
 								class="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4"
 							>
 								<div class="flex min-w-0 items-center gap-3">
