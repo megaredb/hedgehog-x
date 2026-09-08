@@ -21,7 +21,7 @@ export interface AuthAvatarCase {
 }
 
 /** Относительный URL-заглушка аватара — локальный, без внешнего хоста. */
-const AUTH_AVATAR = '/img/auth-avatar.png';
+const AUTH_AVATAR = '/img/overlord.webp';
 
 export const authAvatarCases: AuthAvatarCase[] = [
 	{ id: 'img', image: AUTH_AVATAR, expectImg: true },
