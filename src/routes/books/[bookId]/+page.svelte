@@ -3,6 +3,9 @@
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { LayoutGrid, List as ListIcon } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
+	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { cn } from '$lib/utils';
 
 	let { data } = $props();
 
@@ -23,7 +26,7 @@
 </script>
 
 <svelte:head>
-	<title>{bookQuery.data?.title || 'Книга'} | Тома</title>
+	<title>{bookQuery.data?.title || 'Книга'} — HEDGEHOG.INC</title>
 </svelte:head>
 
 <main class="layout-content py-4 md:py-8">
@@ -39,30 +42,40 @@
 		<div
 			class="flex items-center gap-1 bg-muted/50 p-1 rounded-lg self-start sm:self-auto border border-border/50"
 		>
-			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'grid'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+			<Button
+				variant="ghost"
+				size="icon"
+				class={cn(
+					viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
+				)}
 				onclick={() => (viewMode = 'grid')}
 				aria-label="Сетка"
 			>
-				<LayoutGrid class="w-5 h-5" />
-			</button>
-			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'list'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+				<LayoutGrid class="size-5" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon"
+				class={cn(
+					viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
+				)}
 				onclick={() => (viewMode = 'list')}
 				aria-label="Список"
 			>
-				<ListIcon class="w-5 h-5" />
-			</button>
+				<ListIcon class="size-5" />
+			</Button>
 		</div>
 	</div>
 
-	{#if volumesQuery.data.length === 0}
+	{#if volumesQuery.isLoading}
+		<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+			{#each Array(5)}
+				<Skeleton class="aspect-3/4 rounded-xl md:rounded-2xl" />
+			{/each}
+		</div>
+	{:else if volumesQuery.data.length === 0}
 		<div class="p-8 text-center bg-muted/30 rounded-2xl border-2 border-dashed border-border/50">
-			<p class="text-lg text-muted-foreground">Тома не найдены или загружаются...</p>
+			<p class="text-lg text-muted-foreground">Тома не найдены.</p>
 		</div>
 	{:else}
 		<div

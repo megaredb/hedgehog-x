@@ -1,9 +1,15 @@
 <script lang="ts">
+	import { segmentTitle } from '$lib/route-titles';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
+<svelte:head>
+	<title>{segmentTitle('community')} — HEDGEHOG.INC</title>
+</svelte:head>
+
 <div class="p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Сообщество</h1>
-	<p class="text-muted-foreground mt-2">
-		Обсуждения, отзывы и активность пользователей Hedgehog X.
-	</p>
+	<PageHeader
+		title={segmentTitle('community')!}
+		description="Обсуждения, отзывы и активность пользователей Hedgehog X."
+	/>
 </div>

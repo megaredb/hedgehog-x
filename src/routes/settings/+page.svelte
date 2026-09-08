@@ -1,7 +1,15 @@
 <script lang="ts">
+	import { segmentTitle } from '$lib/route-titles';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
+<svelte:head>
+	<title>{segmentTitle('settings')} — HEDGEHOG.INC</title>
+</svelte:head>
+
 <div class="p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Настройки</h1>
-	<p class="text-muted-foreground mt-2">Настройки внешнего вида, уведомлений и приложения.</p>
+	<PageHeader
+		title={segmentTitle('settings')!}
+		description="Настройки внешнего вида, уведомлений и приложения."
+	/>
 </div>

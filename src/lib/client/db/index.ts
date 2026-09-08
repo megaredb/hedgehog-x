@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { HEDGEHOG_DB_NAME } from '$lib/constants';
 
 export interface OfflineBook {
 	id: string;
@@ -83,7 +84,7 @@ export interface OfflineDownload {
 	createdAt?: number;
 }
 
-const db = new Dexie('HedgehogDB') as Dexie & {
+const db = new Dexie(HEDGEHOG_DB_NAME) as Dexie & {
 	books: EntityTable<OfflineBook, 'id'>;
 	volumes: EntityTable<OfflineVolume, 'id'>;
 	chapters: EntityTable<OfflineChapter, 'id'>;

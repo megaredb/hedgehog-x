@@ -44,7 +44,7 @@
 		return 'Скачать для прослушивания оффлайн';
 	});
 
-	const buttonVariant = $derived<ButtonVariant>((isDownloading || isQueued) ? 'secondary' : variant);
+	const buttonVariant = $derived<ButtonVariant>(isDownloading || isQueued ? 'secondary' : variant);
 
 	const buttonClass = $derived(
 		cn(
@@ -57,7 +57,7 @@
 		)
 	);
 
-	const buttonSize = $derived<ButtonSize>((isDownloading || isQueued) ? 'sm' : size);
+	const buttonSize = $derived<ButtonSize>(isDownloading || isQueued ? 'sm' : size);
 </script>
 
 <Tooltip.Root>

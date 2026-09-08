@@ -16,6 +16,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import ThemeSwitchButton from './ThemeSwitchButton.svelte';
 	import ProfileDropdown from './ProfileDropdown.svelte';
+	import Logo from './Logo.svelte';
+	import UserAvatar from './UserAvatar.svelte';
 	import { useSession } from '$lib/client/session.svelte';
 
 	const session = useSession();
@@ -56,17 +58,8 @@
 
 {#snippet navContent(onLinkClick: () => void)}
 	<!-- Логотип + Название -->
-	<div class="flex items-center gap-3 px-2 mb-8 select-none">
-		<div
-			class="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm"
-		>
-			<img alt="logo" src="/logo.webp" class="h-7 w-7 rounded-full object-cover" />
-		</div>
-		<span
-			class="font-extrabold text-lg tracking-tight bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-transparent"
-		>
-			HEDGEHOG.INC
-		</span>
+	<div class="px-2 mb-8">
+		<Logo size="md" />
 	</div>
 
 	<!-- Основная навигация -->
@@ -74,7 +67,7 @@
 		{#each groups as group (group.title)}
 			<div class="space-y-1">
 				<span
-					class="px-2 text-xxs font-bold uppercase tracking-wider text-muted-foreground/60 select-none"
+					class="px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground/60 select-none"
 				>
 					{group.title}
 				</span>
@@ -110,15 +103,7 @@
 			triggerClass="flex items-center gap-3 text-left p-1.5 rounded-xl hover:bg-muted/40 transition-colors w-full focus:outline-none select-none"
 		>
 			{#if session.user}
-				<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
-					{#if session.user.image}
-						<Avatar.Image src={session.user.image} alt={session.user.name} />
-					{:else}
-						<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">
-							{session.user.name?.charAt(0).toUpperCase()}
-						</Avatar.Fallback>
-					{/if}
-				</Avatar.Root>
+				<UserAvatar user={session.user} size="md" />
 				<div class="flex-1 min-w-0">
 					<p class="text-sm font-semibold truncate text-foreground leading-snug">
 						{session.user.name}
@@ -183,17 +168,8 @@
 		</Sheet.Root>
 
 		<!-- Круглый логотип + Название -->
-		<a href={resolve('/')} class="flex items-center gap-2 select-none">
-			<div
-				class="h-8 w-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm"
-			>
-				<img alt="logo" src="/logo.webp" class="h-6.5 w-6.5 rounded-full object-cover" />
-			</div>
-			<span
-				class="font-extrabold text-md tracking-tight bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-transparent"
-			>
-				HEDGEHOG.INC
-			</span>
+		<a href={resolve('/')}>
+			<Logo size="sm" />
 		</a>
 	</div>
 
@@ -203,15 +179,7 @@
 			align="end"
 			triggerClass="h-8 w-8 rounded-full border border-border/80 shadow-sm overflow-hidden focus:outline-none"
 		>
-			<Avatar.Root class="h-8 w-8">
-				{#if session.user?.image}
-					<Avatar.Image src={session.user.image} alt={session.user.name} />
-				{:else}
-					<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">
-						{session.user?.name?.charAt(0).toUpperCase() ?? 'Г'}
-					</Avatar.Fallback>
-				{/if}
-			</Avatar.Root>
+			<UserAvatar user={session.user} size="sm" />
 		</ProfileDropdown>
 	</div>
 </header>

@@ -2,6 +2,9 @@
 	import { Code, Award, ExternalLink, Heart } from '@lucide/svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import { Button } from '$lib/components/ui/button';
+	import { segmentTitle } from '$lib/route-titles';
+
+	const currentYear = new Date().getFullYear();
 
 	interface Developer {
 		name: string;
@@ -32,7 +35,7 @@
 </script>
 
 <svelte:head>
-	<title>О проекте & Авторы — Hedgehog X</title>
+	<title>{segmentTitle('about')} — HEDGEHOG.INC</title>
 	<meta
 		name="description"
 		content="Информация о проекте Hedgehog X, авторах контента и разработчиках."
@@ -168,6 +171,6 @@
 			<Heart class="h-4 w-4 text-destructive animate-pulse" />
 			<span>Сделано с любовью командой разработчиков</span>
 		</div>
-		<div class="font-medium">Copyright © 2025 HEDGEHOG.INC</div>
+		<div class="font-medium">Copyright © {currentYear} HEDGEHOG.INC</div>
 	</div>
 </div>

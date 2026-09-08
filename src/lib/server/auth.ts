@@ -4,6 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { telegram } from 'better-auth-telegram';
 import { getRequestEvent } from '$app/server';
+import { building, dev } from '$app/environment';
 import { db } from '$lib/server/db';
 
 // Динамический baseURL: лучше-auth сам определяет origin из запроса
@@ -17,15 +18,23 @@ import { db } from '$lib/server/db';
 //     (строка, без пробелов; порт включается в элемент, как 'localhost:5173').
 //   BETTER_AUTH_FALLBACK_URL — URL, используемый, когда origin не определяется
 //     из запроса (опционально).
-// Если BETTER_AUTH_ALLOWED_HOSTS не задан — baseURL не передаётся, и
-// лучше-auth сам выводит origin из запроса.
+// В production список хостов обязателен (fail-fast ниже); в dev можно
+// оставить пустым — better-auth выведет origin из запроса.
 const allowedHosts = env.BETTER_AUTH_ALLOWED_HOSTS
 	? env.BETTER_AUTH_ALLOWED_HOSTS.split(',')
 			.map((h) => h.trim())
 			.filter((h) => h.length > 0)
-	: undefined;
+	: [];
 
-const baseURL = allowedHosts?.length
+// Fail-fast в production: без явного списка доверенных хостов better-auth
+// выводит origin из каждого запроса, что ослабляет origin-check (защиту от
+// подделки Origin/CSRF). В dev origin часто меняется (localhost, mkcert-домены),
+// поэтому список обязателен только в production-рантайме (не в сборке).
+if (!dev && !building && allowedHosts.length === 0) {
+	throw new Error('BETTER_AUTH_ALLOWED_HOSTS must be set in production');
+}
+
+const baseURL = allowedHosts.length
 	? { allowedHosts, fallback: env.BETTER_AUTH_FALLBACK_URL }
 	: undefined;
 
@@ -51,7 +60,10 @@ function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): 
 		const userId = sub.slice(botId.length);
 		return userId.length > 0 ? userId : null;
 	}
-	// Фолбэк: отрезаем первые 12 цифр (стандартная длина bot_id в sub).
+	// Фолбэк без TELEGRAM_BOT_TOKEN: sub Telegram OIDC имеет формат
+	// `{bot_id}{user_id}`. Без токена bot_id от user_id не отделить, поэтому
+	// отрезаем первые 12 цифр как эвристику (стандартная длина bot_id в sub).
+	// Проверка длины гарантирует непустой остаток, иначе возвращаем null.
 	return sub.length > 12 ? sub.slice(12) : null;
 }
 
@@ -73,7 +85,14 @@ export const auth = betterAuth({
 			telegramAvatar: { type: 'string' },
 			telegramOidcUsername: { type: 'string' },
 			discordAvatar: { type: 'string' },
-			discordUsername: { type: 'string' }
+			discordUsername: { type: 'string' },
+			// Аватар и имя из Boosty — отдельно для карточки Boosty-способа входа.
+			boostyAvatar: { type: 'string' },
+			boostyName: { type: 'string' },
+			// Провайдер последнего входа (providerId: discord / telegram-oidc / boosty).
+			// Обновляется на сервере при каждом входе — надёжнее, чем выводить
+			// «последний вход» из сравнения user.image с аватарами провайдеров.
+			lastLoginProvider: { type: 'string' }
 		}
 	},
 	socialProviders: {
@@ -111,8 +130,8 @@ export const auth = betterAuth({
 	databaseHooks: {
 		// После каждого входа/линковки через OAuth-провайдера обновляем
 		// user.image (аватар профиля) аватаром последней использованной
-		// платформы. Провайдер определяется по URL запроса:
-		// /api/auth/callback/{provider}.
+		// платформы И user.lastLoginProvider — провайдер последнего входа.
+		// Провайдер определяется по URL запроса: /api/auth/callback/{provider}.
 		session: {
 			create: {
 				after: async (session, context) => {
@@ -138,6 +157,8 @@ export const auth = betterAuth({
 						if (!url.includes('/callback/')) return;
 						const providerId = url.split('/callback/')[1]?.split('?')[0];
 						if (!providerId || !ctx?.context) return;
+						// Обновляем lastLoginProvider для известных OAuth-провайдеров.
+						if (providerId !== 'discord' && providerId !== 'telegram-oidc') return;
 						const { internalAdapter } = ctx.context;
 						const user = await internalAdapter?.findUserById(session.userId);
 						if (!user) return;
@@ -148,11 +169,15 @@ export const auth = betterAuth({
 									? 'telegramAvatar'
 									: null;
 						const image = avatarField ? user[avatarField] : null;
+						// Собираем изменения: аватар (если изменился) + провайдер
+						// последнего входа (обновляем всегда — и при повторном входе).
+						const patch: Record<string, unknown> = { lastLoginProvider: providerId };
 						if (typeof image === 'string' && image.length > 0 && image !== user.image) {
-							await internalAdapter.updateUser(session.userId, { image });
+							patch.image = image;
 						}
+						await internalAdapter.updateUser(session.userId, patch);
 					} catch (e) {
-						console.warn('[auth] failed to sync profile image', e);
+						console.warn('[auth] failed to sync profile image/lastLoginProvider', e);
 					}
 				}
 			}

@@ -20,6 +20,12 @@ type ServerBookWithRelations = ServerBook & {
 	})[];
 };
 
+/**
+ * Кэш ETag по bookId. Позволяет слать `If-None-Match` при повторной
+ * синхронизации и пропускать гидрацию, когда сервер отвечает 304.
+ */
+const bookETags = new Map<string, string>();
+
 export const syncService = {
 	/**
 	 * Стягивает список книг с бэкенда и сохраняет в локальный Dexie.
@@ -52,7 +58,11 @@ export const syncService = {
 	 */
 	async syncBookDetails(bookId: string, fetchFn: typeof fetch = fetch) {
 		try {
-			const res = await fetchFn(`/api/books/${bookId}`);
+			const etag = bookETags.get(bookId);
+			const headers: Record<string, string> = {};
+			if (etag) headers['If-None-Match'] = etag;
+
+			const res = await fetchFn(`/api/books/${bookId}`, { headers });
 
 			// Если сервер вернул 304, значит данные в локальном кэше (Dexie) полностью актуальны!
 			if (res.status === 304) {
@@ -61,6 +71,9 @@ export const syncService = {
 			}
 
 			if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+			const newEtag = res.headers.get('etag');
+			if (newEtag) bookETags.set(bookId, newEtag);
 
 			const bookData: ServerBookWithRelations = await res.json();
 
@@ -105,6 +118,24 @@ export const syncService = {
 			if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
 			const userData = await res.json();
+
+			// Guard от data-loss: для неавторизованного пользователя (или когда у
+			// пользователя просто нет данных) `/api/user/sync` возвращает пустые
+			// массивы. Гидрировать их с purgeScope='all' нельзя — это стёрло бы
+			// локальный прогресс/лайки/закладки гостя в Dexie.
+			const isEmpty =
+				!userData ||
+				((!Array.isArray(userData.chapterLikes) || userData.chapterLikes.length === 0) &&
+					(!Array.isArray(userData.volumeLikes) || userData.volumeLikes.length === 0) &&
+					(!Array.isArray(userData.listeningProgress) || userData.listeningProgress.length === 0) &&
+					(!Array.isArray(userData.bookmarks) || userData.bookmarks.length === 0));
+
+			if (isEmpty) {
+				console.log(
+					'Синхронизация user-данных пропущена: пустой ответ (неавторизован или нет данных).'
+				);
+				return;
+			}
 
 			await Promise.all([
 				hydrate('chapterLikes', userData.chapterLikes || [], 'all'),

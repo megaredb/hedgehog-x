@@ -12,6 +12,8 @@
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { PAGES_CACHE } from '$lib/constants';
+	import { dev } from '$app/environment';
 
 	let { children } = $props();
 
@@ -20,6 +22,7 @@
 
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
 		return new Promise((resolve) => {
 			document.startViewTransition(async () => {
@@ -32,12 +35,15 @@
 	afterNavigate(async ({ to }) => {
 		if (to && typeof navigator !== 'undefined' && navigator.onLine) {
 			try {
-				const cache = await caches.open('pages-cache');
-				const exists = await cache.match(to.url.pathname);
+				// Кладём в кэш по полному URL (с учётом query, например ?book=),
+				// а не по pathname — иначе страницы с query не отдавались из кэша.
+				const href = to.url.href;
+				const cache = await caches.open(PAGES_CACHE);
+				const exists = await cache.match(href);
 				if (!exists) {
-					const res = await fetch(to.url.pathname);
+					const res = await fetch(href);
 					if (res.ok) {
-						await cache.put(to.url.pathname, res);
+						await cache.put(href, res);
 					}
 				}
 			} catch {
@@ -52,10 +58,10 @@
 			registerSW({
 				immediate: true,
 				onRegistered(r) {
-					console.log('SW registered:', r);
+					if (dev) console.log('SW registered:', r);
 				},
 				onRegisterError(error) {
-					console.error('SW registration error:', error);
+					if (dev) console.error('SW registration error:', error);
 				}
 			});
 		}

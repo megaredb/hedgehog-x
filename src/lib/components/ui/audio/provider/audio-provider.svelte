@@ -5,6 +5,14 @@
 	import type { Track } from '$lib/html-audio.js';
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
+	import {
+		PLAYBACK_ERROR_MAX_RETRIES,
+		PLAYBACK_RETRY_BASE_DELAY_MS,
+		PROGRESS_SAVE_INTERVAL_MS,
+		SLEEP_TIMER_TICK_MS,
+		TIME_UPDATE_MIN_DELTA_SEC,
+		TIME_UPDATE_THROTTLE_MS
+	} from '$lib/constants';
 
 	interface Props {
 		tracks?: Track[];
@@ -13,11 +21,11 @@
 
 	let { tracks = [], children }: Props = $props();
 
-	// ─── Constants ─────────────────────────────────────────────────────────────
-	const MAX_ERROR_RETRIES = 3;
-	const ERROR_RETRY_DELAY = 1000;
-	const THROTTLE_INTERVAL = 100;
-	const MIN_UPDATE_THRESHOLD = 0.5;
+	// ─── Constants (значения в src/lib/constants.ts) ───────────────────────────
+	const MAX_ERROR_RETRIES = PLAYBACK_ERROR_MAX_RETRIES;
+	const ERROR_RETRY_DELAY = PLAYBACK_RETRY_BASE_DELAY_MS;
+	const THROTTLE_INTERVAL = TIME_UPDATE_THROTTLE_MS;
+	const MIN_UPDATE_THRESHOLD = TIME_UPDATE_MIN_DELTA_SEC;
 
 	// ─── Non-reactive refs (no $state — mutations must not trigger re-renders) ──
 	let preloadAudio: HTMLAudioElement | null = null;
@@ -26,7 +34,7 @@
 	let lastUpdateTime = 0;
 	let prevTrackId: string | number | undefined = undefined;
 	let lastProgressSaveTime = 0;
-	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
+	const PROGRESS_SAVE_INTERVAL = PROGRESS_SAVE_INTERVAL_MS; // save progress every 5 seconds
 
 	// ─── Sync tracks prop → store ───────────────────────────────────────────────
 	$effect(() => {
@@ -113,7 +121,11 @@
 			const currentTime = audio.currentTime;
 			const wasPlaying = !audio.paused;
 			if (audioStore.currentTrack) {
-				await htmlAudio.load({ url: audioStore.currentTrack.url, id: audioStore.currentTrack.id, startTime: currentTime });
+				await htmlAudio.load({
+					url: audioStore.currentTrack.url,
+					id: audioStore.currentTrack.id,
+					startTime: currentTime
+				});
 				if (wasPlaying) await htmlAudio.play();
 			}
 			return true;
@@ -415,7 +427,7 @@
 		};
 
 		updateTimer();
-		const interval = setInterval(updateTimer, 1000);
+		const interval = setInterval(updateTimer, SLEEP_TIMER_TICK_MS);
 
 		return () => clearInterval(interval);
 	});

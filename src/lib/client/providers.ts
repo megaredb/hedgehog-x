@@ -1,5 +1,6 @@
 import TelegramIcon from '$lib/components/ui/brand-icons/TelegramIcon.svelte';
 import DiscordIcon from '$lib/components/ui/brand-icons/DiscordIcon.svelte';
+import BoostyIcon from '$lib/components/ui/brand-icons/BoostyIcon.svelte';
 import type { Component } from 'svelte';
 
 /**
@@ -37,6 +38,15 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
 		brandColor: '#5865F2',
 		userAvatarField: 'discordAvatar',
 		userUsernameField: 'discordUsername'
+	},
+	{
+		id: 'boosty',
+		label: 'Boosty',
+		description: 'Вход через Boosty',
+		icon: BoostyIcon,
+		brandColor: '#F15F2C',
+		userAvatarField: 'boostyAvatar',
+		userUsernameField: 'boostyName'
 	}
 ];
 
@@ -57,6 +67,10 @@ export type SessionUser = {
 	telegramOidcUsername?: string | null;
 	discordAvatar?: string | null;
 	discordUsername?: string | null;
+	boostyAvatar?: string | null;
+	boostyName?: string | null;
+	/** Провайдер последнего входа (providerId из user.lastLoginProvider). */
+	lastLoginProvider?: string | null;
 	[key: string]: unknown;
 } | null;
 
@@ -77,10 +91,8 @@ export function providerUsername(providerId: string, user: SessionUser): string 
 }
 
 /**
- * Текст для отображения в профиле этого провайдера:
- * аватар ещё есть платформа, иначе — username (или first name/имя),
- * если username нет.
- * Приоритет: username провайдера → имя (name) → null.
+ * Текст для отображения в профиле этого провайдера.
+ * Приоритет: username провайдера → первое слово name → null.
  */
 export function providerDisplayName(providerId: string, user: SessionUser): string | null {
 	const username = providerUsername(providerId, user);

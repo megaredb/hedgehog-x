@@ -3,7 +3,7 @@
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { Pause, Play } from '@lucide/svelte';
-	import type { Track } from '$lib/html-audio.js';
+	import { formatDuration, type Track } from '$lib/html-audio.js';
 	import { scale } from 'svelte/transition';
 
 	import DownloadButton from '$lib/components/audio/Download.svelte';
@@ -41,12 +41,6 @@
 		return { current, total };
 	});
 
-	const formatDuration = (seconds: number) => {
-		const m = Math.floor(seconds / 60);
-		const s = seconds % 60;
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	};
-
 	async function handlePlayChapter(index: number) {
 		const chapter = chaptersQuery.data[index];
 		if (!chapter) return;
@@ -79,7 +73,7 @@
 </script>
 
 <svelte:head>
-	<title>{volumeQuery.data?.title || 'Том'} | Главы</title>
+	<title>{volumeQuery.data?.title || 'Том'} — HEDGEHOG.INC</title>
 </svelte:head>
 
 <main class="layout-content py-4 md:py-8">

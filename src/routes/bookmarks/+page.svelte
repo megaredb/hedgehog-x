@@ -1,9 +1,15 @@
 <script lang="ts">
+	import { segmentTitle } from '$lib/route-titles';
+	import PageHeader from '$lib/components/layout/PageHeader.svelte';
 </script>
 
+<svelte:head>
+	<title>{segmentTitle('bookmarks')} — HEDGEHOG.INC</title>
+</svelte:head>
+
 <div class="p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Закладки</h1>
-	<p class="text-muted-foreground mt-2">
-		Здесь будут отображаться ваши сохраненные книги и закладки.
-	</p>
+	<PageHeader
+		title={segmentTitle('bookmarks')!}
+		description="Здесь будут отображаться ваши сохраненные книги и закладки."
+	/>
 </div>

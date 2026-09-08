@@ -692,18 +692,6 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true
-        },
-        "telegram_id": {
-          "name": "telegram_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "telegram_username": {
-          "name": "telegram_username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -892,24 +880,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "telegram_id": {
-          "name": "telegram_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "telegram_phone_number": {
-          "name": "telegram_phone_number",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "telegram_username": {
-          "name": "telegram_username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "telegram_avatar": {
           "name": "telegram_avatar",

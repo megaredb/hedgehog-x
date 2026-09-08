@@ -1,3 +1,12 @@
+import {
+	AUDIO_CACHE,
+	AUDIO_FADE_INTERVAL_MS,
+	AUDIO_LOAD_MAX_RETRIES,
+	AUDIO_LOAD_TIMEOUT_LIVE_MS,
+	AUDIO_LOAD_TIMEOUT_NORMAL_MS,
+	clampPlaybackRate
+} from '$lib/constants';
+
 export type Track = {
 	id?: string | number;
 	url: string;
@@ -36,6 +45,19 @@ type FadeVolumeParams = {
 	duration: number;
 };
 
+/**
+ * Приводит URL к абсолютному виду. Нужно для корректного сравнения
+ * `audio.src` (браузер всегда нормализует в абсолютный URL) с исходным
+ * значением, которое может быть относительным путём.
+ */
+function normalizeAudioUrl(url: string): string {
+	try {
+		return new URL(url, location.origin).href;
+	} catch {
+		return url;
+	}
+}
+
 class HtmlAudio {
 	private audio: HTMLAudioElement | null = null;
 	private isInitialized = false;
@@ -43,11 +65,8 @@ class HtmlAudio {
 	private lastVolume = 1;
 	private fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 	private retryAttempts = 0;
-	private readonly maxRetries = 3;
+	private readonly maxRetries = AUDIO_LOAD_MAX_RETRIES;
 	private readonly eventTarget = new EventTarget();
-	private readonly LOAD_TIMEOUT_LIVE = 60_000;
-	private readonly LOAD_TIMEOUT_NORMAL = 30_000;
-	private readonly FADE_UPDATE_INTERVAL = 16;
 
 	init(): void {
 		if (this.isInitialized || !this.isClient()) return;
@@ -176,7 +195,7 @@ class HtmlAudio {
 				} catch (err) {
 					// Fallback to checking legacy CacheStorage (for files downloaded before OPFS migration)
 					try {
-						const cache = await caches.open('audio-cache');
+						const cache = await caches.open(AUDIO_CACHE);
 						const cachedResponse = await cache.match(url, { ignoreSearch: true, ignoreVary: true });
 						if (cachedResponse) {
 							const blob = await cachedResponse.blob();
@@ -197,7 +216,7 @@ class HtmlAudio {
 				this.currentBlobUrl = finalUrl;
 			}
 
-			if (audio.src === finalUrl || (audio.src === url && finalUrl === url)) {
+			if (normalizeAudioUrl(audio.src) === normalizeAudioUrl(finalUrl)) {
 				if (audio.currentTime !== startTime && !isLiveStream) audio.currentTime = startTime;
 				return;
 			}
@@ -207,7 +226,7 @@ class HtmlAudio {
 			audio.src = finalUrl;
 			audio.preload = 'auto';
 
-			const loadTimeout = isLiveStream ? this.LOAD_TIMEOUT_LIVE : this.LOAD_TIMEOUT_NORMAL;
+			const loadTimeout = isLiveStream ? AUDIO_LOAD_TIMEOUT_LIVE_MS : AUDIO_LOAD_TIMEOUT_NORMAL_MS;
 
 			await new Promise<void>((resolve, reject) => {
 				let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -340,22 +359,13 @@ class HtmlAudio {
 			const progress = Math.min(1, elapsed / duration);
 			audio.volume = startVolume + (endVolume - startVolume) * progress;
 			if (progress < 1) {
-				this.fadeTimeout = setTimeout(updateVolume, this.FADE_UPDATE_INTERVAL);
+				this.fadeTimeout = setTimeout(updateVolume, AUDIO_FADE_INTERVAL_MS);
 			} else {
 				if (endVolume > 0) this.lastVolume = endVolume;
 				this.fadeTimeout = null;
 			}
 		};
 		updateVolume();
-	}
-
-	getVolume(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.volume;
-			}) ?? 0
-		);
 	}
 
 	setMuted(muted: boolean): void {
@@ -373,28 +383,11 @@ class HtmlAudio {
 		});
 	}
 
-	getDuration(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.duration;
-			}) ?? 0
-		);
-	}
-	getCurrentTime(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.currentTime;
-			}) ?? 0
-		);
-	}
-
 	setCurrentTime(time: number): void {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
 			const duration = audio.duration;
-			if (Number.isNaN(duration)) return;
+			if (this.isLive(duration)) return;
 			const validTime =
 				time >= 0 && time <= duration ? time : Math.max(0, Math.min(time, duration));
 			if (audio.readyState >= audio.HAVE_METADATA) audio.currentTime = validTime;
@@ -417,43 +410,12 @@ class HtmlAudio {
 		this.eventTarget.removeEventListener(type, callback, options);
 	}
 
-	getSource(): string {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.src;
-			}) ?? ''
-		);
-	}
-	isPaused(): boolean {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.paused;
-			}) ?? true
-		);
-	}
-
-	getBufferedRanges(): TimeRanges | null {
-		if (!this.isClient() || !this.audio) return null;
-		return this.audio.buffered;
-	}
-
 	setPlaybackRate(rate: number): void {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
 			if (this.isLive(audio.duration)) return;
-			audio.playbackRate = Math.max(0.25, Math.min(2, rate));
+			audio.playbackRate = clampPlaybackRate(rate);
 		});
-	}
-
-	getPlaybackRate(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.playbackRate;
-			}) ?? 1
-		);
 	}
 
 	isLive(duration: number): boolean {
