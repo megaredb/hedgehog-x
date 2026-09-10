@@ -58,6 +58,24 @@ function normalizeAudioUrl(url: string): string {
 	}
 }
 
+/**
+ * WebKit/Safari (включая iOS Safari) игнорирует `preload='metadata'` и скачивает
+ * весь файл с нулевого байта. Seek по `loadedmetadata` тогда прервёт текущий
+ * поток и откроет третий range-запрос с позиции seek. Определяем этот движок,
+ * чтобы при resume отложить seek до момента, пока буфер уже покрывает позицию.
+ */
+function isWebKitSafari(): boolean {
+	if (typeof navigator === 'undefined') return false;
+	const ua = navigator.userAgent;
+	return (
+		/AppleWebKit\//.test(ua) &&
+		!/(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|OPiOS|Firefox|FxiOS)\//.test(ua)
+	);
+}
+
+/** Интервал опроса, пока ожидаем, что отложенный seek попадёт в буфер. */
+const DEFERRED_SEEK_POLL_INTERVAL_MS = 50;
+
 class HtmlAudio {
 	private audio: HTMLAudioElement | null = null;
 	private isInitialized = false;
@@ -67,6 +85,12 @@ class HtmlAudio {
 	private retryAttempts = 0;
 	private readonly maxRetries = AUDIO_LOAD_MAX_RETRIES;
 	private readonly eventTarget = new EventTarget();
+	/**
+	 * Активный отложенный seek (resume в WebKit/Safari): хранит функцию очистки
+	 * слушателя `progress` и целевую позицию, чтобы `_play` мог дождаться
+	 * применения seek перед вызовом `audio.play()`.
+	 */
+	private deferredSeek: { cleanup: () => void; startTime: number } | null = null;
 
 	init(): void {
 		if (this.isInitialized || !this.isClient()) return;
@@ -128,7 +152,67 @@ class HtmlAudio {
 
 	private currentBlobUrl: string | null = null;
 
+	/** Убирает слушатель `progress` отложенного seek, если он активен. */
+	private clearDeferredSeek(): void {
+		if (this.deferredSeek) {
+			this.deferredSeek.cleanup();
+			this.deferredSeek = null;
+		}
+	}
+
+	/** True, когда заданное время уже покрыто буферизованным диапазоном. */
+	private isTimeBuffered(audio: HTMLAudioElement, time: number): boolean {
+		const buffered = audio.buffered;
+		for (let i = 0; i < buffered.length; i++) {
+			if (buffered.start(i) <= time && time <= buffered.end(i)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Регистрирует отложенный seek: вместо seek по `loadedmetadata` (который в
+	 * WebKit/Safari прерывает текущую загрузку с нулевого байта и вызывает третий
+	 * range-запрос) ждём, пока `audio.buffered` покроет `startTime`, и только тогда
+	 * делаем seek. Слушатель живёт дольше промиса загрузки и снимается через
+	 * `clearDeferredSeek()` при следующей загрузке, очистке или ошибке.
+	 */
+	private setupDeferredSeek(audio: HTMLAudioElement, startTime: number): void {
+		this.clearDeferredSeek();
+		const applySeek = () => {
+			if (!this.isTimeBuffered(audio, startTime)) return;
+			audio.currentTime = startTime;
+			this.clearDeferredSeek();
+		};
+		this.deferredSeek = {
+			startTime,
+			cleanup: () => {
+				audio.removeEventListener('progress', applySeek);
+			}
+		};
+		audio.addEventListener('progress', applySeek);
+		// Буфер может уже покрывать позицию к моменту, когда метаданные загрузились.
+		applySeek();
+	}
+
+	/**
+	 * Ждёт применения активного отложенного seek перед началом воспроизведения,
+	 * чтобы воспроизведение не началось с 0 и не прыгнуло. Ограничено `timeoutMs`;
+	 * по таймауту seek выполняется принудительно (возврат к прежнему поведению).
+	 */
+	private async waitForDeferredSeek(timeoutMs: number): Promise<void> {
+		if (!this.deferredSeek) return;
+		const deadline = Date.now() + timeoutMs;
+		while (this.deferredSeek && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, DEFERRED_SEEK_POLL_INTERVAL_MS));
+		}
+		if (this.deferredSeek && this.audio) {
+			this.audio.currentTime = this.deferredSeek.startTime;
+			this.clearDeferredSeek();
+		}
+	}
+
 	cleanup(): void {
+		this.clearDeferredSeek();
 		if (this.audio) {
 			this.audio.pause();
 			this.audio.src = '';
@@ -181,6 +265,16 @@ class HtmlAudio {
 		const audio = this.ensureAudio();
 		if (!audio) return;
 
+		// Для resume с сохранённой позиции на не-live потоке требуется seek.
+		const needsSeek = startTime > 0 && !isLiveStream;
+		// WebKit/Safari игнорирует `preload='metadata'` и продолжает загрузку с
+		// нулевого байта, поэтому seek по `loadedmetadata` прервёт этот поток и
+		// откроет третий range-запрос. Откладываем seek, пока буфер не покроет позицию.
+		const deferSeekUntilBuffered = needsSeek && isWebKitSafari();
+
+		// Сбрасываем отложенный seek, оставшийся от предыдущей загрузки, перед перенастройкой.
+		this.clearDeferredSeek();
+
 		try {
 			this.retryAttempts = 0;
 
@@ -222,9 +316,14 @@ class HtmlAudio {
 			}
 
 			audio.pause();
+			// Устанавливаем preload ДО присвоения `src` и вызова `load()`:
+			// Chromium/Firefox учитывают `preload='metadata'` (метаданные + range-seek
+			// по `loadedmetadata`). WebKit/Safari игнорируют `'metadata'` и продолжают
+			// загрузку с нулевого байта, поэтому используем `'auto'` и откладываем seek,
+			// пока данные не будут буферизованы.
+			audio.preload = needsSeek && !deferSeekUntilBuffered ? 'metadata' : 'auto';
 			audio.src = '';
 			audio.src = finalUrl;
-			audio.preload = 'auto';
 
 			const loadTimeout = isLiveStream ? AUDIO_LOAD_TIMEOUT_LIVE_MS : AUDIO_LOAD_TIMEOUT_NORMAL_MS;
 
@@ -254,7 +353,11 @@ class HtmlAudio {
 					if (isResolved) return;
 					isResolved = true;
 					cleanup();
-					if (startTime > 0 && !isLiveStream) audio.currentTime = startTime;
+					if (needsSeek && !deferSeekUntilBuffered) {
+						audio.currentTime = startTime;
+					} else if (deferSeekUntilBuffered) {
+						this.setupDeferredSeek(audio, startTime);
+					}
 					resolve();
 				};
 
@@ -262,6 +365,7 @@ class HtmlAudio {
 					if (isResolved) return;
 					isResolved = true;
 					cleanup();
+					this.clearDeferredSeek();
 					const error = audio.error;
 					reject(
 						new Error(`Audio load failed: ${error?.message || `code ${error?.code ?? 'unknown'}`}`)
@@ -290,6 +394,9 @@ class HtmlAudio {
 		if (!this.audio) throw new Error('Audio module not initialized');
 		try {
 			if (!this.audio.paused) return;
+			// Для отложенного seek (resume в WebKit/Safari) ждём его применения, чтобы
+			// воспроизведение не началось с 0 и не прыгнуло. Иначе — без задержки.
+			await this.waitForDeferredSeek(AUDIO_LOAD_TIMEOUT_NORMAL_MS);
 			this.playPromise = this.audio.play();
 			await this.playPromise;
 			this.playPromise = null;
@@ -300,17 +407,19 @@ class HtmlAudio {
 	}
 
 	private reloadAudio(): void {
+		this.clearDeferredSeek();
 		if (!this.isClient()) return;
 		const audio = this.ensureAudio();
 		const currentTime = audio.currentTime;
 		const wasPlaying = !audio.paused;
 		const currentSrc = audio.src;
+		const needsSeek = currentTime > 0 && !this.isLive(audio.duration);
 
 		audio.pause();
+		audio.preload = needsSeek ? 'metadata' : 'auto';
 		audio.src = '';
 		audio.load();
 		audio.src = currentSrc;
-		audio.preload = 'auto';
 		audio.load();
 
 		const setTimeAndPlay = () => {
