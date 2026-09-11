@@ -1,6 +1,9 @@
 import { db, type OfflineChapter, type OfflineDownload } from '$lib/client/db';
 import { liveQuery } from 'dexie';
 import { SvelteMap } from 'svelte/reactivity';
+import { createLogger } from '$lib/logger';
+
+const log = createLogger('Downloads');
 
 export interface DownloadStats {
 	percentage: number;
@@ -30,7 +33,7 @@ if (typeof window !== 'undefined') {
 			}
 		},
 		error: (err) => {
-			console.error('Error in downloads liveQuery:', err);
+			log.error('Ошибка подписки liveQuery для загрузок:', err);
 		}
 	});
 }
@@ -146,9 +149,9 @@ async function performDownload(chapter: OfflineChapter) {
 		progressMap[chapter.id] = { percentage: 100, downloadedBytes: totalBytes, totalBytes };
 	} catch (err: unknown) {
 		if (err instanceof Error && err.name === 'AbortError') {
-			console.log(`Download cancelled for chapter ${chapter.id}`);
+			log.debug(`Загрузка главы ${chapter.id} отменена`);
 		} else {
-			console.error(`Download failed for chapter ${chapter.id}:`, err);
+			log.error(`Ошибка загрузки главы ${chapter.id}:`, err);
 			await db.downloads.put({
 				chapterId: chapter.id,
 				status: 'error',
@@ -265,7 +268,7 @@ export function useDownloads() {
 			const opfsRoot = await navigator.storage.getDirectory();
 			await opfsRoot.removeEntry(chapterId);
 		} catch (e) {
-			console.error('Error removing cancelled audio from OPFS:', e);
+			log.error('Ошибка при удалении отменённого аудио из OPFS:', e);
 		}
 
 		await db.downloads.delete(chapterId);

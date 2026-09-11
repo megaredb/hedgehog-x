@@ -1,4 +1,3 @@
-// If you see this file, you have not run the auth:schema script yet, but you should!
 import { relations } from 'drizzle-orm';
 import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
 
@@ -12,7 +11,16 @@ export const user = pgTable('user', {
 	updatedAt: timestamp('updated_at')
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
-		.notNull()
+		.notNull(),
+	// (telegram_id, telegram_phone_number, telegram_username удалены:
+	// widget-режим Telegram выключен, колонки дропнуты миграцией 0005)
+	// Аватар и username из Telegram (OIDC) — хранятся отдельно, чтобы
+	// показывать их именно в карточке Telegram-способа входа.
+	telegramAvatar: text('telegram_avatar'),
+	telegramOidcUsername: text('telegram_oidc_username'),
+	// Аватар и username из Discord — отдельно для карточки Discord.
+	discordAvatar: text('discord_avatar'),
+	discordUsername: text('discord_username')
 });
 
 export const session = pgTable(
@@ -54,6 +62,7 @@ export const account = pgTable(
 		updatedAt: timestamp('updated_at')
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull()
+		// (telegram_id, telegram_username в account удалены — см. 0005)
 	},
 	(table) => [index('account_userId_idx').on(table.userId)]
 );

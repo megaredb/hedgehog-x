@@ -22,35 +22,35 @@
 </script>
 
 <div
-	class="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 flex flex-col items-center gap-4 z-10 pointer-events-auto"
+	class="pointer-events-auto absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col items-center gap-4 md:right-8"
 >
 	<!-- Навигация -->
 	<div
-		class="flex flex-col rounded-full bg-background/50 backdrop-blur-md border border-border/40 shadow-xl overflow-hidden"
+		class="flex flex-col overflow-hidden rounded-full border border-border/40 bg-background/50 shadow-xl backdrop-blur-md"
 	>
 		<Button
 			variant="ghost"
 			size="icon"
-			class="rounded-none w-12 h-12 text-foreground hover:bg-foreground/10 disabled:opacity-30 transition-all duration-300"
+			class="h-12 w-12 rounded-none text-foreground transition-all duration-300 hover:bg-foreground/10 disabled:opacity-30"
 			disabled={!hasPrev}
 			onclick={() => onScrollTo(currentIndex - 1)}
 			title={hasPrev ? `К предыдущей: ${books[currentIndex - 1].title}` : ''}
 		>
-			<ChevronUp class="w-7 h-7" />
+			<ChevronUp class="h-7 w-7" />
 			<span class="sr-only">Вверх</span>
 		</Button>
 
-		<div class="h-px bg-border/40 w-full"></div>
+		<div class="h-px w-full bg-border/40"></div>
 
 		<Button
 			variant="ghost"
 			size="icon"
-			class="rounded-none w-12 h-12 text-foreground hover:bg-foreground/10 disabled:opacity-30 transition-all duration-300"
+			class="h-12 w-12 rounded-none text-foreground transition-all duration-300 hover:bg-foreground/10 disabled:opacity-30"
 			disabled={!hasNext}
 			onclick={() => onScrollTo(currentIndex + 1)}
 			title={hasNext ? `К следующей: ${books[currentIndex + 1].title}` : ''}
 		>
-			<ChevronDown class="w-7 h-7" />
+			<ChevronDown class="h-7 w-7" />
 			<span class="sr-only">Вниз</span>
 		</Button>
 	</div>
@@ -59,14 +59,14 @@
 	<Button
 		variant="outline"
 		size="icon"
-		class="rounded-full w-12 h-12 mt-2 bg-background/50 backdrop-blur-md border border-border/40 text-foreground hover:bg-foreground/10 shadow-xl transition-all duration-300"
+		class="mt-2 h-12 w-12 rounded-full border border-border/40 bg-background/50 text-foreground shadow-xl backdrop-blur-md transition-all duration-300 hover:bg-foreground/10"
 		onclick={onToggleVideo}
 		title={isVideoPlaying ? 'Выключить видеофон' : 'Включить видеофон'}
 	>
 		{#if isVideoPlaying}
-			<MonitorOff class="w-5 h-5" />
+			<MonitorOff class="h-5 w-5" />
 		{:else}
-			<MonitorPlay class="w-5 h-5" />
+			<MonitorPlay class="h-5 w-5" />
 		{/if}
 		<span class="sr-only">Переключить видео</span>
 	</Button>

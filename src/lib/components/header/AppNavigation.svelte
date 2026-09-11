@@ -16,6 +16,9 @@
 	import { Button } from '$lib/components/ui/button';
 	import ThemeSwitchButton from './ThemeSwitchButton.svelte';
 	import ProfileDropdown from './ProfileDropdown.svelte';
+	import { useSession } from '$lib/client/session.svelte';
+
+	const session = useSession();
 
 	let y = $state(0);
 	let isMobileMenuOpen = $state(false);
@@ -53,25 +56,25 @@
 
 {#snippet navContent(onLinkClick: () => void)}
 	<!-- Логотип + Название -->
-	<div class="flex items-center gap-3 px-2 mb-8 select-none">
+	<div class="mb-8 flex items-center gap-3 px-2 select-none">
 		<div
-			class="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm"
+			class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 shadow-sm"
 		>
 			<img alt="logo" src="/logo.webp" class="h-7 w-7 rounded-full object-cover" />
 		</div>
 		<span
-			class="font-extrabold text-lg tracking-tight bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-transparent"
+			class="bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
 		>
 			HEDGEHOG.INC
 		</span>
 	</div>
 
 	<!-- Основная навигация -->
-	<nav class="flex-1 flex flex-col gap-6">
+	<nav class="flex flex-1 flex-col gap-6">
 		{#each groups as group (group.title)}
 			<div class="space-y-1">
 				<span
-					class="px-2 text-xxs font-bold uppercase tracking-wider text-muted-foreground/60 select-none"
+					class="text-xxs px-2 font-bold tracking-wider text-muted-foreground/60 uppercase select-none"
 				>
 					{group.title}
 				</span>
@@ -82,9 +85,9 @@
 							<a
 								href={link.href}
 								onclick={onLinkClick}
-								class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group
+								class="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200
 								{isActive(link.href)
-									? 'bg-accent text-accent-foreground shadow-sm font-semibold'
+									? 'bg-accent font-semibold text-accent-foreground shadow-sm'
 									: 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'}"
 							>
 								<Icon
@@ -100,24 +103,44 @@
 	</nav>
 
 	<!-- Нижний блок с профилем -->
-	<div class="mt-auto pt-4 border-t border-border/40 flex items-center justify-between gap-2 px-1">
+	<div class="mt-auto flex items-center justify-between gap-2 border-t border-border/40 px-1 pt-4">
 		<ProfileDropdown
 			{onLinkClick}
 			side="top"
 			triggerClass="flex items-center gap-3 text-left p-1.5 rounded-xl hover:bg-muted/40 transition-colors w-full focus:outline-none select-none"
 		>
-			<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
-				<Avatar.Image src="/logo.webp" alt="User Profile" />
-				<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">ME</Avatar.Fallback
-				>
-			</Avatar.Root>
-			<div class="flex-1 min-w-0">
-				<p class="text-sm font-semibold truncate text-foreground leading-snug">Мой Профиль</p>
-				<p class="text-xs text-muted-foreground truncate leading-normal">Hedgehog User</p>
-			</div>
+			{#if session.user}
+				<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
+					{#if session.user.image}
+						<Avatar.Image src={session.user.image} alt={session.user.name} />
+					{:else}
+						<Avatar.Fallback class="bg-primary/5 text-xs font-semibold text-primary">
+							{session.user.name?.charAt(0).toUpperCase()}
+						</Avatar.Fallback>
+					{/if}
+				</Avatar.Root>
+				<div class="min-w-0 flex-1">
+					<p class="truncate text-sm leading-snug font-semibold text-foreground">
+						{session.user.name}
+					</p>
+				</div>
+			{:else}
+				<div class="flex items-center gap-3">
+					<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
+						<Avatar.Image src="/logo.webp" alt="Гость" />
+						<Avatar.Fallback class="bg-primary/5 text-xs font-semibold text-primary"
+							>Г</Avatar.Fallback
+						>
+					</Avatar.Root>
+					<div class="min-w-0 flex-1">
+						<p class="truncate text-sm leading-snug font-semibold text-foreground">Гость</p>
+						<p class="truncate text-xs leading-normal text-muted-foreground">Войдите в аккаунт</p>
+					</div>
+				</div>
+			{/if}
 		</ProfileDropdown>
 
-		<div class="shrink-0 flex items-center justify-center">
+		<div class="flex shrink-0 items-center justify-center">
 			<ThemeSwitchButton />
 		</div>
 	</div>
@@ -125,15 +148,15 @@
 
 <!-- ДЕСКТОПНЫЙ САЙДБАР -->
 <aside
-	class="w-64 h-screen border-r border-border/40 bg-muted/30 shadow-[4px_0_24px_rgba(0,0,0,0.04)] dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)] backdrop-blur-xl hidden lg:flex flex-col py-6 px-4 sticky top-0 shrink-0 z-10"
+	class="sticky top-0 z-10 hidden h-screen w-64 shrink-0 flex-col border-r border-border/40 bg-muted/30 px-4 py-6 shadow-[4px_0_24px_rgba(0,0,0,0.04)] backdrop-blur-xl lg:flex dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)]"
 >
 	{@render navContent(() => {})}
 </aside>
 
 <!-- МОБИЛЬНЫЙ ХЭДЕР -->
 <header
-	class="w-full sticky top-0 z-40 py-3 px-4 flex items-center justify-between transition-all duration-300 border-b lg:hidden
-	{y > 10 ? 'border-border/40 shadow-sm bg-background/80 backdrop-blur-md' : 'border-transparent'}"
+	class="sticky top-0 z-40 flex w-full items-center justify-between border-b px-4 py-3 transition-all duration-300 lg:hidden
+	{y > 10 ? 'border-border/40 bg-background/80 shadow-sm backdrop-blur-md' : 'border-transparent'}"
 >
 	<!-- Левая часть: бургер-меню -->
 	<div class="flex items-center gap-3">
@@ -153,7 +176,7 @@
 			</Sheet.Trigger>
 			<Sheet.Content
 				side="left"
-				class="w-72 p-6 flex flex-col h-full bg-background/95 backdrop-blur-md"
+				class="flex h-full w-72 flex-col bg-background/95 p-6 backdrop-blur-md"
 			>
 				{@render navContent(() => (isMobileMenuOpen = false))}
 			</Sheet.Content>
@@ -162,12 +185,12 @@
 		<!-- Круглый логотип + Название -->
 		<a href={resolve('/')} class="flex items-center gap-2 select-none">
 			<div
-				class="h-8 w-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm"
+				class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 shadow-sm"
 			>
 				<img alt="logo" src="/logo.webp" class="h-6.5 w-6.5 rounded-full object-cover" />
 			</div>
 			<span
-				class="font-extrabold text-md tracking-tight bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-transparent"
+				class="text-md bg-linear-to-r from-foreground to-foreground/80 bg-clip-text font-extrabold tracking-tight text-transparent"
 			>
 				HEDGEHOG.INC
 			</span>
@@ -181,9 +204,13 @@
 			triggerClass="h-8 w-8 rounded-full border border-border/80 shadow-sm overflow-hidden focus:outline-none"
 		>
 			<Avatar.Root class="h-8 w-8">
-				<Avatar.Image src="/logo.webp" alt="User Profile" />
-				<Avatar.Fallback class="bg-primary/5 text-primary text-xs font-semibold">ME</Avatar.Fallback
-				>
+				{#if session.user?.image}
+					<Avatar.Image src={session.user.image} alt={session.user.name} />
+				{:else}
+					<Avatar.Fallback class="bg-primary/5 text-xs font-semibold text-primary">
+						{session.user?.name?.charAt(0).toUpperCase() ?? 'Г'}
+					</Avatar.Fallback>
+				{/if}
 			</Avatar.Root>
 		</ProfileDropdown>
 	</div>

@@ -37,10 +37,10 @@
 				disabled={isDisabled}
 				{size}
 				{variant}
+				{...rest}
 				{...props}
 				onclick={(e) => {
-					// @ts-expect-error
-					props.onclick?.(e);
+					(props as { onclick?: (e: MouseEvent) => void }).onclick?.(e);
 					onclick?.(e);
 					audioStore.previous();
 				}}

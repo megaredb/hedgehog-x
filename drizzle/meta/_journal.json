@@ -22,6 +22,27 @@
       "when": 1783897010523,
       "tag": "0002_dizzy_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788627159808,
+      "tag": "0003_careful_nico_minoru",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788636647447,
+      "tag": "0004_add-provider-avatars",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788644309889,
+      "tag": "0005_fix-schema",
+      "breakpoints": true
     }
   ]
 }

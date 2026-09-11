@@ -56,7 +56,7 @@
 		<Tooltip.Content sideOffset={4}>{tooltipLabel}</Tooltip.Content>
 	</Tooltip.Root>
 
-	<DropdownMenu.Content align="center" class={cn('flex flex-col min-w-8 gap-1.5 p-1.5', className)}>
+	<DropdownMenu.Content align="center" class={cn('flex min-w-8 flex-col gap-1.5 p-1.5', className)}>
 		<div class="flex flex-col-reverse items-center gap-2">
 			<!-- Mute toggle icon -->
 			<button

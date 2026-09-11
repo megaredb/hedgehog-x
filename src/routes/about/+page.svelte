@@ -39,15 +39,15 @@
 	/>
 </svelte:head>
 
-<div class="layout-content py-10 md:py-16 space-y-12">
+<div class="layout-content space-y-12 py-10 md:py-16">
 	<!-- Заголовок страницы -->
-	<div class="text-center space-y-4 max-w-2xl mx-auto">
+	<div class="mx-auto max-w-2xl space-y-4 text-center">
 		<h1
-			class="text-4xl md:text-5xl font-extrabold tracking-tight text-balance bg-linear-to-r from-foreground to-foreground/75 bg-clip-text text-transparent"
+			class="bg-linear-to-r from-foreground to-foreground/75 bg-clip-text text-4xl font-extrabold tracking-tight text-balance text-transparent md:text-5xl"
 		>
 			О сайте
 		</h1>
-		<p class="text-muted-foreground text-md md:text-lg leading-relaxed text-balance">
+		<p class="text-md leading-relaxed text-balance text-muted-foreground md:text-lg">
 			Добро пожаловать на сайт HEDGEHOG.INC! Здесь вы можете послушать различные аудиокниги:
 			Реинкарнация безработного, Повелитель.
 		</p>
@@ -61,18 +61,18 @@
 		</div>
 
 		<div
-			class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 md:p-8 shadow-xs transition-all duration-300 hover:shadow-md hover:border-primary/20 hover:-translate-y-1"
+			class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-md md:p-8"
 		>
 			<!-- Декоративное свечение -->
 			<div
-				class="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl"
+				class="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/5 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
 			></div>
 
 			<div
-				class="flex flex-col md:flex-row gap-6 items-center md:items-start text-center md:text-left relative z-10"
+				class="relative z-10 flex flex-col items-center gap-6 text-center md:flex-row md:items-start md:text-left"
 			>
 				<div
-					class="h-20 w-20 rounded-2xl bg-secondary/80 border border-border flex items-center justify-center overflow-hidden shadow-inner shrink-0 group-hover:scale-105 transition-transform duration-300"
+					class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-secondary/80 shadow-inner transition-transform duration-300 group-hover:scale-105"
 				>
 					<img
 						src="/logo-full.webp"
@@ -80,16 +80,16 @@
 						class="h-16 w-16 rounded-xl object-cover"
 					/>
 				</div>
-				<div class="space-y-3 flex-1">
-					<div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
-						<h3 class="text-2xl font-extrabold text-foreground tracking-tight">HEDGEHOG.INC</h3>
+				<div class="flex-1 space-y-3">
+					<div class="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+						<h3 class="text-2xl font-extrabold tracking-tight text-foreground">HEDGEHOG.INC</h3>
 						<span
-							class="inline-flex self-center md:self-start items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20"
+							class="inline-flex items-center self-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary md:self-start"
 						>
 							Главный автор
 						</span>
 					</div>
-					<p class="text-muted-foreground text-sm md:text-base leading-relaxed">
+					<p class="text-sm leading-relaxed text-muted-foreground md:text-base">
 						Автор всех аудиокниг на сайте, проводящий колоссальную работу по их озвучке и
 						редактированию.
 					</p>
@@ -105,31 +105,31 @@
 			<h2 class="text-xl font-bold tracking-tight text-foreground">Разработчики</h2>
 		</div>
 
-		<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+		<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 			{#each developers as dev (dev.name)}
 				<div
-					class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-xs transition-all duration-300 hover:shadow-md hover:border-primary/20 hover:-translate-y-1"
+					class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-md"
 				>
 					<div
-						class="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-2xl"
+						class="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/5 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
 					></div>
 
-					<div class="flex items-start gap-4 relative z-10">
+					<div class="relative z-10 flex items-start gap-4">
 						<Avatar.Root
-							class="h-16 w-16 border border-border/80 shadow-sm group-hover:scale-105 transition-transform duration-300"
+							class="h-16 w-16 border border-border/80 shadow-sm transition-transform duration-300 group-hover:scale-105"
 						>
-							<Avatar.Fallback class="bg-primary/10 text-primary text-lg font-extrabold"
+							<Avatar.Fallback class="bg-primary/10 text-lg font-extrabold text-primary"
 								>{dev.fallback}</Avatar.Fallback
 							>
 						</Avatar.Root>
 
-						<div class="space-y-3 flex-1 min-w-0">
+						<div class="min-w-0 flex-1 space-y-3">
 							<div>
-								<h3 class="text-lg font-extrabold text-foreground truncate">{dev.name}</h3>
-								<p class="text-xs text-muted-foreground font-medium">{dev.role}</p>
+								<h3 class="truncate text-lg font-extrabold text-foreground">{dev.name}</h3>
+								<p class="text-xs font-medium text-muted-foreground">{dev.role}</p>
 							</div>
 
-							<p class="text-muted-foreground text-sm leading-relaxed">
+							<p class="text-sm leading-relaxed text-muted-foreground">
 								{dev.description}
 							</p>
 
@@ -140,7 +140,7 @@
 									rel="noopener noreferrer"
 									variant="outline"
 									size="sm"
-									class="gap-2 h-9 border-border/60 hover:bg-muted"
+									class="h-9 gap-2 border-border/60 hover:bg-muted"
 								>
 									<svg class="h-4 w-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
 										<path
@@ -162,10 +162,10 @@
 
 	<!-- Копирайт и футер страницы -->
 	<div
-		class="border-t border-border/30 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground/80"
+		class="flex flex-col items-center justify-between gap-4 border-t border-border/30 pt-8 text-xs text-muted-foreground/80 sm:flex-row"
 	>
 		<div class="flex items-center gap-1.5">
-			<Heart class="h-4 w-4 text-destructive animate-pulse" />
+			<Heart class="h-4 w-4 animate-pulse text-destructive" />
 			<span>Сделано с любовью командой разработчиков</span>
 		</div>
 		<div class="font-medium">Copyright © 2025 HEDGEHOG.INC</div>

@@ -44,7 +44,7 @@
 		return 'Скачать для прослушивания оффлайн';
 	});
 
-	const buttonVariant = $derived<ButtonVariant>((isDownloading || isQueued) ? 'secondary' : variant);
+	const buttonVariant = $derived<ButtonVariant>(isDownloading || isQueued ? 'secondary' : variant);
 
 	const buttonClass = $derived(
 		cn(
@@ -57,7 +57,7 @@
 		)
 	);
 
-	const buttonSize = $derived<ButtonSize>((isDownloading || isQueued) ? 'sm' : size);
+	const buttonSize = $derived<ButtonSize>(isDownloading || isQueued ? 'sm' : size);
 </script>
 
 <Tooltip.Root>
@@ -78,19 +78,19 @@
 			>
 				{#if isDownloaded}
 					<span class="flex items-center justify-center group-hover/btn:hidden">
-						<Check class="w-4.5 h-4.5" />
+						<Check class="h-4.5 w-4.5" />
 					</span>
 					<span class="hidden items-center justify-center group-hover/btn:flex">
-						<Trash2 class="w-4.5 h-4.5" />
+						<Trash2 class="h-4.5 w-4.5" />
 					</span>
 				{:else if isDownloading}
-					<Loader2 class="w-3.5 h-3.5 animate-spin shrink-0" />
-					<span class="text-xs font-mono">{stats.percentage}%</span>
+					<Loader2 class="h-3.5 w-3.5 shrink-0 animate-spin" />
+					<span class="font-mono text-xs">{stats.percentage}%</span>
 				{:else if isQueued}
-					<Clock class="w-3.5 h-3.5 shrink-0" />
-					<span class="text-xs font-mono">В очер.</span>
+					<Clock class="h-3.5 w-3.5 shrink-0" />
+					<span class="font-mono text-xs">В очер.</span>
 				{:else}
-					<DownloadIcon class="w-4.5 h-4.5" />
+					<DownloadIcon class="h-4.5 w-4.5" />
 				{/if}
 			</Button>
 		{/snippet}

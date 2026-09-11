@@ -55,17 +55,17 @@
 {#if isVisible}
 	<div
 		transition:fade={{ duration: 150 }}
-		class="absolute inset-0 z-50 flex items-center justify-center pointer-events-none select-none"
+		class="pointer-events-none absolute inset-0 z-50 flex items-center justify-center select-none"
 	>
 		<div
 			transition:scale={{ duration: 150, start: 0.85 }}
 			class="relative flex items-center justify-center"
 		>
 			<div
-				class="absolute -inset-4 rounded-full bg-primary/30 blur-xl pointer-events-none -z-10"
+				class="pointer-events-none absolute -inset-4 -z-10 rounded-full bg-primary/30 blur-xl"
 			></div>
 
-			<span class="text-4xl font-bold text-primary tabular-nums font-mono">
+			<span class="font-mono text-4xl font-bold text-primary tabular-nums">
 				{displayValue}
 			</span>
 		</div>

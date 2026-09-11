@@ -104,13 +104,13 @@
 </svelte:head>
 
 <!-- flex-1 заставляет контейнер заполнить всю доступную высоту -->
-<div class="relative flex-1 flex flex-col w-full overflow-hidden isolate">
+<div class="relative isolate flex w-full flex-1 flex-col overflow-hidden">
 	<ShowcaseBackground books={showcaseBooks} {currentIndex} {isVideoPlaying} />
 
 	<!-- Контейнер со скроллом -->
 	<div
 		bind:this={scrollContainer}
-		class="absolute inset-0 w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+		class="absolute inset-0 no-scrollbar w-full snap-y snap-mandatory overflow-y-scroll"
 	>
 		{#each showcaseBooks as book, index (book.id)}
 			<ShowcaseItem {book} {index} onVisible={handleSectionVisible} />
@@ -126,10 +126,10 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 text-foreground/60 hover:text-foreground transition-colors duration-300 pointer-events-auto cursor-pointer select-none animate-bounce"
+			class="pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Пролистать вверх"
 		>
-			<ChevronUp class="w-8 h-8" />
+			<ChevronUp class="h-8 w-8" />
 		</button>
 	{/if}
 
@@ -142,10 +142,10 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 text-foreground/60 hover:text-foreground transition-colors duration-300 pointer-events-auto cursor-pointer select-none animate-bounce"
+			class="pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Пролистать вниз"
 		>
-			<ChevronDown class="w-8 h-8" />
+			<ChevronDown class="h-8 w-8" />
 		</button>
 	{/if}
 

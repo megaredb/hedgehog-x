@@ -27,47 +27,47 @@
 </svelte:head>
 
 <main class="layout-content py-4 md:py-8">
-	<div class="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+	<div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 		<div>
 			<h1 class="text-4xl font-extrabold tracking-tight">
 				{bookQuery.data?.title || 'Загрузка...'}
 			</h1>
-			<p class="text-muted-foreground mt-2">Список томов</p>
+			<p class="mt-2 text-muted-foreground">Список томов</p>
 		</div>
 
 		<!-- View Mode Toggle -->
 		<div
-			class="flex items-center gap-1 bg-muted/50 p-1 rounded-lg self-start sm:self-auto border border-border/50"
+			class="flex items-center gap-1 self-start rounded-lg border border-border/50 bg-muted/50 p-1 sm:self-auto"
 		>
 			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'grid'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+				class="rounded-md p-2 transition-colors {viewMode === 'grid'
+					? 'bg-background text-foreground shadow-sm'
+					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 				onclick={() => (viewMode = 'grid')}
 				aria-label="Сетка"
 			>
-				<LayoutGrid class="w-5 h-5" />
+				<LayoutGrid class="h-5 w-5" />
 			</button>
 			<button
-				class="p-2 rounded-md transition-colors {viewMode === 'list'
-					? 'bg-background shadow-sm text-foreground'
-					: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+				class="rounded-md p-2 transition-colors {viewMode === 'list'
+					? 'bg-background text-foreground shadow-sm'
+					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
 				onclick={() => (viewMode = 'list')}
 				aria-label="Список"
 			>
-				<ListIcon class="w-5 h-5" />
+				<ListIcon class="h-5 w-5" />
 			</button>
 		</div>
 	</div>
 
 	{#if volumesQuery.data.length === 0}
-		<div class="p-8 text-center bg-muted/30 rounded-2xl border-2 border-dashed border-border/50">
+		<div class="rounded-2xl border-2 border-dashed border-border/50 bg-muted/30 p-8 text-center">
 			<p class="text-lg text-muted-foreground">Тома не найдены или загружаются...</p>
 		</div>
 	{:else}
 		<div
 			class={viewMode === 'grid'
-				? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6'
+				? 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5'
 				: 'flex flex-col gap-4'}
 		>
 			{#each volumesQuery.data as volume (volume.id)}
@@ -75,45 +75,45 @@
 					href={resolve(`/books/${data.bookId}/${volume.id}`)}
 					class="group flex {viewMode === 'grid'
 						? 'flex-col'
-						: 'flex-row'} bg-card text-card-foreground rounded-xl md:rounded-2xl border border-border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden"
+						: 'flex-row'} overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-md md:rounded-2xl"
 				>
 					<div
 						class="{viewMode === 'grid'
-							? 'w-full aspect-3/4'
-							: 'w-24 sm:w-32 lg:w-40 shrink-0'} bg-muted relative overflow-hidden"
+							? 'aspect-3/4 w-full'
+							: 'w-24 shrink-0 sm:w-32 lg:w-40'} relative overflow-hidden bg-muted"
 					>
 						{#if volume.coverUrl}
 							<img
 								src={volume.coverUrl}
 								alt={`Обложка ${volume.title}`}
-								class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+								class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
 								loading="lazy"
 							/>
 						{:else}
 							<div class="absolute inset-0 flex items-center justify-center bg-secondary/50">
 								<span
-									class="text-secondary-foreground/50 font-medium text-xs sm:text-sm text-center px-2"
+									class="px-2 text-center text-xs font-medium text-secondary-foreground/50 sm:text-sm"
 									>Без обложки</span
 								>
 							</div>
 						{/if}
 						<div
-							class="absolute top-2 left-2 bg-background/80 text-foreground px-2 py-1 text-xs rounded-md font-bold backdrop-blur-md shadow-sm"
+							class="absolute top-2 left-2 rounded-md bg-background/80 px-2 py-1 text-xs font-bold text-foreground shadow-sm backdrop-blur-md"
 						>
 							Том {volume.volumeNumber}
 						</div>
 					</div>
 
-					<div class="p-3 sm:p-4 flex flex-col justify-center flex-1">
+					<div class="flex flex-1 flex-col justify-center p-3 sm:p-4">
 						<h2
 							class="{viewMode === 'grid'
 								? 'text-sm sm:text-base'
-								: 'text-lg sm:text-xl'} font-bold leading-tight line-clamp-2"
+								: 'text-lg sm:text-xl'} line-clamp-2 leading-tight font-bold"
 						>
 							{volume.title}
 						</h2>
 						{#if viewMode === 'list'}
-							<p class="text-muted-foreground text-sm mt-2 line-clamp-2 sm:line-clamp-3">
+							<p class="mt-2 line-clamp-2 text-sm text-muted-foreground sm:line-clamp-3">
 								{volume.description || 'Описание отсутствует'}
 							</p>
 						{/if}

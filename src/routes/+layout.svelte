@@ -12,6 +12,9 @@
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { createLogger } from '$lib/logger';
+
+	const log = createLogger('SW');
 
 	let { children } = $props();
 
@@ -52,10 +55,10 @@
 			registerSW({
 				immediate: true,
 				onRegistered(r) {
-					console.log('SW registered:', r);
+					log.debug('Service Worker успешно зарегистрирован:', r);
 				},
 				onRegisterError(error) {
-					console.error('SW registration error:', error);
+					log.error('Ошибка регистрации Service Worker:', error);
 				}
 			});
 		}
@@ -72,18 +75,18 @@
 	<Tooltip.Provider delayDuration={200}>
 		<ModeWatcher disableTransitions={false} />
 
-		<div class="flex flex-col lg:flex-row min-h-screen w-full">
+		<div class="flex min-h-screen w-full flex-col lg:flex-row">
 			<!-- Универсальная навигация (Десктопный Sidebar + Мобильный Header) -->
 			<AppNavigation />
 
 			<!-- Область контента -->
 			<div
-				class="flex-1 flex flex-col min-w-0 relative bg-no-repeat"
+				class="relative flex min-w-0 flex-1 flex-col bg-no-repeat"
 				style="background-image: radial-gradient(circle 800px at 50% -300px, color-mix(in oklch, var(--color-secondary) 100%, transparent) 0%, transparent 100%);"
 			>
 				<AppBreadcrumbs />
 				<!-- Страницы -->
-				<main class="flex-1 page-content-transition">
+				<main class="page-content-transition flex-1">
 					{@render children()}
 				</main>
 				<GlobalPlayer />

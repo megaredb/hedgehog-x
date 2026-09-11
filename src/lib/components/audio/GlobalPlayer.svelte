@@ -26,20 +26,20 @@
 
 {#snippet shortBookInfo()}
 	<!-- Book info — tapping navigates to the volume page -->
-	<div class="flex items-center gap-2 h-fit min-w-0">
+	<div class="flex h-fit min-w-0 items-center gap-2">
 		{#if volumeHref}
 			<a
 				href={volumeHref}
-				class="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+				class="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
 			>
 				<img
-					class="h-10 w-10 rounded-sm object-cover border shrink-0"
+					class="h-10 w-10 shrink-0 rounded-sm border object-cover"
 					src={audioStore.currentTrack?.artwork ??
 						audioStore.currentTrack?.images?.[0] ??
 						'/logo.webp'}
 					alt={audioStore.currentTrack?.title ?? 'Глава...'}
 				/>
-				<div class="flex flex-col min-w-0">
+				<div class="flex min-w-0 flex-col">
 					<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
 					<p class="truncate text-xs text-muted-foreground">
 						{audioStore.currentTrack?.album ?? 'Том...'}
@@ -48,13 +48,13 @@
 			</a>
 		{:else}
 			<img
-				class="h-10 w-10 rounded-sm object-cover border shrink-0"
+				class="h-10 w-10 shrink-0 rounded-sm border object-cover"
 				src={audioStore.currentTrack?.artwork ??
 					audioStore.currentTrack?.images?.[0] ??
 					'/logo.webp'}
 				alt={audioStore.currentTrack?.title ?? 'Глава...'}
 			/>
-			<div class="flex flex-col min-w-0">
+			<div class="flex min-w-0 flex-col">
 				<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
 				<p class="truncate text-xs text-muted-foreground">
 					{audioStore.currentTrack?.album ?? 'Том...'}
@@ -65,8 +65,8 @@
 {/snippet}
 
 {#snippet desktopControls()}
-	<div class="flex items-center gap-4 justify-between">
-		<AudioPlayer.TimeDisplay class="shrink-0 w-16" />
+	<div class="flex items-center justify-between gap-4">
+		<AudioPlayer.TimeDisplay class="w-16 shrink-0" />
 		<AudioPlayer.ControlGroup class="flex items-center justify-center gap-4 text-center">
 			<AudioPlayer.SkipBack />
 			<AudioPlayer.Rewind />
@@ -74,14 +74,14 @@
 			<AudioPlayer.FastForward />
 			<AudioPlayer.SkipForward />
 		</AudioPlayer.ControlGroup>
-		<AudioPlayer.TimeDisplay class="shrink-0 w-16" remaining />
+		<AudioPlayer.TimeDisplay class="w-16 shrink-0" remaining />
 	</div>
 {/snippet}
 
 {#snippet drawerControls()}
 	<!-- Mobile-optimized controls: tighter gaps, all in one row -->
-	<div class="flex items-center justify-between gap-1 w-full">
-		<AudioPlayer.TimeDisplay class="shrink-0 w-12 text-xs" />
+	<div class="flex w-full items-center justify-between gap-1">
+		<AudioPlayer.TimeDisplay class="w-12 shrink-0 text-xs" />
 		<AudioPlayer.ControlGroup class="flex items-center justify-center gap-2">
 			<AudioPlayer.SkipBack size="sm" />
 			<AudioPlayer.Rewind size="sm" />
@@ -89,31 +89,31 @@
 			<AudioPlayer.FastForward size="sm" />
 			<AudioPlayer.SkipForward size="sm" />
 		</AudioPlayer.ControlGroup>
-		<AudioPlayer.TimeDisplay class="shrink-0 w-12 text-xs" remaining />
+		<AudioPlayer.TimeDisplay class="w-12 shrink-0 text-xs" remaining />
 	</div>
 {/snippet}
 
 {#if audioStore.queue.length > 0}
 	<AudioPlayer.Root
-		class="sticky p-0 bottom-0 z-50 w-full bg-background shadow-[0_0px_6px_0px] shadow-muted/40 rounded-none border-t"
+		class="sticky bottom-0 z-50 w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
 	>
 		<!-- Seek bar sits above the bar on all breakpoints -->
-		<div class="absolute top-0 left-0 w-full z-50 -translate-y-1/2">
+		<div class="absolute top-0 left-0 z-50 w-full -translate-y-1/2">
 			<AudioPlayer.SeekBar class="overflow-x-clip" />
 		</div>
 
 		<!-- ── Desktop ── -->
-		<div class="hidden md:block px-4 py-2">
+		<div class="hidden px-4 py-2 md:block">
 			<AudioPlayer.ControlBar class="flex items-center justify-between">
 				<div class="w-1/4 min-w-0">
 					{@render shortBookInfo()}
 				</div>
 
-				<div class="flex-1 flex flex-col items-center gap-2 max-w-2xl">
+				<div class="flex max-w-2xl flex-1 flex-col items-center gap-2">
 					{@render desktopControls()}
 				</div>
 
-				<div class="w-1/4 flex justify-end items-center gap-2">
+				<div class="flex w-1/4 items-center justify-end gap-2">
 					<AudioPlayer.Download />
 					<AudioPlayer.SleepTimer />
 					<AudioPlayer.Speed />
@@ -134,13 +134,13 @@
 						<div
 							{...props}
 							class={cn(
-								'w-full flex items-center gap-3 px-3 py-2 active:bg-muted/50 transition-colors',
+								'flex w-full items-center gap-3 px-3 py-2 transition-colors active:bg-muted/50',
 								props?.class || ''
 							)}
 						>
 							<!-- Cover art -->
 							<img
-								class="h-10 w-10 rounded-md object-cover shrink-0 border border-border/40 shadow-sm"
+								class="h-10 w-10 shrink-0 rounded-md border border-border/40 object-cover shadow-sm"
 								src={audioStore.currentTrack?.artwork ??
 									audioStore.currentTrack?.images?.[0] ??
 									'/logo.webp'}
@@ -148,11 +148,11 @@
 							/>
 
 							<!-- Track info — takes remaining space, truncates -->
-							<div class="flex flex-col min-w-0 flex-1 text-left">
-								<p class="truncate text-sm font-medium leading-tight">
+							<div class="flex min-w-0 flex-1 flex-col text-left">
+								<p class="truncate text-sm leading-tight font-medium">
 									{audioStore.currentTrack?.title ?? 'Глава...'}
 								</p>
-								<p class="truncate text-xs text-muted-foreground leading-tight">
+								<p class="truncate text-xs leading-tight text-muted-foreground">
 									{audioStore.currentTrack?.album ?? 'Том...'}
 								</p>
 							</div>
@@ -168,9 +168,9 @@
 				</Drawer.Trigger>
 
 				<Drawer.Content>
-					<div class="mx-auto w-full max-w-sm flex flex-col gap-4 px-6 pt-2 pb-10">
+					<div class="mx-auto flex w-full max-w-sm flex-col gap-4 px-6 pt-2 pb-10">
 						<!-- Header: real track data from store -->
-						<Drawer.Header class="text-center p-0">
+						<Drawer.Header class="p-0 text-center">
 							{#if volumeHref}
 								<a href={volumeHref} class="hover:underline">
 									<Drawer.Title class="text-base font-semibold">
@@ -194,14 +194,14 @@
 							{#if volumeHref}
 								<a href={volumeHref} class="mx-auto block">
 									<img
-										class="w-48 h-48 rounded-xl object-cover shadow-lg border border-border/40"
+										class="h-48 w-48 rounded-xl border border-border/40 object-cover shadow-lg"
 										src={coverSrc}
 										alt={audioStore.currentTrack?.title ?? 'Обложка'}
 									/>
 								</a>
 							{:else}
 								<img
-									class="w-48 h-48 mx-auto rounded-xl object-cover shadow-lg border border-border/40"
+									class="mx-auto h-48 w-48 rounded-xl border border-border/40 object-cover shadow-lg"
 									src={coverSrc}
 									alt={audioStore.currentTrack?.title ?? 'Обложка'}
 								/>

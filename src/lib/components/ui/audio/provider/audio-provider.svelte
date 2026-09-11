@@ -113,7 +113,11 @@
 			const currentTime = audio.currentTime;
 			const wasPlaying = !audio.paused;
 			if (audioStore.currentTrack) {
-				await htmlAudio.load({ url: audioStore.currentTrack.url, id: audioStore.currentTrack.id, startTime: currentTime });
+				await htmlAudio.load({
+					url: audioStore.currentTrack.url,
+					id: audioStore.currentTrack.id,
+					startTime: currentTime
+				});
 				if (wasPlaying) await htmlAudio.play();
 			}
 			return true;

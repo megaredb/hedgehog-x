@@ -46,10 +46,10 @@
 
 {#if segments.length > 0}
 	<div
-		class="px-4 py-3 border-b bg-background/80 backdrop-blur-md top-0 z-10 w-full overflow-hidden"
+		class="top-0 z-10 w-full overflow-hidden border-b bg-background/80 px-4 py-3 backdrop-blur-md"
 	>
 		<!-- Горизонтальный скролл контейнер (скрываем скроллбар) -->
-		<div class="flex overflow-x-auto no-scrollbar items-center w-full min-h-[32px]">
+		<div class="no-scrollbar flex min-h-[32px] w-full items-center overflow-x-auto">
 			<Breadcrumb.Root>
 				<Breadcrumb.List class="flex-nowrap whitespace-nowrap">
 					<Breadcrumb.Item>
