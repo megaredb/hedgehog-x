@@ -4,6 +4,9 @@ import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
+import { createLogger } from './lib/logger';
+
+const log = createLogger('SW');
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -22,7 +25,7 @@ const navigationRoute = new NavigationRoute(async (params) => {
 		const response = await navigationStrategy.handle(params);
 		if (response) return response;
 	} catch (error) {
-		console.warn('[SW] Сетевой запрос страницы не удался, пробуем кэш:', error);
+		log.warn('Сетевой запрос страницы не удался, пробуем кэш:', error);
 	}
 
 	// 1. Ищем точное совпадение для этого URL в кэше
@@ -62,7 +65,7 @@ self.addEventListener('install', (event) => {
 	self.skipWaiting();
 	event.waitUntil(
 		caches.open('pages-cache').then((cache) => {
-			return cache.add('/').catch((err) => console.warn('[SW] Ошибка прогрева кэша /:', err));
+			return cache.add('/').catch((err) => log.warn('Ошибка прогрева кэша /:', err));
 		})
 	);
 });

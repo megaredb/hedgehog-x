@@ -1,4 +1,7 @@
 import type { LinkedAccount } from './accounts.svelte';
+import { createLogger } from '../logger';
+
+const log = createLogger('Storage');
 
 export interface SessionData {
 	session: { id: string; userId: string; expiresAt: Date; token: string } | null;
@@ -56,7 +59,7 @@ export function loadCachedSession(now = Date.now()): SessionData | null {
 			user
 		};
 	} catch (e) {
-		console.warn('Failed to load cached session in auth-storage:', e);
+		log.warn('Не удалось загрузить сохранённую сессию:', e);
 		clearCachedSession();
 		return null;
 	}
@@ -78,7 +81,7 @@ export function saveCachedSession(data: SessionData | null): void {
 
 		localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(data));
 	} catch (e) {
-		console.warn('Failed to save cached session in auth-storage:', e);
+		log.warn('Не удалось сохранить сессию в локальное хранилище:', e);
 	}
 }
 
@@ -93,7 +96,7 @@ export function clearCachedSession(): void {
 	try {
 		localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
 	} catch (e) {
-		console.warn('Failed to clear cached session in auth-storage:', e);
+		log.warn('Не удалось очистить сохранённую сессию:', e);
 	}
 }
 
@@ -118,7 +121,7 @@ export function loadCachedAccounts(): LinkedAccount[] {
 			updatedAt: new Date(acc.updatedAt)
 		}));
 	} catch (e) {
-		console.warn('Failed to load cached accounts in auth-storage:', e);
+		log.warn('Не удалось загрузить сохранённые способы входа:', e);
 		clearCachedAccounts();
 		return [];
 	}
@@ -140,7 +143,7 @@ export function saveCachedAccounts(accounts: LinkedAccount[]): void {
 
 		localStorage.setItem(AUTH_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
 	} catch (e) {
-		console.warn('Failed to save cached accounts in auth-storage:', e);
+		log.warn('Не удалось сохранить способы входа в локальное хранилище:', e);
 	}
 }
 
@@ -155,6 +158,6 @@ export function clearCachedAccounts(): void {
 	try {
 		localStorage.removeItem(AUTH_ACCOUNTS_STORAGE_KEY);
 	} catch (e) {
-		console.warn('Failed to clear cached accounts in auth-storage:', e);
+		log.warn('Не удалось очистить сохранённые способы входа:', e);
 	}
 }

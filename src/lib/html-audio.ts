@@ -18,6 +18,9 @@ export type Track = {
 	[key: string]: unknown;
 };
 
+import { createLogger } from './logger';
+const log = createLogger('Audio');
+
 type LoadParams = {
 	url: string;
 	id?: string | number;
@@ -173,7 +176,7 @@ class HtmlAudio {
 					const fileHandle = await opfsRoot.getFileHandle(idStr);
 					const file = await fileHandle.getFile();
 					finalUrl = URL.createObjectURL(file);
-				} catch (err) {
+				} catch {
 					// Fallback to checking legacy CacheStorage (for files downloaded before OPFS migration)
 					try {
 						const cache = await caches.open('audio-cache');
@@ -182,8 +185,8 @@ class HtmlAudio {
 							const blob = await cachedResponse.blob();
 							finalUrl = URL.createObjectURL(blob);
 						}
-					} catch {
-						console.warn('Failed to read audio from cache/OPFS:', err);
+					} catch (err) {
+						log.warn('Не удалось прочитать аудио из кэша/OPFS:', err);
 					}
 				}
 			}
@@ -257,7 +260,7 @@ class HtmlAudio {
 				audio.load();
 			});
 		} catch (error) {
-			console.error('Audio load process error:', error);
+			log.error('Ошибка в процессе загрузки аудио:', error);
 			throw error;
 		}
 	}

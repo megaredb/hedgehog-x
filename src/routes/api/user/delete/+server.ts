@@ -2,6 +2,9 @@ import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { user } from '$lib/server/db/schema';
+import { createLogger } from '$lib/logger';
+
+const log = createLogger('API');
 
 /**
  * Удаление аккаунта пользователя.
@@ -20,7 +23,7 @@ export const POST = async ({ locals }) => {
 		// После удаления пользователя все его сессии исчезли каскадом.
 		return json({ ok: true });
 	} catch (e) {
-		console.error('[api/user/delete] failed to delete user', e);
+		log.error('Не удалось удалить пользователя:', e);
 		return json({ error: 'Failed to delete account' }, { status: 500 });
 	}
 };

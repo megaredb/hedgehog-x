@@ -1,12 +1,15 @@
 import { browser } from '$app/environment';
 import { db } from '$lib/client/db';
 import { hydrate } from '$lib/client/db/hydrate';
+import { createLogger } from '$lib/logger';
 import {
 	mapServerBookToOfflineBook,
 	mapServerVolumeToOfflineVolume,
 	mapServerChapterToOfflineChapter,
 	mapServerIllustrationToOfflineIllustration
 } from './mappers';
+
+const log = createLogger('Sync');
 
 type ServerBook = typeof import('$lib/server/db/schema').books.$inferSelect;
 type ServerVolume = typeof import('$lib/server/db/schema').volumes.$inferSelect;
@@ -37,7 +40,7 @@ export const syncService = {
 			}
 			return offlineBooks;
 		} catch (e) {
-			console.log('Синхронизация каталога не удалась (Оффлайн). Используем данные из Dexie.', e);
+			log.info('Синхронизация каталога не удалась (Оффлайн). Используем данные из Dexie.', e);
 			if (browser) {
 				return await db.books.toArray();
 			}
@@ -56,7 +59,7 @@ export const syncService = {
 
 			// Если сервер вернул 304, значит данные в локальном кэше (Dexie) полностью актуальны!
 			if (res.status === 304) {
-				console.log(`Данные для книги ${bookId} актуальны (304 Not Modified).`);
+				log.debug(`Данные для книги ${bookId} актуальны (304 Not Modified).`);
 				return;
 			}
 
@@ -88,9 +91,9 @@ export const syncService = {
 				hydrate('illustrations', offlineIllustrations, { index: 'volumeId', values: allVolumeIds })
 			]);
 
-			console.log(`Книга ${bookId} успешно синхронизирована.`);
+			log.info(`Книга ${bookId} успешно синхронизирована.`);
 		} catch (e) {
-			console.log(`Оффлайн: данные для книги ${bookId} читаются из Dexie.`, e);
+			log.info(`Оффлайн: данные для книги ${bookId} читаются из Dexie.`, e);
 			// В случае ошибки ничего не делаем, UI-руна прочитает старые данные из Dexie
 		}
 	},
@@ -113,9 +116,9 @@ export const syncService = {
 				hydrate('bookmarks', userData.bookmarks || [], 'all')
 			]);
 
-			console.log('Пользовательские данные успешно синхронизированы с сервером.');
+			log.info('Пользовательские данные успешно синхронизированы с сервером.');
 		} catch (e) {
-			console.log('Синхронизация пользовательских данных не удалась (Оффлайн).', e);
+			log.info('Синхронизация пользовательских данных не удалась (Оффлайн).', e);
 		}
 	}
 };

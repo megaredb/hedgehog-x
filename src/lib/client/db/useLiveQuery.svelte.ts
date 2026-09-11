@@ -1,4 +1,7 @@
 import { liveQuery } from 'dexie';
+import { createLogger } from '$lib/logger';
+
+const log = createLogger('DB');
 
 export function useDexie<T>(querier: () => Promise<T>, fallback: () => T, deps?: () => unknown) {
 	let data = $state<T>(fallback());
@@ -16,7 +19,7 @@ export function useDexie<T>(querier: () => Promise<T>, fallback: () => T, deps?:
 				isLoading = false;
 			},
 			error: (err) => {
-				console.error('Dexie liveQuery error:', err);
+				log.error('Ошибка подписки Dexie liveQuery:', err);
 				isLoading = false;
 			}
 		});

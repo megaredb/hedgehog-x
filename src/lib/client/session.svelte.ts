@@ -1,4 +1,5 @@
 import { authClient } from './authClient';
+import { createLogger } from '../logger';
 import {
 	loadCachedSession,
 	saveCachedSession,
@@ -6,6 +7,8 @@ import {
 	clearCachedAccounts,
 	type SessionData
 } from './auth-storage';
+
+const log = createLogger('Auth');
 
 export type { SessionData };
 
@@ -121,7 +124,7 @@ export function useSession() {
 			try {
 				await atom.get().refetch();
 			} catch (e) {
-				console.warn('[Session] Ошибка refetch:', e);
+				log.warn('Ошибка refetch:', e);
 			}
 		},
 		signOut: async () => {
@@ -131,7 +134,7 @@ export function useSession() {
 			try {
 				await authClient.signOut();
 			} catch (e) {
-				console.warn('[Session] Ошибка signOut на сервере:', e);
+				log.warn('Ошибка signOut на сервере:', e);
 			}
 		}
 	};

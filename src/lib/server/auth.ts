@@ -5,6 +5,9 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { telegram } from 'better-auth-telegram';
 import { getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db';
+import { createLogger } from '$lib/logger';
+
+const log = createLogger('Auth');
 
 // Динамический baseURL: better-auth сам определяет origin из запроса
 // и добавляет все allowedHosts в trustedOrigins (иначе POST /api/auth/*
@@ -139,7 +142,7 @@ export const auth = betterAuth({
 							await internalAdapter.updateUser(session.userId, { image });
 						}
 					} catch (e) {
-						console.warn('[auth] failed to sync profile image', e);
+						log.warn('Не удалось синхронизировать аватар профиля:', e);
 					}
 				}
 			}

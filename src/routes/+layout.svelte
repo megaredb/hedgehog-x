@@ -12,6 +12,9 @@
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { createLogger } from '$lib/logger';
+
+	const log = createLogger('SW');
 
 	let { children } = $props();
 
@@ -52,10 +55,10 @@
 			registerSW({
 				immediate: true,
 				onRegistered(r) {
-					console.log('SW registered:', r);
+					log.debug('Service Worker успешно зарегистрирован:', r);
 				},
 				onRegisterError(error) {
-					console.error('SW registration error:', error);
+					log.error('Ошибка регистрации Service Worker:', error);
 				}
 			});
 		}
