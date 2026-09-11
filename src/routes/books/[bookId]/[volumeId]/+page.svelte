@@ -83,36 +83,36 @@
 </svelte:head>
 
 <main class="layout-content py-4 md:py-8">
-	<div class="mb-8 flex flex-col md:flex-row gap-6 items-start">
+	<div class="mb-8 flex flex-col items-start gap-6 md:flex-row">
 		{#if volumeQuery.isLoading}
-			<Skeleton class="w-32 md:w-48 rounded-lg shadow-md aspect-2/3 shrink-0" />
+			<Skeleton class="aspect-2/3 w-32 shrink-0 rounded-lg shadow-md md:w-48" />
 		{:else if volumeQuery.data?.coverUrl}
 			<img
 				src={volumeQuery.data.coverUrl}
 				alt={volumeQuery.data.title}
-				class="w-32 md:w-48 rounded-lg shadow-md object-cover aspect-2/3 shrink-0"
+				class="aspect-2/3 w-32 shrink-0 rounded-lg object-cover shadow-md md:w-48"
 			/>
 		{/if}
 		<div class="w-full">
 			{#if volumeQuery.isLoading}
-				<Skeleton class="h-9 w-3/4 md:w-1/2 mb-4" />
-				<Skeleton class="h-4 w-full max-w-2xl mb-2" />
-				<Skeleton class="h-4 w-5/6 max-w-2xl mb-2" />
+				<Skeleton class="mb-4 h-9 w-3/4 md:w-1/2" />
+				<Skeleton class="mb-2 h-4 w-full max-w-2xl" />
+				<Skeleton class="mb-2 h-4 w-5/6 max-w-2xl" />
 				<Skeleton class="h-4 w-2/3 max-w-2xl" />
 			{:else}
-				<h1 class="text-3xl font-extrabold tracking-tight mb-2">
+				<h1 class="mb-2 text-3xl font-extrabold tracking-tight">
 					{volumeQuery.data?.title || 'Загрузка...'}
 				</h1>
 				{#if volumeQuery.data?.description}
-					<p class="text-muted-foreground max-w-2xl mt-2">{volumeQuery.data.description}</p>
+					<p class="mt-2 max-w-2xl text-muted-foreground">{volumeQuery.data.description}</p>
 				{/if}
 			{/if}
 		</div>
 	</div>
 
-	<div class="bg-card text-card-foreground border rounded-2xl shadow-sm overflow-hidden">
-		<div class="p-4 border-b bg-muted/20 flex items-center justify-between">
-			<h2 class="font-semibold text-lg">Список глав</h2>
+	<div class="overflow-hidden rounded-2xl border bg-card text-card-foreground shadow-sm">
+		<div class="flex items-center justify-between border-b bg-muted/20 p-4">
+			<h2 class="text-lg font-semibold">Список глав</h2>
 
 			{#if isVolumeDownloading}
 				<Button
@@ -120,12 +120,12 @@
 					size="sm"
 					onclick={() => manager.cancelVolumeQueue(data.volumeId)}
 				>
-					<XCircle class="w-4 h-4 mr-1.5" />
+					<XCircle class="mr-1.5 h-4 w-4" />
 					Отменить ({volumeProgress.current}/{volumeProgress.total})
 				</Button>
 			{:else if isFullyDownloaded}
-				<span class="text-sm text-green-600 flex items-center gap-1">
-					<Check class="w-4 h-4" /> Все главы загружены
+				<span class="flex items-center gap-1 text-sm text-green-600">
+					<Check class="h-4 w-4" /> Все главы загружены
 				</span>
 			{:else if volumeChapters.length > 0}
 				<Button
@@ -133,7 +133,7 @@
 					size="sm"
 					onclick={() => manager.enqueueVolume(data.volumeId, chaptersQuery.data)}
 				>
-					<DownloadIcon class="w-4 h-4 mr-1.5" />
+					<DownloadIcon class="mr-1.5 h-4 w-4" />
 					Скачать все
 				</Button>
 			{/if}
@@ -143,14 +143,14 @@
 			<ul class="divide-y">
 				{#each Array(5)}
 					<li class="flex items-center justify-between p-3">
-						<div class="flex-1 flex items-center gap-4">
-							<Skeleton class="w-8 h-8 rounded-full shrink-0" />
-							<div class="space-y-2 flex-1">
+						<div class="flex flex-1 items-center gap-4">
+							<Skeleton class="h-8 w-8 shrink-0 rounded-full" />
+							<div class="flex-1 space-y-2">
 								<Skeleton class="h-4 w-3/4 max-w-50" />
 								<Skeleton class="h-3 w-1/2 max-w-30" />
 							</div>
 						</div>
-						<Skeleton class="w-8 h-8 rounded-md shrink-0" />
+						<Skeleton class="h-8 w-8 shrink-0 rounded-md" />
 					</li>
 				{/each}
 			</ul>
@@ -166,21 +166,21 @@
 					{@const showControl = isCurrent || hoveredIndex === index}
 
 					<li
-						class="group flex items-center justify-between p-3 hover:bg-muted/10 transition-colors"
+						class="group flex items-center justify-between p-3 transition-colors hover:bg-muted/10"
 						onmouseenter={() => (hoveredIndex = index)}
 						onmouseleave={() => (hoveredIndex = null)}
 					>
 						<button
 							type="button"
 							onclick={() => handlePlayChapter(index)}
-							class="flex-1 flex items-center gap-4 text-left cursor-pointer select-none outline-none p-1 rounded-md focus-visible:ring-2 focus-visible:ring-ring"
+							class="flex flex-1 cursor-pointer items-center gap-4 rounded-md p-1 text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
 							aria-label={isCurrent && isPlaying
 								? `Пауза: ${chapter.title}`
 								: `Воспроизвести: ${chapter.title}`}
 						>
 							<div
-								class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 transition-all duration-200 relative overflow-hidden {isCurrent
-									? 'bg-primary text-primary-foreground scale-105 shadow-sm'
+								class="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold transition-all duration-200 {isCurrent
+									? 'scale-105 bg-primary text-primary-foreground shadow-sm'
 									: 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground'}"
 							>
 								{#if showControl}
@@ -189,9 +189,9 @@
 										transition:scale={{ duration: 150, start: 0.8 }}
 									>
 										{#if isPlaying}
-											<Pause class="w-4 h-4 fill-current" />
+											<Pause class="h-4 w-4 fill-current" />
 										{:else}
-											<Play class="w-4 h-4 fill-current ml-0.5" />
+											<Play class="ml-0.5 h-4 w-4 fill-current" />
 										{/if}
 									</div>
 								{:else}
@@ -205,17 +205,17 @@
 							</div>
 							<h3
 								class="font-medium transition-colors {isCurrent
-									? 'text-primary font-semibold'
+									? 'font-semibold text-primary'
 									: ''}"
 							>
 								{chapter.title}
 							</h3>
 						</button>
 
-						<div class="flex items-center gap-3 pl-4 shrink-0">
+						<div class="flex shrink-0 items-center gap-3 pl-4">
 							<DownloadButton {chapter} class="h-8 w-8" />
 
-							<span class="text-sm text-muted-foreground tabular-nums w-10 text-right">
+							<span class="w-10 text-right text-sm text-muted-foreground tabular-nums">
 								{formatDuration(chapter.durationSeconds)}
 							</span>
 						</div>

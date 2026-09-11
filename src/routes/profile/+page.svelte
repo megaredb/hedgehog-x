@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Link2Off, Plus, Trash2, UserRound, ShieldAlert } from '@lucide/svelte';
+	import { Link2Off, Plus, Trash2, UserRound, ShieldAlert, WifiOff } from '@lucide/svelte';
+	import { online } from 'svelte/reactivity/window';
 	import { Button } from '$lib/components/ui/button';
 	import { useSession } from '$lib/client/session.svelte';
 	import { useAccounts } from '$lib/client/accounts.svelte';
@@ -22,9 +23,10 @@
 
 	const session = useSession();
 	const accounts = useAccounts();
+	const isOnline = $derived(online.current ?? true);
 
 	// Загружаем способы входа, как только появился пользователь.
-	let loadedForUser = $state<string | null>(null);
+	let loadedForUser: string | null = null;
 
 	$effect(() => {
 		const userId = session.user?.id;
@@ -155,7 +157,7 @@
 		// Аккаунт удалён — форсируем пересинхронизацию сессии и уходим на главную
 		deleteModalOpen = false;
 		deleting = false;
-		await session.refetch();
+		await session.signOut();
 		window.location.href = resolve('/');
 	}
 </script>
@@ -163,6 +165,18 @@
 <div class="mx-auto max-w-2xl p-6">
 	<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
 	<p class="mt-2 text-muted-foreground">Профиль, идентификатор и способы входа.</p>
+
+	{#if !isOnline}
+		<div
+			class="mt-4 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400"
+		>
+			<WifiOff class="size-4 shrink-0" />
+			<span
+				>Вы находитесь в оффлайн-режиме. Привязка, отвязка и удаление аккаунта требуют подключения к
+				сети.</span
+			>
+		</div>
+	{/if}
 
 	{#if session.isPending}
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>
@@ -281,8 +295,12 @@
 								{#if linked}
 									<Button
 										variant="outline"
-										disabled={accounts.isPending !== null || lastOne}
-										title={lastOne ? 'Нельзя отвязать последний способ входа' : 'Отвязать'}
+										disabled={accounts.isPending !== null || lastOne || !isOnline}
+										title={!isOnline
+											? 'Недоступно в оффлайн-режиме'
+											: lastOne
+												? 'Нельзя отвязать последний способ входа'
+												: 'Отвязать'}
 										onclick={() => openUnlinkModal(provider.id)}
 									>
 										<Link2Off class="size-4" />
@@ -290,7 +308,8 @@
 									</Button>
 								{:else}
 									<Button
-										disabled={accounts.isPending !== null}
+										disabled={accounts.isPending !== null || !isOnline}
+										title={!isOnline ? 'Недоступно в оффлайн-режиме' : 'Привязать'}
 										onclick={() => linkProvider(provider.id)}
 									>
 										<Plus class="size-4" />
@@ -317,7 +336,8 @@
 					<Button
 						variant="outline"
 						class="text-destructive hover:text-destructive"
-						disabled={accounts.isPending !== null}
+						disabled={accounts.isPending !== null || !isOnline}
+						title={!isOnline ? 'Недоступно в оффлайн-режиме' : 'Удалить аккаунт'}
 						onclick={openDeleteModal}
 					>
 						<Trash2 class="size-4" />

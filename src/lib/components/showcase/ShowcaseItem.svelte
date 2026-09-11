@@ -24,14 +24,14 @@
 
 <section
 	use:inview={handleInView}
-	class="snap-start snap-always relative h-full w-full overflow-hidden flex flex-col justify-end px-8 md:px-16 lg:px-24 pb-24 md:pb-32"
+	class="relative flex h-full w-full snap-start snap-always flex-col justify-end overflow-hidden px-8 pb-24 md:px-16 md:pb-32 lg:px-24"
 >
 	<div class="max-w-2xl space-y-6">
-		<h1 class="text-4xl md:text-6xl font-extrabold tracking-tight text-foreground drop-shadow-md">
+		<h1 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
 			{book.title}
 		</h1>
 		<p
-			class="text-lg md:text-xl text-foreground/90 drop-shadow max-w-xl leading-relaxed line-clamp-3 md:line-clamp-4"
+			class="line-clamp-3 max-w-xl text-lg leading-relaxed text-foreground/90 drop-shadow md:line-clamp-4 md:text-xl"
 		>
 			{book.description}
 		</p>
@@ -42,7 +42,7 @@
 				href={resolve(`/books/${book.id}`)}
 				class="rounded-full px-8 text-base font-semibold shadow-lg shadow-primary/20"
 			>
-				<Play class="w-5 h-5 mr-2" />
+				<Play class="mr-2 h-5 w-5" />
 				Слушать
 			</Button>
 		</div>

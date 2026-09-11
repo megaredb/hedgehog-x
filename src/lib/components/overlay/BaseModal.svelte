@@ -55,7 +55,7 @@
 		{/if}
 
 		{#if footer}
-			<Dialog.Footer class="gap-2 min-w-0">{@render footer()}</Dialog.Footer>
+			<Dialog.Footer class="min-w-0 gap-2">{@render footer()}</Dialog.Footer>
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>

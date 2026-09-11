@@ -36,7 +36,7 @@
 
 <div
 	class={cn(
-		'group relative flex w-full cursor-pointer touch-none items-center select-none py-2',
+		'group relative flex w-full cursor-pointer touch-none items-center py-2 select-none',
 		disabled && 'pointer-events-none opacity-50',
 		className
 	)}
@@ -44,19 +44,19 @@
 >
 	<div
 		class={cn(
-			'bg-muted/60 relative w-full overflow-hidden rounded-full transition-all duration-200',
+			'relative w-full overflow-hidden rounded-full bg-muted/60 transition-all duration-200',
 			// Держим толщину при перетаскивании или наведении
 			isDragging ? 'h-2' : 'h-1 group-hover:h-2'
 		)}
 	>
 		<div
-			class="bg-muted-foreground/40 absolute left-0 h-full rounded-full transition-[width] duration-200"
+			class="absolute left-0 h-full rounded-full bg-muted-foreground/40 transition-[width] duration-200"
 			style="width: {pct(bufferValue)}"
 		></div>
 
 		<div
 			class={cn(
-				'bg-primary absolute left-0 h-full rounded-full',
+				'absolute left-0 h-full rounded-full bg-primary',
 				// Анимация работает всегда, КРОМЕ моментов, когда мы физически тащим ползунок
 				!isDragging && 'transition-[width] duration-200'
 			)}
@@ -66,11 +66,11 @@
 
 	<div
 		class={cn(
-			'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 size-3.5 rounded-full bg-primary shadow-sm pointer-events-none z-10',
+			'pointer-events-none absolute top-1/2 z-10 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-sm',
 			// Если тащим - кружок видим. Иначе показываем только при hover
 			isDragging
-				? 'opacity-100 scale-100'
-				: 'opacity-0 scale-0 group-hover:opacity-100 group-hover:scale-100',
+				? 'scale-100 opacity-100'
+				: 'scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100',
 			!isDragging && 'transition-all duration-200'
 		)}
 		style="left: {pct(value)}"
@@ -84,7 +84,7 @@
 		{value}
 		{disabled}
 		aria-valuenow={value}
-		class="absolute inset-0 h-full w-full cursor-pointer opacity-0 z-20"
+		class="absolute inset-0 z-20 h-full w-full cursor-pointer opacity-0"
 		oninput={handleInput}
 		onmousemove={onMouseMove}
 		ontouchstart={(e) => {

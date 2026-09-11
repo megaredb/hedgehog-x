@@ -14,9 +14,7 @@ precacheAndRoute(self.__WB_MANIFEST);
 const navigationStrategy = new NetworkFirst({
 	cacheName: 'pages-cache',
 	networkTimeoutSeconds: 3,
-	plugins: [
-		new CacheableResponsePlugin({ statuses: [200] })
-	]
+	plugins: [new CacheableResponsePlugin({ statuses: [200] })]
 });
 
 const navigationRoute = new NavigationRoute(async (params) => {

@@ -51,13 +51,13 @@
 		<Tooltip.Content sideOffset={4}>{tooltipLabel}</Tooltip.Content>
 	</Tooltip.Root>
 
-	<DropdownMenu.Content align="center" class={cn('flex flex-col min-w-8 gap-1.5 p-1.5', className)}>
+	<DropdownMenu.Content align="center" class={cn('flex min-w-8 flex-col gap-1.5 p-1.5', className)}>
 		<div class="flex flex-col items-center gap-2">
 			<!-- Fast reset to 100% button -->
 			<button
 				type="button"
 				aria-label="Сбросить скорость на 100%"
-				class="font-mono text-xs tabular-nums hover:text-primary transition-colors cursor-pointer"
+				class="cursor-pointer font-mono text-xs tabular-nums transition-colors hover:text-primary"
 				onclick={resetSpeed}
 			>
 				{speedPercent}%
@@ -81,7 +81,7 @@
 			<button
 				type="button"
 				aria-label="Сбросить скорость на 100%"
-				class="shrink-0 cursor-pointer opacity-60 hover:opacity-100 transition-opacity"
+				class="shrink-0 cursor-pointer opacity-60 transition-opacity hover:opacity-100"
 				onclick={resetSpeed}
 			>
 				<Gauge class="size-4 -scale-x-100" />

@@ -1,62 +1,115 @@
 import { authClient } from './authClient';
-import type { BetterFetchError } from '@better-fetch/fetch';
+import {
+	loadCachedSession,
+	saveCachedSession,
+	clearCachedSession,
+	clearCachedAccounts,
+	type SessionData
+} from './auth-storage';
 
-interface SessionData {
-	session: { id: string; userId: string; expiresAt: Date; token: string } | null;
-	user: {
-		id: string;
-		name: string;
-		email: string;
-		image?: string | null;
-		// Аватары/username каждого провайдера (доп.поля user)
-		telegramAvatar?: string | null;
-		telegramOidcUsername?: string | null;
-		discordAvatar?: string | null;
-		discordUsername?: string | null;
-	} | null;
+export type { SessionData };
+
+export interface SessionError {
+	message?: string;
+	status?: number;
+	statusText?: string;
 }
 
 interface SessionState {
 	data: SessionData | null;
-	error: BetterFetchError | null;
+	error: SessionError | null;
 	isPending: boolean;
 	isRefetching: boolean;
 	refetch: () => Promise<void>;
 }
 
 /**
- * Реактивная обёртка над сессией better-auth (nanostores atom) в стиле
- * useLiveQuery: вызывается внутри компонента, состояние живёт в $state.
+ * Реактивная обёртка над сессией better-auth с поддержкой оффлайн-режима:
+ * 1. Мгновенная гидратация из localStorage без задержек и мигания «Гость».
+ * 2. При потере связи или ошибке сети сессия НЕ сбрасывается.
+ * 3. Сессия аннулируется только при ответе 401/403 от сервера или истечении expiresAt.
  */
 export function useSession() {
 	const atom = authClient.useSession;
 
-	let data = $state<SessionData | null>(atom.get().data);
-	let error = $state<BetterFetchError | null>(atom.get().error);
-	let isPending = $state(atom.get().isPending);
+	const cached = loadCachedSession();
+	const serverState = atom.get() as unknown as SessionState;
+
+	const initialData = serverState?.data ?? cached;
+	let data = $state<SessionData | null>(initialData);
+	let error = $state<SessionError | null>(serverState?.error ?? null);
+	let isPending = $state(initialData ? false : (serverState?.isPending ?? true));
+
+	function syncState(state: SessionState) {
+		if (state.data) {
+			data = state.data;
+			error = null;
+			isPending = false;
+			saveCachedSession(state.data);
+		} else if (state.error) {
+			error = state.error;
+			isPending = false;
+			const status = state.error.status;
+			// 401/403: сервер явно отклонил сессию
+			if (status === 401 || status === 403) {
+				data = null;
+				clearCachedSession();
+			} else {
+				// Ошибка сети / таймаут / оффлайн: сохраняем кэш
+				const validCached = loadCachedSession();
+				if (validCached) {
+					data = validCached;
+				}
+			}
+		} else if (state.data === null && !state.isPending) {
+			// Сервер ответил null без ошибки (пользователь не авторизован)
+			if (typeof navigator !== 'undefined' && navigator.onLine) {
+				data = null;
+				clearCachedSession();
+			} else {
+				const validCached = loadCachedSession();
+				if (validCached) {
+					data = validCached;
+				}
+			}
+		} else {
+			isPending = state.isPending;
+		}
+	}
 
 	$effect(() => {
-		const state = atom.get();
-		data = state.data;
-		error = state.error;
-		isPending = state.isPending;
+		syncState(atom.get() as unknown as SessionState);
 		const unsubscribe = atom.listen((next: SessionState) => {
-			data = next.data;
-			error = next.error;
-			isPending = next.isPending;
+			syncState(next);
 		});
 		return unsubscribe;
 	});
 
+	// Проверка срока действия сессии по системным часам (строгий контроль)
+	const isExpired = $derived.by(() => {
+		const rawExpires = data?.session?.expiresAt;
+		if (!rawExpires) return false;
+		const expiresMs =
+			rawExpires instanceof Date ? rawExpires.getTime() : Date.parse(String(rawExpires));
+		return Number.isFinite(expiresMs) && expiresMs <= Date.now();
+	});
+
+	$effect(() => {
+		if (isExpired) {
+			data = null;
+			clearCachedSession();
+		}
+	});
+
 	return {
 		get data() {
-			return data;
+			return isExpired ? null : data;
 		},
 		get user() {
-			return data?.user ?? null;
+			return isExpired ? null : (data?.user ?? null);
 		},
 		get session() {
-			return data?.session ?? null;
+			return isExpired ? null : (data?.session ?? null);
 		},
 		get isPending() {
 			return isPending;
@@ -64,6 +117,22 @@ export function useSession() {
 		get error() {
 			return error;
 		},
-		refetch: () => atom.get().refetch()
+		refetch: async () => {
+			try {
+				await atom.get().refetch();
+			} catch (e) {
+				console.warn('[Session] Ошибка refetch:', e);
+			}
+		},
+		signOut: async () => {
+			clearCachedSession();
+			clearCachedAccounts();
+			data = null;
+			try {
+				await authClient.signOut();
+			} catch (e) {
+				console.warn('[Session] Ошибка signOut на сервере:', e);
+			}
+		}
 	};
 }

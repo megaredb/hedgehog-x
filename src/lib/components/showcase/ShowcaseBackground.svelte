@@ -65,6 +65,6 @@
 
 	<!-- Темный градиент поверх медиа для читаемости текста -->
 	<div
-		class="absolute inset-0 bg-linear-to-t from-background via-background/60 to-background/10 pointer-events-none"
+		class="pointer-events-none absolute inset-0 bg-linear-to-t from-background via-background/60 to-background/10"
 	></div>
 </div>

@@ -23,7 +23,7 @@
 	}: Props = $props();
 
 	const isLiveStream = $derived(htmlAudio.isLive(audioStore.duration));
-	const isDisabled = $derived(() => {
+	const isDisabled = $derived.by(() => {
 		if (!audioStore.currentTrack || isLiveStream) return true;
 		return audioStore.duration > 0 && audioStore.currentTime >= audioStore.duration;
 	});
@@ -45,13 +45,13 @@
 			<Button
 				class={cn(className)}
 				data-slot="audio-fast-forward-button"
-				disabled={isDisabled()}
+				disabled={isDisabled}
 				{size}
 				{variant}
+				{...rest}
 				{...props}
 				onclick={(e) => {
-					// @ts-expect-error
-					props.onclick?.(e);
+					(props as { onclick?: (e: MouseEvent) => void }).onclick?.(e);
 					handleClick(e);
 				}}
 			>

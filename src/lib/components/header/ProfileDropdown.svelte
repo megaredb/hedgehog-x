@@ -4,7 +4,6 @@
 	import { page } from '$app/state';
 	import { User, Settings, LogOut, LogIn } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import { authClient } from '$lib/client/authClient';
 	import { useSession } from '$lib/client/session.svelte';
 	import type { Snippet } from 'svelte';
 
@@ -33,8 +32,7 @@
 	});
 
 	async function signOut() {
-		await authClient.signOut();
-		await session.refetch();
+		await session.signOut();
 		await goto(resolve('/'));
 	}
 </script>
@@ -51,7 +49,7 @@
 				{@const Icon = link.icon}
 				<a href={link.href} class="w-full" onclick={onLinkClick}>
 					<DropdownMenu.Item class="cursor-pointer">
-						<Icon class="h-4 w-4 mr-2" />
+						<Icon class="mr-2 h-4 w-4" />
 						{link.label}
 					</DropdownMenu.Item>
 				</a>
@@ -61,7 +59,7 @@
 				class="text-destructive focus:bg-destructive/10 focus:text-destructive"
 				onclick={signOut}
 			>
-				<LogOut class="h-4 w-4 mr-2" />
+				<LogOut class="mr-2 h-4 w-4" />
 				Выйти
 			</DropdownMenu.Item>
 		</DropdownMenu.Content>

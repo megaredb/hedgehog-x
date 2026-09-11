@@ -76,8 +76,8 @@
 					{#snippet child({ props: dialogProps })}
 						<Button
 							class={cn(
-								'hidden md:flex items-center transition-all',
-								isTimerActive && 'border-primary text-primary bg-primary/10 font-mono font-medium',
+								'hidden items-center transition-all md:flex',
+								isTimerActive && 'border-primary bg-primary/10 font-mono font-medium text-primary',
 								className
 							)}
 							data-slot="audio-sleep-timer-button"
@@ -106,7 +106,7 @@
 		</Dialog.Header>
 
 		<!-- 3D Cylindrical Wheel Picker -->
-		<div class="py-4 flex flex-col items-center gap-4">
+		<div class="flex flex-col items-center gap-4 py-4">
 			<WheelPicker
 				options={PRESETS}
 				value={selectedDuration}
@@ -123,16 +123,16 @@
 			/>
 
 			<!-- Quick Preset Buttons -->
-			<div class="flex flex-wrap items-center justify-center gap-2 w-full pt-2">
+			<div class="flex w-full flex-wrap items-center justify-center gap-2 pt-2">
 				{#each QUICK_PRESETS as preset (preset)}
 					<button
 						type="button"
 						onclick={() => (selectedDuration = preset)}
 						class={cn(
-							'px-3 py-1 text-xs rounded-full border transition-all cursor-pointer font-medium',
+							'cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-all',
 							selectedDuration === preset
-								? 'bg-primary text-primary-foreground border-primary'
-								: 'bg-muted/40 hover:bg-muted text-muted-foreground border-border'
+								? 'border-primary bg-primary text-primary-foreground'
+								: 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'
 						)}
 					>
 						{preset === 'end_of_track' ? 'В конце главы' : `${preset} мин`}
