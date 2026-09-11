@@ -162,7 +162,7 @@
 
 <div class="mx-auto max-w-2xl p-6">
 	<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
-	<p class="text-muted-foreground mt-2">Профиль, идентификатор и способы входа.</p>
+	<p class="mt-2 text-muted-foreground">Профиль, идентификатор и способы входа.</p>
 
 	{#if session.isPending}
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>
@@ -187,7 +187,7 @@
 					<div class="min-w-0">
 						<p class="truncate text-xl font-semibold">{session.user.name}</p>
 						{#if lastProvider}
-							<p class="text-muted-foreground mt-1 flex items-center gap-1.5 text-sm">
+							<p class="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
 								<span class="inline-block size-2 rounded-full bg-emerald-500"></span>
 								Последний вход: {providerLabel(lastProvider)}
 							</p>
@@ -197,7 +197,7 @@
 
 				<dl class="mt-6 grid gap-3 text-sm sm:grid-cols-2">
 					<div class="rounded-lg bg-muted/40 p-3">
-						<dt class="text-xs uppercase tracking-wide text-muted-foreground">ID пользователя</dt>
+						<dt class="text-xs tracking-wide text-muted-foreground uppercase">ID пользователя</dt>
 						<dd class="mt-1 font-mono text-xs break-all text-foreground">{session.user.id}</dd>
 					</div>
 				</dl>
@@ -206,7 +206,7 @@
 			<!-- способы входа -->
 			<section class="mt-8">
 				<h2 class="text-xl font-bold tracking-tight">Способы входа</h2>
-				<p class="text-muted-foreground mt-1 text-sm">
+				<p class="mt-1 text-sm text-muted-foreground">
 					Привяжите несколько аккаунтов (Telegram, Discord), чтобы входить с любого из них.
 					Последний способ входа отвязать нельзя.
 				</p>
@@ -254,14 +254,22 @@
 									{/if}
 									<div class="min-w-0">
 										<p class="font-medium">{provider.label}</p>
-										<p class="text-xs text-muted-foreground truncate">
+										<p class="text-xs text-muted-foreground">
 											{#if linked}
 												{#if username}
-													@{username} <span class="mx-1">·</span> ID {accId}
+													<span class="block sm:inline">@{username}</span>
+													{#if accId}
+														<span class="mx-1 hidden sm:inline">·</span>
+														<span class="block sm:inline">ID {accId}</span>
+													{/if}
 												{:else if displayName}
-													{displayName} <span class="mx-1">·</span> ID {accId}
-												{:else}
-													ID {accId}
+													<span class="block sm:inline">{displayName}</span>
+													{#if accId}
+														<span class="mx-1 hidden sm:inline">·</span>
+														<span class="block sm:inline">ID {accId}</span>
+													{/if}
+												{:else if accId}
+													<span>ID {accId}</span>
 												{/if}
 											{:else}
 												{provider.description}
@@ -301,7 +309,7 @@
 					<ShieldAlert class="size-5" />
 					<h2 class="text-lg font-bold tracking-tight">Опасная зона</h2>
 				</div>
-				<p class="text-muted-foreground mt-1 text-sm">
+				<p class="mt-1 text-sm text-muted-foreground">
 					Удаление аккаунта навсегда стирает профиль, способы входа, закладки, прогресс
 					прослушивания и лайки. Действие необратимо.
 				</p>

@@ -47,7 +47,7 @@ export function useAccounts() {
 		error = null;
 		try {
 			// POST /link-social — привязывает OAuth-аккаунт к текущему пользователю
-			// (лучше-auth НЕ создаёт нового пользователя, а добавляет account).
+			// (better-auth НЕ создаёт нового пользователя, а добавляет account).
 			const res = await authClient.$fetch('/link-social', {
 				method: 'POST',
 				body: { provider: providerId, callbackURL }

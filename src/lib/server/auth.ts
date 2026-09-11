@@ -6,7 +6,7 @@ import { telegram } from 'better-auth-telegram';
 import { getRequestEvent } from '$app/server';
 import { db } from '$lib/server/db';
 
-// Динамический baseURL: лучше-auth сам определяет origin из запроса
+// Динамический baseURL: better-auth сам определяет origin из запроса
 // и добавляет все allowedHosts в trustedOrigins (иначе POST /api/auth/*
 // с заголовком Origin не пройдёт origin-check и вернёт 403 Invalid origin).
 // Протокол берётся из запроса (default 'auto'): для localhost — http, для
@@ -18,7 +18,7 @@ import { db } from '$lib/server/db';
 //   BETTER_AUTH_FALLBACK_URL — URL, используемый, когда origin не определяется
 //     из запроса (опционально).
 // Если BETTER_AUTH_ALLOWED_HOSTS не задан — baseURL не передаётся, и
-// лучше-auth сам выводит origin из запроса.
+// better-auth сам выводит origin из запроса.
 const allowedHosts = env.BETTER_AUTH_ALLOWED_HOSTS
 	? env.BETTER_AUTH_ALLOWED_HOSTS.split(',')
 			.map((h) => h.trim())
@@ -39,20 +39,7 @@ const baseURL = allowedHosts?.length
  * формат `{bot_id}{user_id}` (бот-токен, часть до «:» — префикс).
  */
 function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): string | null {
-	// Приоритет: claims.id — официальный telegram id пользователя.
-	if (typeof claims.id === 'number' && Number.isFinite(claims.id)) {
-		return String(claims.id);
-	}
-	const sub = typeof claims.sub === 'string' ? claims.sub : '';
-	if (!/^\d+$/.test(sub)) return null;
-	const botId = env.TELEGRAM_BOT_TOKEN?.split(':')[0] ?? '';
-	// sub = [bot_id][user_id]: bot_id фиксированной длины (цифры из токена).
-	if (botId && sub.startsWith(botId)) {
-		const userId = sub.slice(botId.length);
-		return userId.length > 0 ? userId : null;
-	}
-	// Фолбэк: отрезаем первые 12 цифр (стандартная длина bot_id в sub).
-	return sub.length > 12 ? sub.slice(12) : null;
+	return String(claims.id);
 }
 
 export const auth = betterAuth({
@@ -119,7 +106,7 @@ export const auth = betterAuth({
 					try {
 						// context: GenericEndpointContext | null — request доступен
 						// на самом context (EndpointContext better-call), а
-						// internalAdapter — в context.context. Типы лучше-auth не
+						// internalAdapter — в context.context. Типы better-auth не
 						// описывают request на AuthContext и доп.поля user, поэтому
 						// сужаем через минимальный локальный интерфейс.
 						const ctx = context as unknown as {

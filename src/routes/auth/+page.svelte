@@ -55,7 +55,7 @@
 		isSubmitting = provider.id;
 		errorMessage = null;
 		try {
-			// Лучше-auth сам создаёт состояние и редиректит на страницу провайдера:
+			// better-auth сам создаёт состояние и редиректит на страницу провайдера:
 			// Telegram -> oauth.telegram.org (OIDC), Discord -> discord.com (OAuth2).
 			const result = (await authClient.signIn.social({
 				provider: provider.id,
