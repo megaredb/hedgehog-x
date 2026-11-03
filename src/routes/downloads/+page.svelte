@@ -23,13 +23,13 @@
 	const activeGroups = $derived.by(() => {
 		const groups = new SvelteMap<string, typeof manager.queuedChapters>();
 
-		// Сначала добавляем активные
+		// Add active downloads first
 		for (const ch of manager.downloadingChapters) {
 			if (!groups.has(ch.chapter.volumeId)) groups.set(ch.chapter.volumeId, []);
 			groups.get(ch.chapter.volumeId)!.push(ch);
 		}
 
-		// Затем в очереди
+		// Then append queued downloads
 		for (const ch of manager.queuedChapters) {
 			if (!groups.has(ch.chapter.volumeId)) groups.set(ch.chapter.volumeId, []);
 			groups.get(ch.chapter.volumeId)!.push(ch);
@@ -219,7 +219,7 @@
 									class="hover:text-destructive-foreground mr-2 shrink-0 text-destructive transition-colors hover:bg-destructive"
 									onclick={(e) => {
 										e.stopPropagation();
-										// Отменить все скачанные главы в томе
+										// Cancel and remove all downloaded chapters for volume
 										group.items.forEach(({ chapter }) => {
 											manager.deleteDownload(chapter.id);
 										});

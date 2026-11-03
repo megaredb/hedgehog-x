@@ -9,7 +9,7 @@ class ProgressSyncService {
 		{ chapterId: string; progressSeconds: number; isCompleted: boolean }
 	>();
 	private syncTimer: ReturnType<typeof setTimeout> | null = null;
-	private readonly BATCH_INTERVAL_MS = 30000; // 30 секунд
+	private readonly BATCH_INTERVAL_MS = 30000;
 
 	constructor() {
 		if (typeof window !== 'undefined') {
@@ -24,7 +24,7 @@ class ProgressSyncService {
 	}
 
 	/**
-	 * Добавляет прогресс в очередь на отправку. Вызывается из плеера.
+	 * Records playback progress in memory to batch sync requests.
 	 */
 	recordProgress(chapterId: string, progressSeconds: number, isCompleted = false) {
 		this.pendingUpdates.set(chapterId, {
@@ -41,7 +41,7 @@ class ProgressSyncService {
 	}
 
 	/**
-	 * Принудительная отправка накопленного прогресса (при паузе, окончании трека или закрытии страницы).
+	 * Flushes pending progress immediately to the server or offline queue.
 	 */
 	async flushImmediately() {
 		if (this.syncTimer) {
@@ -55,16 +55,15 @@ class ProgressSyncService {
 		this.pendingUpdates.clear();
 
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			// Сохраняем в оффлайн-очередь Dexie
 			try {
 				await db.syncQueue.add({
 					action: 'UPDATE_PROGRESS',
 					payload: updates,
 					timestamp: Date.now()
 				});
-				log.debug('Прогресс сохранен в оффлайн-очередь syncQueue.');
+				log.debug('Progress saved to offline syncQueue.');
 			} catch (err) {
-				log.warn('Ошибка сохранения в syncQueue:', err);
+				log.warn('Failed to save progress to syncQueue:', err);
 			}
 			return;
 		}
@@ -77,17 +76,16 @@ class ProgressSyncService {
 			});
 
 			if (!res.ok && res.status !== 401) {
-				// Ошибка сети — возвращаем в оффлайн-очередь
 				await db.syncQueue.add({
 					action: 'UPDATE_PROGRESS',
 					payload: updates,
 					timestamp: Date.now()
 				});
 			} else if (res.ok) {
-				log.debug(`Успешно синхронизирован прогресс ${updates.length} глав.`);
+				log.debug(`Synced progress for ${updates.length} chapters.`);
 			}
 		} catch (err) {
-			log.warn('Ошибка отправки прогресса на сервер, сохраняем в очередь:', err);
+			log.warn('Failed to send progress to server, enqueuing offline:', err);
 			await db.syncQueue
 				.add({
 					action: 'UPDATE_PROGRESS',
@@ -99,7 +97,7 @@ class ProgressSyncService {
 	}
 
 	/**
-	 * Сбрасывает сохраненные в Dexie оффлайн-пакеты при появлении сети.
+	 * Flushes enqueued offline progress updates when connectivity returns.
 	 */
 	async flushOfflineQueue() {
 		try {
@@ -122,9 +120,9 @@ class ProgressSyncService {
 					await db.syncQueue.delete(item.id);
 				}
 			}
-			log.info('Оффлайн-очередь прогресса успешно отправлена на сервер.');
+			log.info('Offline progress queue flushed to server.');
 		} catch (err) {
-			log.warn('Не удалось сбросить оффлайн-очередь:', err);
+			log.warn('Failed to flush offline progress queue:', err);
 		}
 	}
 }

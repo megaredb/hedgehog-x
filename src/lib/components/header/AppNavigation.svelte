@@ -17,13 +17,14 @@
 	import ThemeSwitchButton from './ThemeSwitchButton.svelte';
 	import ProfileDropdown from './ProfileDropdown.svelte';
 	import { useSession } from '$lib/client/session.svelte';
+	import { strings } from '$lib/constants/strings';
 
 	const session = useSession();
 
 	let y = $state(0);
 	let isMobileMenuOpen = $state(false);
 
-	// Проверяем, активна ли ссылка
+	// Check whether the route is currently active
 	const isActive = (path: string) => {
 		if (path === '/') {
 			return page.url.pathname === '/' || page.url.pathname.startsWith('/books/');
@@ -33,20 +34,20 @@
 
 	const groups = [
 		{
-			title: 'Библиотека',
+			title: strings.nav.library,
 			links: [
-				{ href: resolve('/'), icon: BookOpen, label: 'Каталог' },
-				{ href: resolve('/bookmarks'), icon: Bookmark, label: 'Закладки' },
-				{ href: resolve('/history'), icon: HistoryIcon, label: 'История' },
-				{ href: resolve('/downloads'), icon: Download, label: 'Загрузки' }
+				{ href: resolve('/'), icon: BookOpen, label: strings.nav.catalog },
+				{ href: resolve('/bookmarks'), icon: Bookmark, label: strings.nav.bookmarks },
+				{ href: resolve('/history'), icon: HistoryIcon, label: strings.nav.history },
+				{ href: resolve('/downloads'), icon: Download, label: strings.nav.downloads }
 			]
 		},
 		{
-			title: 'Информация',
+			title: strings.nav.info,
 			links: [
-				{ href: resolve('/community'), icon: Users, label: 'Сообщество' },
-				{ href: resolve('/support'), icon: Heart, label: 'Поддержать' },
-				{ href: resolve('/about'), icon: Info, label: 'О сайте' }
+				{ href: resolve('/community'), icon: Users, label: strings.nav.community },
+				{ href: resolve('/support'), icon: Heart, label: strings.nav.support },
+				{ href: resolve('/about'), icon: Info, label: strings.nav.about }
 			]
 		}
 	];
@@ -55,7 +56,7 @@
 <svelte:window bind:scrollY={y} />
 
 {#snippet navContent(onLinkClick: () => void)}
-	<!-- Логотип + Название -->
+	<!-- Brand logo and name -->
 	<div class="mb-8 flex items-center gap-3 px-2 select-none">
 		<div
 			class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 shadow-sm"
@@ -65,11 +66,11 @@
 		<span
 			class="bg-linear-to-r from-foreground to-foreground/80 bg-clip-text text-lg font-extrabold tracking-tight text-transparent"
 		>
-			HEDGEHOG.INC
+			{strings.common.appName}
 		</span>
 	</div>
 
-	<!-- Основная навигация -->
+	<!-- Main navigation -->
 	<nav class="flex flex-1 flex-col gap-6">
 		{#each groups as group (group.title)}
 			<div class="space-y-1">
@@ -102,7 +103,7 @@
 		{/each}
 	</nav>
 
-	<!-- Нижний блок с профилем -->
+	<!-- Footer with profile -->
 	<div class="mt-auto flex items-center justify-between gap-2 border-t border-border/40 px-1 pt-4">
 		<ProfileDropdown
 			{onLinkClick}
@@ -127,14 +128,18 @@
 			{:else}
 				<div class="flex items-center gap-3">
 					<Avatar.Root class="h-9 w-9 border border-border/80 shadow-sm">
-						<Avatar.Image src="/logo.webp" alt="Гость" />
+						<Avatar.Image src="/logo.webp" alt={strings.common.guest} />
 						<Avatar.Fallback class="bg-primary/5 text-xs font-semibold text-primary"
 							>Г</Avatar.Fallback
 						>
 					</Avatar.Root>
 					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm leading-snug font-semibold text-foreground">Гость</p>
-						<p class="truncate text-xs leading-normal text-muted-foreground">Войдите в аккаунт</p>
+						<p class="truncate text-sm leading-snug font-semibold text-foreground">
+							{strings.common.guest}
+						</p>
+						<p class="truncate text-xs leading-normal text-muted-foreground">
+							{strings.common.signIn}
+						</p>
 					</div>
 				</div>
 			{/if}
@@ -146,19 +151,19 @@
 	</div>
 {/snippet}
 
-<!-- ДЕСКТОПНЫЙ САЙДБАР -->
+<!-- Desktop sidebar -->
 <aside
 	class="sticky top-0 z-10 hidden h-screen w-64 shrink-0 flex-col border-r border-border/40 bg-muted/30 px-4 py-6 shadow-[4px_0_24px_rgba(0,0,0,0.04)] backdrop-blur-xl lg:flex dark:shadow-[4px_0_24px_rgba(0,0,0,0.2)]"
 >
 	{@render navContent(() => {})}
 </aside>
 
-<!-- МОБИЛЬНЫЙ ХЭДЕР -->
+<!-- Mobile header -->
 <header
 	class="sticky top-0 z-40 flex w-full items-center justify-between border-b px-4 py-3 transition-all duration-300 lg:hidden
 	{y > 10 ? 'border-border/40 bg-background/80 shadow-sm backdrop-blur-md' : 'border-transparent'}"
 >
-	<!-- Левая часть: бургер-меню -->
+	<!-- Left: Drawer menu -->
 	<div class="flex items-center gap-3">
 		<Sheet.Root bind:open={isMobileMenuOpen}>
 			<Sheet.Trigger>
@@ -182,7 +187,7 @@
 			</Sheet.Content>
 		</Sheet.Root>
 
-		<!-- Круглый логотип + Название -->
+		<!-- Logo + name -->
 		<a href={resolve('/')} class="flex items-center gap-2 select-none">
 			<div
 				class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 shadow-sm"
@@ -192,12 +197,12 @@
 			<span
 				class="text-md bg-linear-to-r from-foreground to-foreground/80 bg-clip-text font-extrabold tracking-tight text-transparent"
 			>
-				HEDGEHOG.INC
+				{strings.common.appName}
 			</span>
 		</a>
 	</div>
 
-	<!-- Правая часть: быстрый профиль -->
+	<!-- Right: Quick profile -->
 	<div class="flex items-center gap-2">
 		<ProfileDropdown
 			align="end"

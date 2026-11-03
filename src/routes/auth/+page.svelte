@@ -17,13 +17,12 @@
 
 	const from = $derived.by(() => {
 		const raw = page.url.searchParams.get('from') ?? resolve('/');
-		// Страница входа — туда возвращаться нельзя (цикл). Уводим на главную.
+		// Prevent redirect loop if 'from' is auth page
 		if (raw === resolve('/auth')) return resolve('/');
 		return raw;
 	});
 
-	// Если провайдер вернул нас с ошибкой (отмена авторизации, access_denied
-	// и т.п.) — показываем модальное окно с сообщением.
+	// Handle OAuth error parameters in query string
 	$effect(() => {
 		if (session.user) return;
 		const params = page.url.searchParams;
@@ -34,8 +33,7 @@
 					? 'Вы отменили авторизацию. Вход не выполнен.'
 					: decodeURIComponent(err).replace(/^[A-Za-z_]+:\s*/, '');
 			errorModalOpen = true;
-			// Чистим URL от параметров ошибки, чтобы при повторном визите
-			// модалка не открывалась снова.
+			// Clean error query parameters from URL
 			const url = new URL(window.location.href);
 			url.searchParams.delete('error');
 			url.searchParams.delete('error_description');
@@ -54,8 +52,7 @@
 		isSubmitting = provider.id;
 		errorMessage = null;
 		try {
-			// better-auth сам создаёт состояние и редиректит на страницу провайдера:
-			// Telegram -> oauth.telegram.org (OIDC), Discord -> discord.com (OAuth2).
+			// Trigger social sign-in via better-auth
 			const result = (await authClient.signIn.social({
 				provider: provider.id,
 				callbackURL: from

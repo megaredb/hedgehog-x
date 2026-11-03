@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 export const GET = async ({ params, request }) => {
 	const { bookId } = params;
 
-	// Получаем полное дерево (Книга -> Тома -> Главы)
+	// Fetch full book hierarchy (Book -> Volumes -> Chapters & Illustrations)
 	const bookData = await db.query.books.findFirst({
 		where: (books, { eq }) => eq(books.id, bookId),
 		with: {
@@ -36,10 +36,10 @@ export const GET = async ({ params, request }) => {
 
 	const etag = `W/"${maxUpdatedAt}"`;
 
-	// Проверяем If-None-Match от клиента
+	// Check client If-None-Match ETag header
 	const clientEtag = request.headers.get('if-none-match');
 	if (clientEtag === etag) {
-		return new Response(null, { status: 304 }); // 0 байт тело ответа!
+		return new Response(null, { status: 304 });
 	}
 
 	const payloadString = JSON.stringify(bookData);

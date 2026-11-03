@@ -8,26 +8,16 @@ const log = createLogger('Sync');
 export const load: LayoutLoad = async ({ params, fetch }) => {
 	const { bookId } = params;
 
-	// Этот лоадер выполняется ПЕРЕД рендером любой страницы внутри /books/[bookId]/*
-	// Включая саму страницу книги, страницу тома или плеера.
-
 	if (browser) {
-		// Фоновая синхронизация всей структуры книги (тома + главы) в Dexie.
-		// Запрашиваем с сервера, работает ETag, гидратируется Dexie.
-		// Мы не ставим `await`, чтобы не блокировать мгновенный рендер
-		// страницы данными из локального Dexie кэша.
+		// Asynchronous background sync of book structure into Dexie
 		syncService
 			.syncBookDetails(bookId, fetch)
-			.catch((err) => log.error('Не удалось синхронизировать данные книги:', err));
+			.catch((err) => log.error('Failed to sync book data:', err));
 
-		// Параллельно стягиваем приватные данные юзера (лайки, прогресс)
-		// Эндпоинт сам поймет, если юзер не залогинен, и ничего не вернет.
-		syncService
-			.syncUserData(fetch)
-			.catch((err) => log.error('Не удалось синхронизировать данные пользователя:', err));
+		// Parallel sync of user-specific data (likes, progress, bookmarks)
+		syncService.syncUserData(fetch).catch((err) => log.error('Failed to sync user data:', err));
 	}
 
-	// Отдаем bookId вниз, чтобы страницы знали, что они рендерят
 	return {
 		bookId
 	};

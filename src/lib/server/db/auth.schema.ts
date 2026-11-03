@@ -12,16 +12,13 @@ export const user = pgTable('user', {
 		.defaultNow()
 		.$onUpdate(() => /* @__PURE__ */ new Date())
 		.notNull(),
-	// (telegram_id, telegram_phone_number, telegram_username удалены:
-	// widget-режим Telegram выключен, колонки дропнуты миграцией 0005)
-	// Аватар и username из Telegram (OIDC) — хранятся отдельно, чтобы
-	// показывать их именно в карточке Telegram-способа входа.
+	// Telegram OIDC provider details
 	telegramAvatar: text('telegram_avatar'),
 	telegramOidcUsername: text('telegram_oidc_username'),
-	// Аватар и username из Discord — отдельно для карточки Discord.
+	// Discord provider details
 	discordAvatar: text('discord_avatar'),
 	discordUsername: text('discord_username'),
-	// Роль пользователя: 'user' | 'admin'
+	// User role: 'user' | 'admin'
 	role: text('role').default('user').notNull()
 });
 
@@ -64,7 +61,6 @@ export const account = pgTable(
 		updatedAt: timestamp('updated_at')
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull()
-		// (telegram_id, telegram_username в account удалены — см. 0005)
 	},
 	(table) => [index('account_userId_idx').on(table.userId)]
 );

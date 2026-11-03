@@ -29,9 +29,8 @@
 		onValueChange?.([Number(e.currentTarget.value)]);
 	}
 
-	// === УЛУЧШЕННАЯ ЛОГИКА ПЕРЕТАСКИВАНИЯ ===
-	let isPointerDown = false; // Зажата ли кнопка мыши/палец
-	let isDragging = $state(false); // Начали ли мы физически тащить ползунок
+	let isPointerDown = false;
+	let isDragging = $state(false);
 </script>
 
 <div
@@ -45,7 +44,6 @@
 	<div
 		class={cn(
 			'relative w-full overflow-hidden rounded-full bg-muted/60 transition-all duration-200',
-			// Держим толщину при перетаскивании или наведении
 			isDragging ? 'h-2' : 'h-1 group-hover:h-2'
 		)}
 	>
@@ -57,7 +55,6 @@
 		<div
 			class={cn(
 				'absolute left-0 h-full rounded-full bg-primary',
-				// Анимация работает всегда, КРОМЕ моментов, когда мы физически тащим ползунок
 				!isDragging && 'transition-[width] duration-200'
 			)}
 			style="width: {pct(value)}"
@@ -67,7 +64,6 @@
 	<div
 		class={cn(
 			'pointer-events-none absolute top-1/2 z-10 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-sm',
-			// Если тащим - кружок видим. Иначе показываем только при hover
 			isDragging
 				? 'scale-100 opacity-100'
 				: 'scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100',
@@ -92,7 +88,6 @@
 			onTouchStart?.(e);
 		}}
 		ontouchmove={(e) => {
-			// Отключаем анимацию только если начали водить пальцем
 			if (isPointerDown) isDragging = true;
 			onTouchMove?.(e);
 		}}
@@ -104,7 +99,6 @@
 			isPointerDown = true;
 		}}
 		onpointermove={() => {
-			// Отключаем анимацию только если двигаем зажатой мышью
 			if (isPointerDown) isDragging = true;
 		}}
 		onpointerup={() => {

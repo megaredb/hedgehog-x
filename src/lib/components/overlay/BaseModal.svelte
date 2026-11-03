@@ -7,7 +7,7 @@
 		title?: string;
 		description?: string;
 		widthClass?: string;
-		/** Показывать ли «крестик» закрытия. По умолчанию true. */
+		/** Whether to show close button. Defaults to true. */
 		showCloseButton?: boolean;
 		onClose?: () => void;
 		children?: import('svelte').Snippet;

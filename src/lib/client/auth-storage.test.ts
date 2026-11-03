@@ -13,7 +13,7 @@ import {
 } from './auth-storage';
 import type { LinkedAccount } from './accounts.svelte';
 
-// Тестовый mock localStorage в Node окружении
+// In-memory mock for localStorage in Node test environment
 class LocalStorageMock {
 	private store = new Map<string, string>();
 

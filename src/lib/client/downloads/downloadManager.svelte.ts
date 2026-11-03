@@ -108,7 +108,7 @@ async function performDownload(chapter: OfflineChapter) {
 
 		if (!reader) throw new Error('Stream reading not supported');
 
-		// Удаляем из старого кэша, если вдруг он там застрял
+		// Clean previous cached copy if present
 		try {
 			const cache = await caches.open('audio-cache');
 			await cache.delete(chapter.audioUrl);

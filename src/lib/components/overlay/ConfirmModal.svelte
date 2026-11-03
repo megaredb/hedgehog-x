@@ -6,17 +6,17 @@
 		open: boolean;
 		title: string;
 		description?: string;
-		/** Текст на кнопке подтверждения. */
+		/** Confirm button label */
 		confirmLabel?: string;
-		/** Текст на кнопке отмены. */
+		/** Cancel button label */
 		cancelLabel?: string;
-		/** Фирменный (акцентный) стиль кнопки отмены. По умолчанию true. */
+		/** Accent style for cancel button. Defaults to true */
 		accentCancel?: boolean;
-		/** busy-состояние кнопки подтверждения. */
+		/** Confirming loading state */
 		confirming?: boolean;
-		/** disabled у кнопки подтверждения. */
+		/** Confirm button disabled state */
 		confirmDisabled?: boolean;
-		/** Показывать ли «крестик» закрытия. */
+		/** Whether to show close button */
 		showCloseButton?: boolean;
 		onConfirm?: () => void;
 		onCancel?: () => void;

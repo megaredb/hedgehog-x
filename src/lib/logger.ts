@@ -8,16 +8,16 @@ export const LOG_LEVELS: Record<LogLevel, number> = {
 };
 
 const BROWSER_COLORS: Record<string, string> = {
-	Auth: '#8b5cf6', // фиолетовый
-	Audio: '#06b6d4', // бирюзовый
-	Sync: '#10b981', // изумрудный
-	Storage: '#f59e0b', // янтарный
-	Downloads: '#3b82f6', // синий
-	DB: '#6366f1', // индиго
-	SW: '#ec4899', // розовый
-	API: '#ef4444', // красный
-	App: '#14b8a6', // тил
-	Default: '#64748b' // сланец
+	Auth: '#8b5cf6',
+	Audio: '#06b6d4',
+	Sync: '#10b981',
+	Storage: '#f59e0b',
+	Downloads: '#3b82f6',
+	DB: '#6366f1',
+	SW: '#ec4899',
+	API: '#ef4444',
+	App: '#14b8a6',
+	Default: '#64748b'
 };
 
 export interface Logger {
@@ -50,10 +50,10 @@ function isDev(): boolean {
 }
 
 /**
- * Определяет текущий минимальный уровень логов:
- * - В dev-режиме: 'debug'
- * - В production в браузере: 'warn' (можно переопределить через localStorage.setItem('LOG_LEVEL', 'debug'))
- * - В production на сервере: 'info'
+ * Resolves current minimum logging level:
+ * - In development mode: 'debug'
+ * - In production browser: 'warn' (overridable via localStorage.getItem('LOG_LEVEL'))
+ * - In production server: 'info'
  */
 export function getMinLogLevel(): LogLevel {
 	if (isDev()) return 'debug';
@@ -62,7 +62,7 @@ export function getMinLogLevel(): LogLevel {
 			const override = localStorage.getItem('LOG_LEVEL') as LogLevel;
 			if (override && override in LOG_LEVELS) return override;
 		} catch {
-			// localStorage недоступен
+			// localStorage unavailable
 		}
 		return 'warn';
 	}
@@ -70,8 +70,8 @@ export function getMinLogLevel(): LogLevel {
 }
 
 /**
- * Создаёт скоупированный логгер для модуля или компонента.
- * Безопасен для SSR, Node.js, браузера и Service Worker.
+ * Creates a scoped logger for a module or component.
+ * Safe for SSR, Node.js, browser and Service Worker environments.
  */
 export function createLogger(tag: string): Logger {
 	const color = BROWSER_COLORS[tag] ?? BROWSER_COLORS.Default;

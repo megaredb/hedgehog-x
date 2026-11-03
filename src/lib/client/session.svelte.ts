@@ -27,10 +27,10 @@ interface SessionState {
 }
 
 /**
- * Реактивная обёртка над сессией better-auth с поддержкой оффлайн-режима:
- * 1. Мгновенная гидратация из localStorage без задержек и мигания «Гость».
- * 2. При потере связи или ошибке сети сессия НЕ сбрасывается.
- * 3. Сессия аннулируется только при ответе 401/403 от сервера или истечении expiresAt.
+ * Reactive wrapper for better-auth session with offline resilience:
+ * 1. Instant hydration from localStorage
+ * 2. Network errors retain cached credentials
+ * 3. Invalidation occurs strictly on 401/403 or session expiration
  */
 export function useSession() {
 	const atom = authClient.useSession;
@@ -53,19 +53,19 @@ export function useSession() {
 			error = state.error;
 			isPending = false;
 			const status = state.error.status;
-			// 401/403: сервер явно отклонил сессию
+			// Explicit unauthorized status
 			if (status === 401 || status === 403) {
 				data = null;
 				clearCachedSession();
 			} else {
-				// Ошибка сети / таймаут / оффлайн: сохраняем кэш
+				// Network or offline issue: preserve cache
 				const validCached = loadCachedSession();
 				if (validCached) {
 					data = validCached;
 				}
 			}
 		} else if (state.data === null && !state.isPending) {
-			// Сервер ответил null без ошибки (пользователь не авторизован)
+			// Unauthenticated response
 			isPending = false;
 			if (typeof navigator !== 'undefined' && navigator.onLine) {
 				data = null;
@@ -89,7 +89,7 @@ export function useSession() {
 		return unsubscribe;
 	});
 
-	// Проверка срока действия сессии по системным часам (строгий контроль)
+	// Strict expiration check based on system clock
 	const isExpired = $derived.by(() => {
 		const rawExpires = data?.session?.expiresAt;
 		if (!rawExpires) return false;

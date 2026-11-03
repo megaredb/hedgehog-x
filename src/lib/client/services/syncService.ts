@@ -25,7 +25,7 @@ type ServerBookWithRelations = ServerBook & {
 
 export const syncService = {
 	/**
-	 * Стягивает список книг с бэкенда и сохраняет в локальный Dexie.
+	 * Fetches the book catalog from the server and hydrates local Dexie storage.
 	 */
 	async syncBooks(fetchFn: typeof fetch = fetch) {
 		try {
@@ -40,7 +40,7 @@ export const syncService = {
 			}
 			return offlineBooks;
 		} catch (e) {
-			log.info('Синхронизация каталога не удалась (Оффлайн). Используем данные из Dexie.', e);
+			log.info('Catalog sync skipped (Offline). Using cached Dexie data.', e);
 			if (browser) {
 				return await db.books.toArray();
 			}
@@ -49,17 +49,15 @@ export const syncService = {
 	},
 
 	/**
-	 * Стягивает конкретную книгу со всеми её томами и главами.
-	 * Поддерживает ETag: если сервер вернет 304 Not Modified, функция просто
-	 * завершится, не делая лишней работы с локальной базой.
+	 * Fetches book details with relations (volumes, chapters, illustrations).
+	 * Supports ETag: skips hydration if 304 Not Modified.
 	 */
 	async syncBookDetails(bookId: string, fetchFn: typeof fetch = fetch) {
 		try {
 			const res = await fetchFn(`/api/books/${bookId}`);
 
-			// Если сервер вернул 304, значит данные в локальном кэше (Dexie) полностью актуальны!
 			if (res.status === 304) {
-				log.debug(`Данные для книги ${bookId} актуальны (304 Not Modified).`);
+				log.debug(`Book data for ${bookId} is up to date (304 Not Modified).`);
 				return;
 			}
 
@@ -67,7 +65,6 @@ export const syncService = {
 
 			const bookData: ServerBookWithRelations = await res.json();
 
-			// 1. Подготовка плоских массивов для Dexie
 			const offlineBook = mapServerBookToOfflineBook(bookData);
 			const offlineVolumes = bookData.volumes.map(mapServerVolumeToOfflineVolume);
 			const offlineChapters = bookData.volumes.flatMap((v) =>
@@ -77,13 +74,11 @@ export const syncService = {
 				v.illustrations.map(mapServerIllustrationToOfflineIllustration)
 			);
 
-			// Для корректного удаления старых глав/иллюстраций нам нужны ID всех томов этой книги (включая удаленные на сервере)
 			const existingVolumes = await db.volumes.where('bookId').equals(bookId).toArray();
 			const allVolumeIds = Array.from(
 				new Set([...existingVolumes.map((v) => v.id), ...offlineVolumes.map((v) => v.id)])
 			);
 
-			// 2. Параллельная гидратация всех связанных таблиц с очисткой удаленных
 			await Promise.all([
 				hydrate('books', offlineBook),
 				hydrate('volumes', offlineVolumes, { index: 'bookId', values: [bookId] }),
@@ -91,16 +86,14 @@ export const syncService = {
 				hydrate('illustrations', offlineIllustrations, { index: 'volumeId', values: allVolumeIds })
 			]);
 
-			log.info(`Книга ${bookId} успешно синхронизирована.`);
+			log.info(`Book ${bookId} synchronized successfully.`);
 		} catch (e) {
-			log.info(`Оффлайн: данные для книги ${bookId} читаются из Dexie.`, e);
-			// В случае ошибки ничего не делаем, UI-руна прочитает старые данные из Dexie
+			log.info(`Offline: Reading book data for ${bookId} from Dexie.`, e);
 		}
 	},
 
 	/**
-	 * Стягивает личные данные текущего пользователя (Лайки, Прогресс, Закладки)
-	 * Этот метод легкий и выполняется независимо от стягивания большой книги.
+	 * Synchronizes user data (likes, progress, bookmarks).
 	 */
 	async syncUserData(fetchFn: typeof fetch = fetch) {
 		try {
@@ -116,9 +109,9 @@ export const syncService = {
 				hydrate('bookmarks', userData.bookmarks || [], 'all')
 			]);
 
-			log.info('Пользовательские данные успешно синхронизированы с сервером.');
+			log.info('User data synchronized successfully with server.');
 		} catch (e) {
-			log.info('Синхронизация пользовательских данных не удалась (Оффлайн).', e);
+			log.info('User data sync skipped (Offline).', e);
 		}
 	}
 };

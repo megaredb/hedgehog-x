@@ -11,21 +11,19 @@
 		isVideoPlaying: boolean;
 	} = $props();
 
-	// Массив ссылок на элементы видео для управления воспроизведением
+	// Video element references for playback management
 	let videoElements = $state<(HTMLVideoElement | null)[]>([]);
 
-	// Эффект для автоматического воспроизведения/паузы
+	// Play active video and pause inactive videos
 	$effect(() => {
 		videoElements.forEach((video, index) => {
 			if (!video) return;
 
 			if (index === currentIndex && isVideoPlaying) {
-				// Пытаемся воспроизвести только активное видео
 				video.play().catch(() => {
-					// Игнорируем ошибку автоплея браузера, если пользователь еще не взаимодействовал с документом
+					// Ignore browser autoplay restrictions
 				});
 			} else {
-				// Останавливаем все остальные видео или если настройка выключена
 				video.pause();
 			}
 		});

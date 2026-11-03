@@ -3,19 +3,15 @@ import DiscordIcon from '$lib/components/ui/brand-icons/DiscordIcon.svelte';
 import type { Component } from 'svelte';
 
 /**
- * Описание способа авторизации (OAuth-провайдера) для UI.
- * providerId совпадает с providerId в таблице account better-auth.
+ * UI description of supported OAuth providers.
  */
 export interface AuthProvider {
 	id: string;
 	label: string;
 	description: string;
 	icon: Component;
-	/** Фирменный цвет платформы (для кнопки входа). */
 	brandColor: string;
-	/** Имя поля в session.user, где хранится аватар этого провайдера. */
 	userAvatarField: string;
-	/** Имя поля в session.user, где хранится username этого провайдера. */
 	userUsernameField: string;
 }
 
@@ -40,12 +36,12 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
 	}
 ];
 
-/** Доступный для текущей настройки способ входа (все, что настроены в auth.ts). */
+/** Looks up provider configuration by ID */
 export function getProvider(id: string): AuthProvider | undefined {
 	return AUTH_PROVIDERS.find((p) => p.id === id);
 }
 
-/** Человекочитаемое название провайдера по его id. */
+/** Human-readable provider label */
 export function providerLabel(id: string): string {
 	return getProvider(id)?.label ?? id;
 }
@@ -60,7 +56,7 @@ export type SessionUser = {
 	[key: string]: unknown;
 } | null;
 
-/** Аватар пользователя, полученный от конкретного провайдера. */
+/** User avatar received from a specific provider */
 export function providerAvatar(providerId: string, user: SessionUser): string | null {
 	const provider = getProvider(providerId);
 	if (!provider || !user) return null;
@@ -68,7 +64,7 @@ export function providerAvatar(providerId: string, user: SessionUser): string | 
 	return typeof avatar === 'string' && avatar.length > 0 ? avatar : null;
 }
 
-/** Имя пользователя на конкретной платформе. */
+/** User handle received from a specific provider */
 export function providerUsername(providerId: string, user: SessionUser): string | null {
 	const provider = getProvider(providerId);
 	if (!provider || !user) return null;
@@ -77,10 +73,8 @@ export function providerUsername(providerId: string, user: SessionUser): string 
 }
 
 /**
- * Текст для отображения в профиле этого провайдера:
- * аватар ещё есть платформа, иначе — username (или first name/имя),
- * если username нет.
- * Приоритет: username провайдера → имя (name) → null.
+ * Display name for a provider profile:
+ * Priority: provider handle -> user first name -> null
  */
 export function providerDisplayName(providerId: string, user: SessionUser): string | null {
 	const username = providerUsername(providerId, user);
@@ -88,7 +82,6 @@ export function providerDisplayName(providerId: string, user: SessionUser): stri
 	if (!user) return null;
 	const name = user.name;
 	if (typeof name === 'string' && name.trim().length > 0) {
-		// Берём первую часть (first name), чтобы не показывать «Ivan Petrov»
 		return name.trim().split(/\s+/)[0] ?? null;
 	}
 	return null;

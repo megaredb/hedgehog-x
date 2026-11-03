@@ -7,10 +7,8 @@ import { createLogger } from '$lib/logger';
 const log = createLogger('API');
 
 /**
- * Удаление аккаунта пользователя.
- * Требует авторизованной сессии. Удаляет самого пользователя — все связанные
- * данные (account, session, закладки, прогресс, лайки) удаляются каскадом
- * (FK с ON DELETE CASCADE).
+ * User account deletion endpoint.
+ * Requires authenticated session. Deletes user record and cascades associated data.
  */
 export const POST = async ({ locals }) => {
 	const currentUser = locals.user;
@@ -20,15 +18,13 @@ export const POST = async ({ locals }) => {
 
 	try {
 		await db.delete(user).where(eq(user.id, currentUser.id));
-		// После удаления пользователя все его сессии исчезли каскадом.
 		return json({ ok: true });
 	} catch (e) {
-		log.error('Не удалось удалить пользователя:', e);
+		log.error('Failed to delete user:', e);
 		return json({ error: 'Failed to delete account' }, { status: 500 });
 	}
 };
 
-/** GET не поддерживается — только POST. */
 export const GET = async () => {
 	return json({ error: 'Method not allowed' }, { status: 405 });
 };

@@ -74,6 +74,10 @@ class AudioStore {
 	sleepTimerEndOnTrack = $state(false);
 	sleepTimerRemainingSec = $state(0);
 
+	// ── Track completion event ──────────────────────────────────────────────
+	lastCompletedTrackId: string | null = $state(null);
+	lastCompletedTrackAt = $state(0);
+
 	// ── Undo seek state ──────────────────────────────────────────────────────
 	lastSeekFrom: number | null = $state(null);
 	undoSeekAvailable = $state(false);
@@ -236,6 +240,11 @@ class AudioStore {
 	}
 
 	handleTrackEnd(): void {
+		if (this.currentTrack) {
+			this.lastCompletedTrackId =
+				this.currentTrack.id != null ? String(this.currentTrack.id) : null;
+			this.lastCompletedTrackAt = Date.now();
+		}
 		this.next();
 	}
 

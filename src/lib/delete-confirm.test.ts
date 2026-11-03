@@ -18,7 +18,7 @@ test('computeDeleteButtons: подтверждение стоит на запр�
 	for (let pos = 0; pos < 4; pos++) {
 		const buttons = computeDeleteButtons('Удалить аккаунт', pos);
 		assert.equal(buttons[pos].confirm, true);
-		// вне позиции подтверждения — только «отмены»
+		// Non-confirm positions must strictly be cancel buttons
 		for (let i = 0; i < 4; i++) {
 			if (i !== pos) assert.equal(buttons[i].confirm, false);
 		}
@@ -39,8 +39,7 @@ test('computeDeleteButtons: все тексты «отмен» из пула, б
 });
 
 test('nextDeleteConfirmPos: новое место всегда отличается от текущего', () => {
-	// Прогоняем много раз от каждой стартовой позиции:
-	// результат никогда не равен текущей позиции.
+	// Shift result should never equal current position
 	for (let pos = 0; pos < 4; pos++) {
 		for (let attempt = 0; attempt < 200; attempt++) {
 			const next = nextDeleteConfirmPos(pos);
@@ -51,8 +50,7 @@ test('nextDeleteConfirmPos: новое место всегда отличает�
 });
 
 test('nextDeleteConfirmPos: со временем покрывает все 4 позиции', () => {
-	// Цепочка из достаточно многих переходов от любой стартовой точки
-	// должна побывать во всех позициях (сдвиги 1..3 — граф связный).
+	// A chain of shifts from any start position covers all 4 positions
 	const seen = new Set<number>();
 	let pos = 0;
 	for (let i = 0; i < 100; i++) {

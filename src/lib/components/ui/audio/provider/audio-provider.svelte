@@ -212,6 +212,8 @@
 			// Mark chapter as completed in local DB
 			if (audioStore.currentTrack?.id && !isLiveStream && audioDuration > 0) {
 				const chapterId = String(audioStore.currentTrack.id);
+				audioStore.lastCompletedTrackId = chapterId;
+				audioStore.lastCompletedTrackAt = Date.now();
 				db.progress
 					.put({
 						chapterId,

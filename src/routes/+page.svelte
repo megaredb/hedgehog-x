@@ -11,8 +11,7 @@
 	import { ChevronUp, ChevronDown } from '@lucide/svelte';
 	import { fade } from 'svelte/transition';
 
-	// Определяем стартовый индекс прямо при инициализации (работает и на сервере!)
-	// Это предотвращает hydration_mismatch.
+	// Initialize start index at declaration to avoid hydration mismatch
 	let initialIndex = 0;
 	const initialBookId = page.url.searchParams.get('book');
 	if (initialBookId) {
@@ -29,13 +28,13 @@
 	let scrollTimeoutId: number | undefined;
 
 	onMount(() => {
-		// Восстанавливаем настройку видео из localStorage
+		// Restore video preference from localStorage
 		const storedVideoPref = localStorage.getItem('videoBackgroundPlaying');
 		if (storedVideoPref !== null) {
 			isVideoPlaying = storedVideoPref === 'true';
 		}
 
-		// Если мы начинаем не с первой книги, нужно проскроллить к ней при загрузке
+		// Scroll to initial book if not the first one
 		if (currentIndex !== 0) {
 			scrollToIndex(currentIndex, 'instant');
 		}
@@ -75,7 +74,7 @@
 			}
 			sections[index].scrollIntoView({ behavior, block: 'start' });
 
-			// Сбрасываем флаг после окончания скролла
+			// Reset programmatic flag after scroll completes
 			scrollTimeoutId = window.setTimeout(() => {
 				isProgrammaticScroll = false;
 				scrollTimeoutId = undefined;
@@ -86,12 +85,12 @@
 	function updateUrl(bookId: string) {
 		const url = new URL(window.location.href);
 		url.searchParams.set('book', bookId);
-		// Используем встроенный метод SvelteKit для shallow роутинга без перезагрузки
+		// Shallow URL update without full page reload
 		replaceState(resolve((url.pathname + url.search) as '/'), page.state);
 	}
 
 	function handleSectionVisible(index: number) {
-		// Обновляем состояние, только если скролл произошел пользователем (ручной)
+		// Update current book only during manual user scroll
 		if (!isProgrammaticScroll && currentIndex !== index) {
 			currentIndex = index;
 			updateUrl(showcaseBooks[index].id);
@@ -103,11 +102,11 @@
 	<title>Hedgehog X - Главная</title>
 </svelte:head>
 
-<!-- flex-1 заставляет контейнер заполнить всю доступную высоту -->
+<!-- Showcase container -->
 <div class="relative isolate flex w-full flex-1 flex-col overflow-hidden">
 	<ShowcaseBackground books={showcaseBooks} {currentIndex} {isVideoPlaying} />
 
-	<!-- Контейнер со скроллом -->
+	<!-- Showcase scroll viewport -->
 	<div
 		bind:this={scrollContainer}
 		class="absolute inset-0 no-scrollbar w-full snap-y snap-mandatory overflow-y-scroll"
@@ -117,7 +116,7 @@
 		{/each}
 	</div>
 
-	<!-- Индикатор прокрутки Вверх -->
+	<!-- Scroll up indicator -->
 	{#if currentIndex > 0}
 		<button
 			transition:fade={{ duration: 300 }}
@@ -127,13 +126,13 @@
 				scrollToIndex(currentIndex);
 			}}
 			class="pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
-			title="Пролистать вверх"
+			title="Previous"
 		>
 			<ChevronUp class="h-8 w-8" />
 		</button>
 	{/if}
 
-	<!-- Индикатор прокрутки Вниз -->
+	<!-- Scroll down indicator -->
 	{#if currentIndex < showcaseBooks.length - 1}
 		<button
 			transition:fade={{ duration: 300 }}
@@ -143,13 +142,13 @@
 				scrollToIndex(currentIndex);
 			}}
 			class="pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
-			title="Пролистать вниз"
+			title="Next"
 		>
 			<ChevronDown class="h-8 w-8" />
 		</button>
 	{/if}
 
-	<!-- Навигация Вверх/Вниз -->
+	<!-- Navigation controls -->
 	<ShowcaseNav
 		books={showcaseBooks}
 		{currentIndex}
@@ -164,7 +163,7 @@
 </div>
 
 <style>
-	/* Скрываем скроллбар для лучшего погружения */
+	/* Hide scrollbar for immersive experience */
 	.no-scrollbar::-webkit-scrollbar {
 		display: none;
 	}

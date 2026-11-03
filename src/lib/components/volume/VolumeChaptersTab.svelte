@@ -24,7 +24,7 @@
 
 	let { volume, chapters, bookId, isLoading = false }: Props = $props();
 
-	// Загружаем сохраненный прогресс для всех глав
+	// Load saved progress for all chapters
 	const progressQuery = useDexie(
 		() => db.progress.toArray(),
 		() => [] as OfflineProgress[],
@@ -83,7 +83,7 @@
 			return;
 		}
 
-		// Если глава уже играет: повторный клик по свободному месту строки перематывает таймлайн
+		// When already playing: secondary click on empty row area seeks chapter timeline
 		const row = e.currentTarget as HTMLElement;
 		const rect = row.getBoundingClientRect();
 		const clickX = e.clientX - rect.left;

@@ -16,7 +16,7 @@ export function mapServerBookToOfflineBook(serverBook: ServerBook): OfflineBook 
 	};
 }
 
-// Добавляем опциональное поле likesCount, так как Drizzle вернет его через extras или агрегацию
+// Includes optional likesCount returned via query aggregates
 export function mapServerVolumeToOfflineVolume(
 	serverVolume: ServerVolume & { likesCount?: number }
 ): OfflineVolume {

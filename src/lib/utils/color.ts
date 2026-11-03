@@ -1,6 +1,6 @@
 /**
- * Извлекает усредненный цвет из изображения через offscreen Canvas.
- * Возвращает RGB, HEX и готовую CSS строку.
+ * Extracts average color from an image using offscreen Canvas.
+ * Returns RGB components, HEX string, and ready-to-use CSS rgbString.
  */
 export interface ExtractedColor {
 	r: number;
@@ -49,7 +49,7 @@ export async function extractAverageColor(
 
 				for (let i = 0; i < imageData.length; i += 4) {
 					const a = imageData[i + 3];
-					if (a < 128) continue; // пропускаем прозрачные пиксели
+					if (a < 128) continue; // Skip semi-transparent pixels
 
 					totalR += imageData[i];
 					totalG += imageData[i + 1];

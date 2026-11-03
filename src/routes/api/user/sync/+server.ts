@@ -1,14 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { chapterLikes, volumeLikes, listeningProgress, bookmarks } from '$lib/server/db/schema';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	// Проверяем авторизацию
 	const user = locals.user;
 	if (!user) {
-		// Если юзер не залогинен, возвращаем пустые массивы
 		return json({
 			chapterLikes: [],
 			volumeLikes: [],
@@ -17,7 +15,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 		});
 	}
 
-	// Делаем 4 параллельных запроса для получения личных данных
 	const [userChapterLikes, userVolumeLikes, userProgress, userBookmarks] = await Promise.all([
 		db.select().from(chapterLikes).where(eq(chapterLikes.userId, user.id)),
 		db.select().from(volumeLikes).where(eq(volumeLikes.userId, user.id)),
@@ -25,7 +22,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 		db.select().from(bookmarks).where(eq(bookmarks.userId, user.id))
 	]);
 
-	// Отправляем на клиент
 	return json({
 		chapterLikes: userChapterLikes.map((l) => ({
 			chapterId: l.chapterId,
@@ -65,35 +61,77 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			isCompleted?: boolean;
 		}> = body.progressUpdates || [];
 
-		if (!Array.isArray(items) || items.length === 0) {
-			return json({ success: true, count: 0 });
-		}
+		const bookmarkUpdates: Array<{
+			id: string;
+			chapterId: string;
+			timestampSeconds: number;
+			note?: string;
+			action?: 'upsert' | 'delete';
+		}> = body.bookmarkUpdates || [];
 
-		for (const item of items) {
-			if (!item.chapterId) continue;
-			await db
-				.insert(listeningProgress)
-				.values({
-					userId: user.id,
-					chapterId: item.chapterId,
-					progressSeconds: item.progressSeconds || 0,
-					isCompleted: !!item.isCompleted,
-					updatedAt: new Date()
-				})
-				.onConflictDoUpdate({
-					target: [listeningProgress.userId, listeningProgress.chapterId],
-					set: {
-						progressSeconds: sql`GREATEST(${listeningProgress.progressSeconds}, ${item.progressSeconds})`,
-						isCompleted: item.isCompleted ? true : listeningProgress.isCompleted,
+		// Handle progress updates
+		if (Array.isArray(items) && items.length > 0) {
+			for (const item of items) {
+				if (!item.chapterId) continue;
+				await db
+					.insert(listeningProgress)
+					.values({
+						userId: user.id,
+						chapterId: item.chapterId,
+						progressSeconds: item.progressSeconds || 0,
+						isCompleted: !!item.isCompleted,
 						updatedAt: new Date()
-					}
-				});
+					})
+					.onConflictDoUpdate({
+						target: [listeningProgress.userId, listeningProgress.chapterId],
+						set: {
+							progressSeconds: sql`GREATEST(${listeningProgress.progressSeconds}, ${item.progressSeconds})`,
+							isCompleted: item.isCompleted ? true : listeningProgress.isCompleted,
+							updatedAt: new Date()
+						}
+					});
+			}
 		}
 
-		return json({ success: true, count: items.length });
+		// Handle bookmark sync updates
+		if (Array.isArray(bookmarkUpdates) && bookmarkUpdates.length > 0) {
+			for (const b of bookmarkUpdates) {
+				if (!b.id) continue;
+				if (b.action === 'delete') {
+					await db
+						.delete(bookmarks)
+						.where(and(eq(bookmarks.id, b.id), eq(bookmarks.userId, user.id)));
+				} else {
+					await db
+						.insert(bookmarks)
+						.values({
+							id: b.id,
+							userId: user.id,
+							chapterId: b.chapterId,
+							timestampSeconds: b.timestampSeconds || 0,
+							note: b.note || '',
+							createdAt: new Date()
+						})
+						.onConflictDoUpdate({
+							target: bookmarks.id,
+							set: {
+								timestampSeconds: b.timestampSeconds,
+								note: b.note || '',
+								createdAt: new Date()
+							}
+						});
+				}
+			}
+		}
+
+		return json({
+			success: true,
+			progressCount: items.length,
+			bookmarksCount: bookmarkUpdates.length
+		});
 	} catch (err) {
 		return json(
-			{ error: err instanceof Error ? err.message : 'Failed to sync progress' },
+			{ error: err instanceof Error ? err.message : 'Failed to sync data' },
 			{ status: 500 }
 		);
 	}

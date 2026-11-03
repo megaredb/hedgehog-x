@@ -11,6 +11,8 @@
 	import TelegramComments from '$lib/components/comments/TelegramComments.svelte';
 	import VolumeCompletionModal from '$lib/components/volume/VolumeCompletionModal.svelte';
 	import { Headphones, Image as ImageIcon, MessageSquare } from '@lucide/svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { strings } from '$lib/constants/strings';
 
 	let { data } = $props();
 
@@ -38,13 +40,13 @@
 	const volume = $derived(volumeQuery.data);
 	const chapters = $derived(chaptersQuery.data);
 
-	// Следующий том в этой книге
+	// Next volume in this book series
 	const nextVolume = $derived.by(() => {
 		if (!volume) return null;
 		return allBookVolumesQuery.data.find((v) => v.volumeNumber === volume.volumeNumber + 1) || null;
 	});
 
-	// Последняя глава тома с привязанным Telegram-постом
+	// Latest chapter of the volume that has a Telegram discussion post linked
 	const latestChapterWithTelegram = $derived.by(() => {
 		return (
 			chapters
@@ -54,17 +56,22 @@
 		);
 	});
 
-	// Проверяем, играет ли последняя глава этого тома и завершилась ли она
+	// Track dismissed volume completions to prevent unwanted popup reappearance
+	const dismissedVolumeIds = new SvelteSet<string>();
+	let lastTriggeredCompletedAt = 0;
+
+	// Open completion modal ONLY when the last chapter of this volume actively finishes playing
 	$effect(() => {
+		const completedAt = audioStore.lastCompletedTrackAt;
+		if (!completedAt || completedAt <= lastTriggeredCompletedAt) return;
+		lastTriggeredCompletedAt = completedAt;
+
 		if (chapters.length === 0) return;
 		const lastChapter = chapters[chapters.length - 1];
 
-		// Если текущий трек — последняя глава, и он только что завершился (время подошло к концу)
 		if (
-			audioStore.currentTrack?.id === lastChapter.id &&
-			audioStore.duration > 0 &&
-			audioStore.currentTime >= audioStore.duration - 1 &&
-			!audioStore.isPlaying
+			audioStore.lastCompletedTrackId === lastChapter.id &&
+			!dismissedVolumeIds.has(data.volumeId)
 		) {
 			isCompletionModalOpen = true;
 		}
@@ -72,6 +79,7 @@
 
 	async function handlePlayNextVolume() {
 		if (!nextVolume) return;
+		dismissedVolumeIds.add(data.volumeId);
 		isCompletionModalOpen = false;
 		await goto(resolve(`/books/${data.bookId}/${nextVolume.id}`));
 	}
@@ -81,7 +89,7 @@
 	<title>{volume?.title || 'Том'} | Аудиокнига | Hedgehog X</title>
 	<meta name="description" content={volume?.description || 'Слушайте аудиокнигу на Hedgehog X'} />
 
-	<!-- OpenGraph мета-теги -->
+	<!-- OpenGraph meta tags -->
 	<meta property="og:title" content="{volume?.title || 'Аудиокнига'} | Hedgehog X" />
 	<meta
 		property="og:description"
@@ -93,27 +101,27 @@
 </svelte:head>
 
 <main class="layout-content mx-auto max-w-5xl py-4 md:py-8">
-	<!-- Вынесенная шапка тома -->
+	<!-- Volume header -->
 	<VolumeHeader {volume} {chapters} isLoading={volumeQuery.isLoading} />
 
-	<!-- Навигация по табам тома: Главы / Иллюстрации / Обсуждение -->
+	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
 		<Tabs.List class="mx-auto mb-6 grid w-full max-w-md grid-cols-3 rounded-xl bg-muted/60 p-1">
 			<Tabs.Trigger value="chapters" class="gap-1.5 text-xs sm:text-sm">
 				<Headphones class="h-4 w-4" />
-				<span>Главы ({chapters.length})</span>
+				<span>{strings.volume.chaptersTab} ({chapters.length})</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="illustrations" class="gap-1.5 text-xs sm:text-sm">
 				<ImageIcon class="h-4 w-4" />
-				<span>Иллюстрации</span>
+				<span>{strings.volume.illustrationsTab}</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="comments" class="gap-1.5 text-xs sm:text-sm">
 				<MessageSquare class="h-4 w-4" />
-				<span>Обсуждение</span>
+				<span>{strings.volume.commentsTab}</span>
 			</Tabs.Trigger>
 		</Tabs.List>
 
-		<!-- Вкладка 1: Главы -->
+		<!-- Tab 1: Chapters -->
 		<Tabs.Content value="chapters" class="outline-none">
 			<VolumeChaptersTab
 				{volume}
@@ -123,20 +131,23 @@
 			/>
 		</Tabs.Content>
 
-		<!-- Вкладка 2: Иллюстрации -->
+		<!-- Tab 2: Illustrations -->
 		<Tabs.Content value="illustrations" class="outline-none">
 			<VolumeIllustrationsTab volumeId={data.volumeId} />
 		</Tabs.Content>
 
-		<!-- Вкладка 3: Обсуждение тома (по последней главе) -->
+		<!-- Tab 3: Volume Discussion -->
 		<Tabs.Content value="comments" class="outline-none">
 			<div class="rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
 				<div class="mb-4 flex items-center justify-between">
 					<div>
-						<h2 class="text-lg font-bold text-foreground">Обсуждение тома</h2>
+						<h2 class="text-lg font-bold text-foreground">{strings.volume.discussionTitle}</h2>
 						{#if latestChapterWithTelegram}
 							<p class="text-xs text-muted-foreground">
-								Комментарии последней выпущенной главы ({latestChapterWithTelegram.chapterNumber}: {latestChapterWithTelegram.title})
+								{strings.volume.discussionSubtitle(
+									latestChapterWithTelegram.chapterNumber,
+									latestChapterWithTelegram.title
+								)}
 							</p>
 						{/if}
 					</div>
@@ -147,7 +158,7 @@
 	</Tabs.Root>
 </main>
 
-<!-- Плашка завершения тома -->
+<!-- Volume completion modal -->
 <VolumeCompletionModal
 	bind:open={isCompletionModalOpen}
 	currentVolume={volume}

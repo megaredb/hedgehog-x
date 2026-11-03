@@ -21,7 +21,7 @@ describe('Database Seed Service', () => {
 			assert.ok(book.blurhash.length >= 20);
 			assert.match(book.themeColor, /^[0-9a-fA-F]{6}$/);
 
-			// Проверяем наличие файла на диске
+			// Ensure cover file exists on disk
 			const diskPath = path.resolve('static', book.coverUrl.replace(/^\//, ''));
 			assert.ok(fs.existsSync(diskPath), `Файл обложки должен существовать на диске: ${diskPath}`);
 		}

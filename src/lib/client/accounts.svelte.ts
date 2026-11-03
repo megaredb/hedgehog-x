@@ -6,7 +6,7 @@ import {
 	clearCachedSession
 } from './auth-storage';
 
-/** Аккаунт внешнего провайдера, привязанный к пользователю. */
+/** External OAuth account linked to the user */
 export interface LinkedAccount {
 	id: string;
 	providerId: string;
@@ -18,12 +18,7 @@ export interface LinkedAccount {
 }
 
 /**
- * Хук: список привязанных способов входа (OAuth-аккаунтов) текущего
- * пользователя + действия «привязать» / «отвязать» с поддержкой оффлайн-кэша.
- *
- * Отвязка последнего способа входа запрещена на сервере (better-auth
- * allowUnlinkingAll: false); здесь мы дублируем проверку для мгновенной
- * обратной связи в UI.
+ * Hook: list of linked sign-in methods (OAuth accounts) with offline cache support.
  */
 export function useAccounts() {
 	let accounts = $state<LinkedAccount[]>(loadCachedAccounts());
@@ -32,7 +27,7 @@ export function useAccounts() {
 	let isPending = $state<'link' | 'unlink' | 'delete' | null>(null);
 
 	async function load() {
-		// В оффлайне сразу используем локально сохранённые способы входа
+		// When offline, use locally cached sign-in methods immediately
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
 			const cached = loadCachedAccounts();
 			if (cached.length > 0) {
@@ -52,12 +47,12 @@ export function useAccounts() {
 					clearCachedAccounts();
 					clearCachedSession();
 				} else {
-					// Ошибка сети или сервера — сохраняем локальный кэш
+					// Network or server error - retain local cache
 					const cached = loadCachedAccounts();
 					if (cached.length > 0) {
 						accounts = cached;
 					} else {
-						error = res.error.message ?? 'Не удалось загрузить способы входа';
+						error = res.error.message ?? 'Failed to load sign-in methods';
 					}
 				}
 				return;
@@ -71,25 +66,23 @@ export function useAccounts() {
 			if (cached.length > 0) {
 				accounts = cached;
 			} else {
-				error = e instanceof Error ? e.message : 'Не удалось загрузить способы входа';
+				error = e instanceof Error ? e.message : 'Failed to load sign-in methods';
 			}
 		} finally {
 			isLoading = false;
 		}
 	}
 
-	/** Привязать провайдера к текущему пользователю. Возвращает URL авторизации. */
+	/** Link OAuth provider to current user */
 	async function link(providerId: string, callbackURL = '/'): Promise<string | null> {
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			error = 'Привязка аккаунта невозможна в оффлайн-режиме';
+			error = 'Linking accounts is unavailable offline';
 			return null;
 		}
 
 		isPending = 'link';
 		error = null;
 		try {
-			// POST /link-social — привязывает OAuth-аккаунт к текущему пользователю
-			// (better-auth НЕ создаёт нового пользователя, а добавляет account).
 			const res = await authClient.$fetch('/link-social', {
 				method: 'POST',
 				body: { provider: providerId, callbackURL }
@@ -99,27 +92,27 @@ export function useAccounts() {
 				error?: { message?: string } | null;
 			};
 			if (result.error || !result.data) {
-				error = result.error?.message ?? 'Не удалось привязать аккаунт';
+				error = result.error?.message ?? 'Failed to link account';
 				return null;
 			}
 			return result.data.url ?? null;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Не удалось привязать аккаунт';
+			error = e instanceof Error ? e.message : 'Failed to link account';
 			return null;
 		} finally {
 			isPending = null;
 		}
 	}
 
-	/** Отвязать способ входа. Если он последний — отвязка запрещена. */
+	/** Unlink OAuth provider from current user */
 	async function unlink(providerId: string): Promise<boolean> {
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			error = 'Отвязка аккаунта невозможна в оффлайн-режиме';
+			error = 'Unlinking accounts is unavailable offline';
 			return false;
 		}
 
 		if (accounts.length <= 1) {
-			error = 'Нельзя отвязать последний способ входа — вы потеряете доступ к аккаунту';
+			error = 'Cannot unlink last sign-in method';
 			return false;
 		}
 		const target = accounts.find((a) => a.providerId === providerId);
@@ -131,24 +124,24 @@ export function useAccounts() {
 				accountId: target?.accountId
 			});
 			if (res.error) {
-				error = res.error.message ?? 'Не удалось отвязать аккаунт';
+				error = res.error.message ?? 'Failed to unlink account';
 				return false;
 			}
 			accounts = accounts.filter((a) => a.providerId !== providerId);
 			saveCachedAccounts(accounts);
 			return true;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Не удалось отвязать аккаунт';
+			error = e instanceof Error ? e.message : 'Failed to unlink account';
 			return false;
 		} finally {
 			isPending = null;
 		}
 	}
 
-	/** Полностью удалить аккаунт пользователя со всеми данными. */
+	/** Permanently delete account and all user data */
 	async function deleteAccount(): Promise<boolean> {
 		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			error = 'Удаление аккаунта невозможно в оффлайн-режиме';
+			error = 'Account deletion is unavailable offline';
 			return false;
 		}
 
@@ -157,7 +150,7 @@ export function useAccounts() {
 		try {
 			const res = await fetch('/api/user/delete', { method: 'POST' });
 			if (!res.ok) {
-				error = 'Не удалось удалить аккаунт';
+				error = 'Failed to delete account';
 				return false;
 			}
 			accounts = [];
@@ -165,7 +158,7 @@ export function useAccounts() {
 			clearCachedSession();
 			return true;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Не удалось удалить аккаунт';
+			error = e instanceof Error ? e.message : 'Failed to delete account';
 			return false;
 		} finally {
 			isPending = null;

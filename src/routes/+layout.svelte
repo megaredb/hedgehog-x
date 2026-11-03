@@ -44,7 +44,7 @@
 					}
 				}
 			} catch {
-				// Ошибки фонового кэширования страниц не должны влиять на UI
+				// Background page caching errors should not affect the UI
 			}
 		}
 	});
@@ -55,10 +55,10 @@
 			registerSW({
 				immediate: true,
 				onRegistered(r) {
-					log.debug('Service Worker успешно зарегистрирован:', r);
+					log.debug('Service Worker registered successfully:', r);
 				},
 				onRegisterError(error) {
-					log.error('Ошибка регистрации Service Worker:', error);
+					log.error('Service Worker registration error:', error);
 				}
 			});
 		}
@@ -76,17 +76,17 @@
 		<ModeWatcher disableTransitions={false} />
 
 		<div class="flex min-h-screen w-full flex-col lg:flex-row">
-			<!-- Универсальная навигация (Десктопный Sidebar + Мобильный Header) -->
+			<!-- Navigation (Desktop Sidebar + Mobile Header) -->
 			<AppNavigation />
 
-			<!-- Область контента -->
+			<!-- Main content area -->
 			<div
 				class="relative flex min-w-0 flex-1 flex-col bg-no-repeat"
 				style="background-image: radial-gradient(circle 800px at 50% -300px, color-mix(in oklch, var(--color-secondary) 100%, transparent) 0%, transparent 100%);"
 			>
 				<AppBreadcrumbs />
-				<!-- Страницы -->
-				<main class="page-content-transition flex-1">
+				<!-- Page Content -->
+				<main class="page-content-transition flex-1 pb-28">
 					{@render children()}
 				</main>
 				<GlobalPlayer />

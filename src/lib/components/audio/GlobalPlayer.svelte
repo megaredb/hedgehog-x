@@ -5,16 +5,51 @@
 	import { audioStore } from '$lib/audio-store.svelte';
 	import * as AudioPlayer from '$lib/components/ui/audio/player/index.js';
 	import * as Drawer from '$lib/components/ui/drawer/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { bookmarkService } from '$lib/client/services/bookmarkService';
+	import { strings } from '$lib/constants/strings';
 	import { cn } from '$lib/utils';
-	import { RotateCcw, X } from '@lucide/svelte';
+	import { Bookmark as BookmarkIcon, RotateCcw, X } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 
 	let isDrawerOpen = $state(false);
+	let isBookmarkModalOpen = $state(false);
+	let bookmarkNote = $state('');
+	let isSavingBookmark = $state(false);
+	let isBookmarkSaved = $state(false);
 
 	function formatTime(seconds: number): string {
 		const m = Math.floor(seconds / 60);
 		const s = Math.floor(seconds % 60);
 		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	function openBookmarkModal() {
+		if (!audioStore.currentTrack) return;
+		bookmarkNote = '';
+		isBookmarkSaved = false;
+		isBookmarkModalOpen = true;
+	}
+
+	async function handleSaveBookmark() {
+		if (!audioStore.currentTrack) return;
+		isSavingBookmark = true;
+		try {
+			await bookmarkService.addBookmark({
+				chapterId: String(audioStore.currentTrack.id),
+				timestampSeconds: audioStore.currentTime,
+				note: bookmarkNote
+			});
+			isBookmarkSaved = true;
+			setTimeout(() => {
+				isBookmarkModalOpen = false;
+				isBookmarkSaved = false;
+			}, 600);
+		} finally {
+			isSavingBookmark = false;
+		}
 	}
 
 	onNavigate(() => {
@@ -37,7 +72,7 @@
 	<div class="flex h-fit min-w-0 items-center gap-2">
 		{#if volumeHref}
 			<a
-				href={volumeHref}
+				href={resolve(volumeHref as '/')}
 				class="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
 			>
 				<img
@@ -45,12 +80,14 @@
 					src={audioStore.currentTrack?.artwork ??
 						audioStore.currentTrack?.images?.[0] ??
 						'/logo.webp'}
-					alt={audioStore.currentTrack?.title ?? 'Глава...'}
+					alt={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
 				/>
 				<div class="flex min-w-0 flex-col">
-					<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
+					<p class="truncate text-sm font-medium">
+						{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+					</p>
 					<p class="truncate text-xs text-muted-foreground">
-						{audioStore.currentTrack?.album ?? 'Том...'}
+						{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 					</p>
 				</div>
 			</a>
@@ -60,12 +97,14 @@
 				src={audioStore.currentTrack?.artwork ??
 					audioStore.currentTrack?.images?.[0] ??
 					'/logo.webp'}
-				alt={audioStore.currentTrack?.title ?? 'Глава...'}
+				alt={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
 			/>
 			<div class="flex min-w-0 flex-col">
-				<p class="truncate text-sm font-medium">{audioStore.currentTrack?.title ?? 'Глава...'}</p>
+				<p class="truncate text-sm font-medium">
+					{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+				</p>
 				<p class="truncate text-xs text-muted-foreground">
-					{audioStore.currentTrack?.album ?? 'Том...'}
+					{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 				</p>
 			</div>
 		{/if}
@@ -112,19 +151,21 @@
 				transition:fly={{ y: 8, duration: 200 }}
 			>
 				<RotateCcw class="h-3.5 w-3.5 text-primary" />
-				<span class="text-muted-foreground">К {formatTime(audioStore.lastSeekFrom)}</span>
+				<span class="text-muted-foreground"
+					>{strings.player.undoSeekTo} {formatTime(audioStore.lastSeekFrom)}</span
+				>
 				<button
 					type="button"
 					class="cursor-pointer font-bold text-primary hover:underline"
 					onclick={() => audioStore.undoSeek()}
 				>
-					Отменить
+					{strings.player.undoSeek}
 				</button>
 				<button
 					type="button"
 					class="ml-1 cursor-pointer text-muted-foreground hover:text-foreground"
 					onclick={() => audioStore.dismissUndoSeek()}
-					aria-label="Закрыть"
+					aria-label={strings.common.close}
 				>
 					<X class="h-3.5 w-3.5" />
 				</button>
@@ -148,6 +189,15 @@
 				</div>
 
 				<div class="flex w-1/4 items-center justify-end gap-2">
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-8 w-8 text-muted-foreground hover:text-foreground"
+						onclick={openBookmarkModal}
+						title={strings.player.addBookmark}
+					>
+						<BookmarkIcon class="h-4 w-4" />
+					</Button>
 					<AudioPlayer.Download />
 					<AudioPlayer.SleepTimer />
 					<AudioPlayer.Speed />
@@ -161,10 +211,7 @@
 			<Drawer.Root bind:open={isDrawerOpen}>
 				<Drawer.Trigger class="w-full">
 					{#snippet child({ props })}
-						<!--
-							Mini-bar: cover + title (tappable → opens drawer) | play button
-							Compact layout — no overflow.
-						-->
+						<!-- Mini-bar: cover + title (tappable → opens drawer) | play button -->
 						<div
 							{...props}
 							class={cn(
@@ -178,16 +225,16 @@
 								src={audioStore.currentTrack?.artwork ??
 									audioStore.currentTrack?.images?.[0] ??
 									'/logo.webp'}
-								alt={audioStore.currentTrack?.title ?? 'Глава...'}
+								alt={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
 							/>
 
 							<!-- Track info — takes remaining space, truncates -->
 							<div class="flex min-w-0 flex-1 flex-col text-left">
 								<p class="truncate text-sm leading-tight font-medium">
-									{audioStore.currentTrack?.title ?? 'Глава...'}
+									{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
 								</p>
 								<p class="truncate text-xs leading-tight text-muted-foreground">
-									{audioStore.currentTrack?.album ?? 'Том...'}
+									{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 								</p>
 							</div>
 
@@ -206,18 +253,18 @@
 						<!-- Header: real track data from store -->
 						<Drawer.Header class="p-0 text-center">
 							{#if volumeHref}
-								<a href={volumeHref} class="hover:underline">
+								<a href={resolve(volumeHref as '/')} class="hover:underline">
 									<Drawer.Title class="text-base font-semibold">
-										{audioStore.currentTrack?.album ?? 'Том...'}
+										{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 									</Drawer.Title>
 								</a>
 							{:else}
 								<Drawer.Title class="text-base font-semibold">
-									{audioStore.currentTrack?.album ?? 'Том...'}
+									{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 								</Drawer.Title>
 							{/if}
 							<Drawer.Description class="text-sm">
-								{audioStore.currentTrack?.title ?? 'Глава...'}
+								{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
 							</Drawer.Description>
 						</Drawer.Header>
 
@@ -226,18 +273,18 @@
 							{@const coverSrc =
 								audioStore.currentTrack?.artwork ?? audioStore.currentTrack?.images?.[0]}
 							{#if volumeHref}
-								<a href={volumeHref} class="mx-auto block">
+								<a href={resolve(volumeHref as '/')} class="mx-auto block">
 									<img
 										class="h-48 w-48 rounded-xl border border-border/40 object-cover shadow-lg"
 										src={coverSrc}
-										alt={audioStore.currentTrack?.title ?? 'Обложка'}
+										alt={audioStore.currentTrack?.title ?? strings.volume.illustrationsTab}
 									/>
 								</a>
 							{:else}
 								<img
 									class="mx-auto h-48 w-48 rounded-xl border border-border/40 object-cover shadow-lg"
 									src={coverSrc}
-									alt={audioStore.currentTrack?.title ?? 'Обложка'}
+									alt={audioStore.currentTrack?.title ?? strings.volume.illustrationsTab}
 								/>
 							{/if}
 						{/if}
@@ -248,8 +295,17 @@
 						<!-- Main playback controls — mobile-optimized sizing -->
 						{@render drawerControls()}
 
-						<!-- Secondary controls — override hidden md:flex with "flex" class -->
+						<!-- Secondary controls -->
 						<div class="flex items-center justify-evenly gap-2 pt-2">
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-9 w-9 text-muted-foreground hover:text-foreground"
+								onclick={openBookmarkModal}
+								title={strings.player.addBookmark}
+							>
+								<BookmarkIcon class="h-4 w-4" />
+							</Button>
 							<AudioPlayer.Download />
 							<AudioPlayer.SleepTimer class="flex" />
 							<AudioPlayer.Speed class="flex" />
@@ -260,3 +316,49 @@
 		</div>
 	</AudioPlayer.Root>
 {/if}
+
+<!-- Add Bookmark Dialog -->
+<Dialog.Root bind:open={isBookmarkModalOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>{strings.bookmarks.addModalTitle}</Dialog.Title>
+			<Dialog.Description>{strings.bookmarks.addModalDescription}</Dialog.Description>
+		</Dialog.Header>
+		<div class="space-y-4 py-2">
+			<div
+				class="flex items-center justify-between rounded-lg border border-border/60 bg-muted/40 p-3"
+			>
+				<div class="min-w-0 flex-1">
+					<p class="truncate text-sm font-semibold">
+						{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+					</p>
+					<p class="truncate text-xs text-muted-foreground">
+						{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
+					</p>
+				</div>
+				<span class="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+					{formatTime(audioStore.currentTime)}
+				</span>
+			</div>
+			<div class="space-y-1.5">
+				<label for="bookmark-note" class="text-xs font-medium text-muted-foreground">
+					{strings.bookmarks.noteLabel}
+				</label>
+				<Input
+					id="bookmark-note"
+					bind:value={bookmarkNote}
+					placeholder={strings.player.bookmarkNotePlaceholder}
+					maxlength={500}
+				/>
+			</div>
+		</div>
+		<Dialog.Footer class="flex gap-2 sm:justify-end">
+			<Button variant="outline" onclick={() => (isBookmarkModalOpen = false)}>
+				{strings.common.cancel}
+			</Button>
+			<Button onclick={handleSaveBookmark} disabled={isSavingBookmark}>
+				{isBookmarkSaved ? strings.player.bookmarkSaved : strings.bookmarks.saveBookmark}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>

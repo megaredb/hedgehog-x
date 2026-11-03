@@ -25,7 +25,7 @@
 	const accounts = useAccounts();
 	const isOnline = $derived(online.current ?? true);
 
-	// Загружаем способы входа, как только появился пользователь.
+	// Load linked accounts upon session readiness
 	let loadedForUser: string | null = null;
 
 	$effect(() => {
@@ -36,8 +36,7 @@
 		}
 	});
 
-	// Если сессия загрузилась и пользователя нет — уводим на страницу входа.
-	// (блок «Вы не авторизованы» на этой странице не рисуем вовсе)
+	// Redirect unauthenticated visitors to auth page
 	$effect(() => {
 		if (!session.isPending && !session.user) {
 			void goto(
@@ -49,7 +48,6 @@
 	async function linkProvider(providerId: string) {
 		const url = await accounts.link(providerId, '/profile');
 		if (url) {
-			// Редирект на страницу авторизации провайдера (Discord/Telegram)
 			window.location.href = url;
 		}
 	}
@@ -62,8 +60,7 @@
 		return accounts.accounts.length <= 1 && isLinked(providerId);
 	}
 
-	// Платформа последнего входа: user.image обновляется при каждом входе
-	// и совпадает с аватаром одной из платформ.
+	// Determines last login provider matching user avatar
 	function lastLoginProvider(): string | null {
 		const user = session.user;
 		if (!user?.image) return null;
@@ -73,10 +70,9 @@
 		return null;
 	}
 
-	// Реактивно: провайдер последнего входа (null — если не определился).
 	const lastProvider = $derived(lastLoginProvider());
 
-	// --- Отвязка провайдера с подтверждением ---
+	// --- Unlink provider dialog state ---
 	let unlinkProviderId = $state<string | null>(null);
 	let unlinkModalOpen = $state(false);
 	let unlinking = $state(false);
@@ -108,42 +104,33 @@
 		}
 	}
 
-	// --- Удаление аккаунта с многоступенчатым подтверждением ---
-	// Логика кнопок (позиция подтверждения, тексты) вынесена в
-	// src/lib/delete-confirm.ts — там же unit-тесты инвариантов.
+	// --- Multi-step account deletion ---
 	let deleteConfirmStep = $state(0);
-	// Позиция (0..3) кнопки подтверждения на текущем шаге.
 	let deleteConfirmPos = $state(0);
 	let deleteModalOpen = $state(false);
 	let deleting = $state(false);
 	let deleteError = $state<string | null>(null);
 
-	/** Текущий текст кнопки подтверждения. */
 	const deleteConfirmLabel = $derived(DELETE_CONFIRM_TEXTS[deleteConfirmStep]);
-
 	const deleteButtons = $derived(computeDeleteButtons(deleteConfirmLabel, deleteConfirmPos));
 
 	function openDeleteModal() {
 		deleteConfirmStep = 0;
-		// Случайная стартовая позиция подтверждения (0..3).
 		deleteConfirmPos = Math.floor(Math.random() * 4);
 		deleteError = null;
 		deleteModalOpen = true;
 	}
 
 	function advanceDeleteStep() {
-		// Гарантированно меняем позицию кнопки подтверждения (см. shared-модуль).
 		deleteConfirmPos = nextDeleteConfirmPos(deleteConfirmPos);
 		if (deleteConfirmStep < DELETE_CONFIRM_TEXTS.length - 1) {
 			deleteConfirmStep += 1;
 			return;
 		}
-		// Последний шаг — реальное удаление
 		void performDelete();
 	}
 
 	function cancelDelete() {
-		// «Отмена» (любая из трёх) — закрываем окно.
 		deleteModalOpen = false;
 	}
 
@@ -156,7 +143,6 @@
 			deleteError = accounts.error ?? 'Не удалось удалить аккаунт';
 			return;
 		}
-		// Аккаунт удалён — форсируем пересинхронизацию сессии и уходим на главную
 		deleteModalOpen = false;
 		deleting = false;
 		await session.signOut();

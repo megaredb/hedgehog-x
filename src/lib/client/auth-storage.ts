@@ -21,9 +21,8 @@ export const AUTH_SESSION_STORAGE_KEY = 'hedgehog_auth_session';
 export const AUTH_ACCOUNTS_STORAGE_KEY = 'hedgehog_auth_accounts';
 
 /**
- * Безопасная загрузка сохранённой сессии из localStorage.
- * Применяет строгую проверку срока действия: если expiresAt истёк по системным
- * часам, кэш очищается и возвращается null.
+ * Loads cached session data from localStorage.
+ * Enforces expiration validation and purges expired caches.
  */
 export function loadCachedSession(now = Date.now()): SessionData | null {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -59,14 +58,14 @@ export function loadCachedSession(now = Date.now()): SessionData | null {
 			user
 		};
 	} catch (e) {
-		log.warn('Не удалось загрузить сохранённую сессию:', e);
+		log.warn('Failed to load cached session:', e);
 		clearCachedSession();
 		return null;
 	}
 }
 
 /**
- * Сохранение активной сессии в localStorage.
+ * Persists active session to localStorage.
  */
 export function saveCachedSession(data: SessionData | null): void {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -81,12 +80,12 @@ export function saveCachedSession(data: SessionData | null): void {
 
 		localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(data));
 	} catch (e) {
-		log.warn('Не удалось сохранить сессию в локальное хранилище:', e);
+		log.warn('Failed to save session to storage:', e);
 	}
 }
 
 /**
- * Очистка сохранённой сессии в localStorage.
+ * Purges cached session from localStorage.
  */
 export function clearCachedSession(): void {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -96,12 +95,12 @@ export function clearCachedSession(): void {
 	try {
 		localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
 	} catch (e) {
-		log.warn('Не удалось очистить сохранённую сессию:', e);
+		log.warn('Failed to clear cached session:', e);
 	}
 }
 
 /**
- * Безопасная загрузка сохранённых способов входа.
+ * Loads linked OAuth accounts from localStorage.
  */
 export function loadCachedAccounts(): LinkedAccount[] {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -121,14 +120,14 @@ export function loadCachedAccounts(): LinkedAccount[] {
 			updatedAt: new Date(acc.updatedAt)
 		}));
 	} catch (e) {
-		log.warn('Не удалось загрузить сохранённые способы входа:', e);
+		log.warn('Failed to load cached accounts:', e);
 		clearCachedAccounts();
 		return [];
 	}
 }
 
 /**
- * Сохранение списка способов входа в localStorage.
+ * Persists linked OAuth accounts to localStorage.
  */
 export function saveCachedAccounts(accounts: LinkedAccount[]): void {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -143,12 +142,12 @@ export function saveCachedAccounts(accounts: LinkedAccount[]): void {
 
 		localStorage.setItem(AUTH_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
 	} catch (e) {
-		log.warn('Не удалось сохранить способы входа в локальное хранилище:', e);
+		log.warn('Failed to save accounts to storage:', e);
 	}
 }
 
 /**
- * Очистка кэша способов входа.
+ * Purges cached OAuth accounts from localStorage.
  */
 export function clearCachedAccounts(): void {
 	if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -158,6 +157,6 @@ export function clearCachedAccounts(): void {
 	try {
 		localStorage.removeItem(AUTH_ACCOUNTS_STORAGE_KEY);
 	} catch (e) {
-		log.warn('Не удалось очистить сохранённые способы входа:', e);
+		log.warn('Failed to clear cached accounts:', e);
 	}
 }

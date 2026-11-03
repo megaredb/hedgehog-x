@@ -1,11 +1,11 @@
 /**
- * Парсит ссылки на Telegram посты вида:
+ * Parses Telegram post URLs or paths:
  * - https://t.me/channel_name/123
  * - http://t.me/channel_name/123
  * - t.me/channel_name/123
  * - channel_name/123
  *
- * Возвращает строку формата 'channel_name/123', необходимую для виджета Telegram comments.
+ * Returns 'channel_name/123' format required for Telegram comments widget.
  */
 export function extractTelegramDiscussion(urlOrPath: string | null | undefined): string | null {
 	if (!urlOrPath) return null;

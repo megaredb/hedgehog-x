@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { strings } from '$lib/constants/strings';
 
 	let segments = $derived(page.url.pathname.split('/').filter(Boolean));
 
@@ -27,12 +28,20 @@
 		() => [volumeId]
 	);
 
+	const breadcrumbTranslations: Record<string, string> = strings.breadcrumbs;
+
 	let breadcrumbs = $derived(
 		segments.map((segment, i) => {
-			let title = segment.charAt(0).toUpperCase() + segment.slice(1);
-			if (segment === 'books') title = 'Книги';
-			else if (segment === bookId) title = bookQuery.data?.title || 'Загрузка...';
-			else if (segment === volumeId) title = volumeQuery.data?.title || 'Загрузка...';
+			let title: string;
+			if (segment === bookId) {
+				title = bookQuery.data?.title || strings.common.loading;
+			} else if (segment === volumeId) {
+				title = volumeQuery.data?.title || strings.common.loading;
+			} else if (breadcrumbTranslations[segment]) {
+				title = breadcrumbTranslations[segment];
+			} else {
+				title = segment.charAt(0).toUpperCase() + segment.slice(1);
+			}
 
 			return {
 				segment,
@@ -48,12 +57,12 @@
 	<div
 		class="top-0 z-10 w-full overflow-hidden border-b bg-background/80 px-4 py-3 backdrop-blur-md"
 	>
-		<!-- Горизонтальный скролл контейнер (скрываем скроллбар) -->
+		<!-- Horizontal scroll container (hide scrollbar) -->
 		<div class="no-scrollbar flex min-h-[32px] w-full items-center overflow-x-auto">
 			<Breadcrumb.Root>
 				<Breadcrumb.List class="flex-nowrap whitespace-nowrap">
 					<Breadcrumb.Item>
-						<Breadcrumb.Link href="/">Главная</Breadcrumb.Link>
+						<Breadcrumb.Link href="/">{strings.breadcrumbs.home}</Breadcrumb.Link>
 					</Breadcrumb.Item>
 
 					{#each breadcrumbs as bc, i (bc.segment)}
@@ -80,12 +89,12 @@
 {/if}
 
 <style>
-	/* Скрываем scrollbar для Chrome, Safari, Opera */
+	/* Hide scrollbar for Chrome, Safari and Opera */
 	.no-scrollbar::-webkit-scrollbar {
 		display: none;
 	}
 
-	/* Скрываем scrollbar для IE, Edge, Firefox */
+	/* Hide scrollbar for IE, Edge and Firefox */
 	.no-scrollbar {
 		-ms-overflow-style: none; /* IE and Edge */
 		scrollbar-width: none; /* Firefox */

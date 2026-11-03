@@ -131,13 +131,13 @@
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
-		class="fixed inset-0 z-50 flex touch-none flex-col items-center justify-between bg-black/90 p-4 backdrop-blur-md select-none"
+		class="fixed inset-0 z-[100] flex touch-none flex-col items-center justify-between bg-black/90 p-4 backdrop-blur-md select-none"
 		transition:fade={{ duration: 200 }}
 		onclick={(e) => {
 			if (e.target === e.currentTarget && !isDragging) close();
 		}}
 	>
-		<!-- Верхняя панель управления -->
+		<!-- Top control bar -->
 		<div class="z-10 flex w-full max-w-5xl items-center justify-between pt-2">
 			<div class="flex items-center gap-2">
 				<Button
@@ -145,7 +145,7 @@
 					size="icon"
 					class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
 					onclick={handleZoomIn}
-					title="Приблизить (+)"
+					title="Zoom In (+)"
 				>
 					<ZoomIn class="h-4.5 w-4.5" />
 				</Button>
@@ -154,7 +154,7 @@
 					size="icon"
 					class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
 					onclick={handleZoomOut}
-					title="Отдалить (-)"
+					title="Zoom Out (-)"
 				>
 					<ZoomOut class="h-4.5 w-4.5" />
 				</Button>
@@ -164,7 +164,7 @@
 						size="sm"
 						class="h-9 gap-1.5 rounded-full bg-white/10 px-3 text-xs text-white hover:bg-white/20"
 						onclick={resetZoom}
-						title="Сбросить масштаб"
+						title="Reset zoom"
 					>
 						<RotateCcw class="h-3.5 w-3.5" />
 						<span>100%</span>
@@ -177,13 +177,13 @@
 				size="icon"
 				class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
 				onclick={close}
-				title="Закрыть (Esc)"
+				title="Close (Esc)"
 			>
 				<X class="h-5 w-5" />
 			</Button>
 		</div>
 
-		<!-- Область отображения изображения -->
+		<!-- Image viewport -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="relative flex w-full max-w-5xl flex-1 items-center justify-center overflow-hidden"
@@ -210,7 +210,7 @@
 			/>
 		</div>
 
-		<!-- Подпись к изображению -->
+		<!-- Image caption -->
 		{#if caption}
 			<div class="z-10 pb-4 text-center">
 				<p class="max-w-xl rounded-lg bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur-sm">

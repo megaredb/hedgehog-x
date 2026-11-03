@@ -1,11 +1,7 @@
 /**
- * Логика многоступенчатого подтверждения удаления аккаунта.
- *
- * На каждом шаге показываются 4 кнопки: три «отмены» и одна «подтверждение».
- * Позиция кнопки подтверждения гарантированно меняется от шага к шагу
- * (никогда не остаётся на месте), а её текст тоже меняется — чтобы
- * пользователь не «привыкал» к одному месту и не подтвердил удаление
- * случайно.
+ * Multi-step account deletion confirmation logic.
+ * On each step, 4 buttons are displayed (3 cancellations and 1 confirmation).
+ * The confirmation button position randomly shifts each step to prevent accidental clicks.
  */
 
 export const DELETE_CANCEL_TEXTS = [
@@ -30,8 +26,7 @@ export interface DeleteButton {
 }
 
 /**
- * Строит 4 кнопки: 3 «отмены» + 1 «подтверждение» на позиции confirmPos.
- * Тексты «отмен» идут по кругу из пула со сдвигом от шага к шагу.
+ * Builds 4 buttons: 3 cancel variants and 1 confirm at confirmPos.
  */
 export function computeDeleteButtons(confirmText: string, confirmPos: number): DeleteButton[] {
 	const pool = DELETE_CANCEL_TEXTS;
@@ -51,8 +46,7 @@ export function computeDeleteButtons(confirmText: string, confirmPos: number): D
 }
 
 /**
- * Следующая позиция подтверждения: гарантированно отличается от текущей
- * (сдвиг 1..3, не 0). Возвращает 0..3.
+ * Returns next confirmation button position guaranteed to differ from current (shift 1..3).
  */
 export function nextDeleteConfirmPos(currentPos: number): number {
 	const shift = 1 + Math.floor(Math.random() * 3); // 1..3

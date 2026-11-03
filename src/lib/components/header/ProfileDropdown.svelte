@@ -23,9 +23,7 @@
 
 	const session = useSession();
 
-	// Какой путь отдадим в resolve(): страница входа, если мы не на ней,
-	// иначе главная. (resolve() зовём в шаблоне, чтобы пройти eslint rule
-	// svelte/no-navigation-without-resolve.)
+	// Return path for auth: current page unless on /auth, otherwise home
 	const authTarget = $derived.by(() => {
 		const current = page.url.pathname;
 		return current === '/auth' ? '/' : current + page.url.search;

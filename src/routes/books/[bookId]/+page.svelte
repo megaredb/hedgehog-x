@@ -8,8 +8,7 @@
 
 	let viewMode = $state<'grid' | 'list'>('grid');
 
-	// Поскольку syncService в +layout.ts кладет данные в базу,
-	// эта руна либо сразу покажет кэш, либо обновится через миллисекунду.
+	// Live query directly resolves from cached Dexie database
 	const bookQuery = useDexie(
 		() => db.books.get(data.bookId),
 		() => undefined,

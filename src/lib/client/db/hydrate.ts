@@ -3,24 +3,21 @@ import type { EntityTable } from 'dexie';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Извлекаем имена всех таблиц из инстанса Dexie
+// Extract all table names from Dexie instance
 type TableNames = {
 	[K in keyof typeof db]: (typeof db)[K] extends EntityTable<any, any> ? K : never;
 }[keyof typeof db];
 
-// Выводим тип сущности (Entity) для конкретной таблицы
+// Infer entity type for a given table
 type TableEntity<TName extends TableNames> =
 	(typeof db)[TName] extends EntityTable<infer TEntity, any> ? TEntity : never;
 
 /**
- * Гидрирует данные с сервера в локальную БД Dexie.
+ * Hydrates server data into local Dexie database.
  *
- * @param tableName Имя таблицы (строго типизировано ключами db)
- * @param data Данные или массив данных для вставки
- * @param purgeScope Опциональное правило для удаления старых данных.
- *                   Если `'all'`, удалит из таблицы все записи, которых нет в `data`.
- *                   Если объект `{ index, values }`, удалит только те записи, которые подпадают под запрос,
- *                   но отсутствуют в `data`.
+ * @param tableName Table name key from db instance
+ * @param data Data or array of data to insert
+ * @param purgeScope Optional purge rule to remove obsolete records
  */
 export async function hydrate<TName extends TableNames>(
 	tableName: TName,
