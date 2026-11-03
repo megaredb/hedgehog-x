@@ -24,4 +24,4 @@ ENV CI=true
 ENV PORT=4173
 ENV HOST=0.0.0.0
 
-CMD ["sh", "-c", "pnpm db:push --force && pnpm build && pnpm exec playwright test"]
+CMD ["sh", "-c", "pnpm db:push --force && pnpm db:seed && pnpm build && pnpm exec playwright test"]

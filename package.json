@@ -21,6 +21,7 @@
 		"docker:down": "docker compose down",
 		"docker:logs": "docker compose logs -f",
 		"db:push": "drizzle-kit push",
+		"db:seed": "node --import tsx src/lib/server/db/seed.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
