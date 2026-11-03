@@ -9,7 +9,13 @@ import type { User, Session } from 'better-auth';
 declare global {
 	namespace App {
 		interface Locals {
-			user?: User;
+			user?: User & {
+				role?: string;
+				telegramAvatar?: string | null;
+				telegramOidcUsername?: string | null;
+				discordAvatar?: string | null;
+				discordUsername?: string | null;
+			};
 			session?: Session;
 		}
 

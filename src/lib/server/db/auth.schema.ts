@@ -20,7 +20,9 @@ export const user = pgTable('user', {
 	telegramOidcUsername: text('telegram_oidc_username'),
 	// Аватар и username из Discord — отдельно для карточки Discord.
 	discordAvatar: text('discord_avatar'),
-	discordUsername: text('discord_username')
+	discordUsername: text('discord_username'),
+	// Роль пользователя: 'user' | 'admin'
+	role: text('role').default('user').notNull()
 });
 
 export const session = pgTable(

@@ -63,7 +63,8 @@ export const auth = betterAuth({
 			telegramAvatar: { type: 'string' },
 			telegramOidcUsername: { type: 'string' },
 			discordAvatar: { type: 'string' },
-			discordUsername: { type: 'string' }
+			discordUsername: { type: 'string' },
+			role: { type: 'string', defaultValue: 'user' }
 		}
 	},
 	socialProviders: {
