@@ -12,3 +12,18 @@ services:
     volumes:
       - ./certs:/certs:ro
       - ./dynamic:/dynamic:ro
+
+  pgweb:
+    image: sosedoff/pgweb:0.17.0
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-mysecretpassword}@db:5432/${POSTGRES_DB:-local}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.pgweb.rule=Host(`pgweb.hedgehog-inc.localhost`)'
+      - 'traefik.http.routers.pgweb.entrypoints=websecure'
+      - 'traefik.http.routers.pgweb.tls=true'
+      - 'traefik.http.services.pgweb.loadbalancer.server.port=8081'
