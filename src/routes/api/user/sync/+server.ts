@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { chapterLikes, volumeLikes, listeningProgress, bookmarks } from '$lib/server/db/schema';
+import type { RequestHandler } from './$types';
 
-export const GET = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals }) => {
 	// Проверяем авторизацию
 	const user = locals.user;
 	if (!user) {
@@ -48,4 +49,52 @@ export const GET = async ({ locals }) => {
 			createdAt: b.createdAt?.getTime() || 0
 		}))
 	});
+};
+
+export const POST: RequestHandler = async ({ request, locals }) => {
+	const user = locals.user;
+	if (!user) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
+	try {
+		const body = await request.json();
+		const items: Array<{
+			chapterId: string;
+			progressSeconds: number;
+			isCompleted?: boolean;
+		}> = body.progressUpdates || [];
+
+		if (!Array.isArray(items) || items.length === 0) {
+			return json({ success: true, count: 0 });
+		}
+
+		for (const item of items) {
+			if (!item.chapterId) continue;
+			await db
+				.insert(listeningProgress)
+				.values({
+					userId: user.id,
+					chapterId: item.chapterId,
+					progressSeconds: item.progressSeconds || 0,
+					isCompleted: !!item.isCompleted,
+					updatedAt: new Date()
+				})
+				.onConflictDoUpdate({
+					target: [listeningProgress.userId, listeningProgress.chapterId],
+					set: {
+						progressSeconds: sql`GREATEST(${listeningProgress.progressSeconds}, ${item.progressSeconds})`,
+						isCompleted: item.isCompleted ? true : listeningProgress.isCompleted,
+						updatedAt: new Date()
+					}
+				});
+		}
+
+		return json({ success: true, count: items.length });
+	} catch (err) {
+		return json(
+			{ error: err instanceof Error ? err.message : 'Failed to sync progress' },
+			{ status: 500 }
+		);
+	}
 };

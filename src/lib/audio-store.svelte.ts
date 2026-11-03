@@ -74,6 +74,11 @@ class AudioStore {
 	sleepTimerEndOnTrack = $state(false);
 	sleepTimerRemainingSec = $state(0);
 
+	// ── Undo seek state ──────────────────────────────────────────────────────
+	lastSeekFrom: number | null = $state(null);
+	undoSeekAvailable = $state(false);
+	private undoTimer: ReturnType<typeof setTimeout> | null = null;
+
 	constructor() {
 		if (canUseDOM()) this.loadFromStorage();
 	}
@@ -145,13 +150,34 @@ class AudioStore {
 		}
 	}
 
-	seek(time: number): void {
+	seek(time: number, isInteractive = true): void {
 		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
+		if (isInteractive && Math.abs(valid - this.currentTime) > 10) {
+			this.lastSeekFrom = this.currentTime;
+			this.undoSeekAvailable = true;
+			if (this.undoTimer) clearTimeout(this.undoTimer);
+			this.undoTimer = setTimeout(() => {
+				this.undoSeekAvailable = false;
+			}, 6000);
+		}
 		this.currentTime = valid;
 		this.progress = this.duration > 0 ? (valid / this.duration) * 100 : 0;
 		// Directly seek the audio element so fast drags are applied immediately.
 		// The $effect in AudioProvider will skip the redundant seek via lastSeekTime.
 		htmlAudio.setCurrentTime(valid);
+	}
+
+	undoSeek(): void {
+		if (this.lastSeekFrom !== null) {
+			const target = this.lastSeekFrom;
+			this.undoSeekAvailable = false;
+			this.lastSeekFrom = null;
+			this.seek(target, false);
+		}
+	}
+
+	dismissUndoSeek(): void {
+		this.undoSeekAvailable = false;
 	}
 
 	next(): void {

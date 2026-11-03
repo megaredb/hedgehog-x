@@ -17,6 +17,7 @@ export interface OfflineVolume {
 	description?: string | null;
 	coverUrl: string;
 	blurhash?: string | null;
+	status?: string | null;
 	likesCount: number;
 }
 export interface OfflineChapter {

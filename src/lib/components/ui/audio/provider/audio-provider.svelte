@@ -5,6 +5,7 @@
 	import type { Track } from '$lib/html-audio.js';
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
+	import { progressSync } from '$lib/client/services/progressSync.svelte.js';
 
 	interface Props {
 		tracks?: Track[];
@@ -75,6 +76,7 @@
 					updatedAt: now
 				})
 				.catch(() => {});
+			progressSync.recordProgress(chapterId, progressSeconds, false);
 		}
 	}
 
@@ -158,6 +160,7 @@
 			forceTimeUpdate();
 			audioStore.isPlaying = false;
 			audioStore.isBuffering = false;
+			progressSync.flushImmediately();
 		};
 
 		const handleError = async (e: Event) => {
@@ -217,6 +220,8 @@
 						updatedAt: Date.now()
 					})
 					.catch(() => {});
+				progressSync.recordProgress(chapterId, Math.floor(audioDuration), true);
+				progressSync.flushImmediately();
 			}
 
 			if (audioStore.currentTrack && isLiveStream) {

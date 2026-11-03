@@ -6,8 +6,16 @@
 	import * as AudioPlayer from '$lib/components/ui/audio/player/index.js';
 	import * as Drawer from '$lib/components/ui/drawer/index.js';
 	import { cn } from '$lib/utils';
+	import { RotateCcw, X } from '@lucide/svelte';
+	import { fly } from 'svelte/transition';
 
 	let isDrawerOpen = $state(false);
+
+	function formatTime(seconds: number): string {
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
 
 	onNavigate(() => {
 		isDrawerOpen = false;
@@ -97,6 +105,32 @@
 	<AudioPlayer.Root
 		class="sticky bottom-0 z-50 w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
 	>
+		<!-- Undo seek floating badge -->
+		{#if audioStore.undoSeekAvailable && audioStore.lastSeekFrom !== null}
+			<div
+				class="absolute -top-11 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-primary/40 bg-background/95 px-3 py-1 text-xs font-medium shadow-lg backdrop-blur-md"
+				transition:fly={{ y: 8, duration: 200 }}
+			>
+				<RotateCcw class="h-3.5 w-3.5 text-primary" />
+				<span class="text-muted-foreground">К {formatTime(audioStore.lastSeekFrom)}</span>
+				<button
+					type="button"
+					class="cursor-pointer font-bold text-primary hover:underline"
+					onclick={() => audioStore.undoSeek()}
+				>
+					Отменить
+				</button>
+				<button
+					type="button"
+					class="ml-1 cursor-pointer text-muted-foreground hover:text-foreground"
+					onclick={() => audioStore.dismissUndoSeek()}
+					aria-label="Закрыть"
+				>
+					<X class="h-3.5 w-3.5" />
+				</button>
+			</div>
+		{/if}
+
 		<!-- Seek bar sits above the bar on all breakpoints -->
 		<div class="absolute top-0 left-0 z-50 w-full -translate-y-1/2">
 			<AudioPlayer.SeekBar class="overflow-x-clip" />

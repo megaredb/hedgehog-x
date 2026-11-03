@@ -34,6 +34,7 @@ export const volumes = pgTable('volumes', {
 	description: text('description'),
 	coverUrl: varchar('cover_url', { length: 255 }),
 	blurhash: varchar('blurhash', { length: 100 }),
+	status: varchar('status', { length: 50 }).default('ongoing'),
 	createdAt: timestamp('created_at').defaultNow(),
 	updatedAt: timestamp('updated_at')
 		.defaultNow()

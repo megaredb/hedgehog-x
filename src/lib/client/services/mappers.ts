@@ -28,6 +28,7 @@ export function mapServerVolumeToOfflineVolume(
 		description: serverVolume.description,
 		coverUrl: serverVolume.coverUrl || '',
 		blurhash: serverVolume.blurhash,
+		status: serverVolume.status || 'ongoing',
 		likesCount: serverVolume.likesCount || 0
 	};
 }
