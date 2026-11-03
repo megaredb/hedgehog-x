@@ -97,6 +97,7 @@
 					variant="ghost"
 					size="sm"
 					class="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+					aria-label="QR-код карты"
 					onclick={() => openQr('bank')}
 				>
 					<QrCode class="h-3.5 w-3.5" />
@@ -146,6 +147,7 @@
 					variant="ghost"
 					size="sm"
 					class="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+					aria-label="QR-код TON"
 					onclick={() => openQr('ton')}
 				>
 					<QrCode class="h-3.5 w-3.5" />

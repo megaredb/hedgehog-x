@@ -1,0 +1,27 @@
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@12.14.0
+
+# Allow builds in pnpm
+RUN pnpm config set dangerously-allow-all-builds true
+
+# Copy package manifests
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+
+# Install dependencies (frozen lockfile)
+RUN pnpm install --frozen-lockfile
+
+# Copy application code
+COPY . .
+
+# Generate SvelteKit manifests
+RUN pnpm exec svelte-kit sync
+
+ENV CI=true
+ENV PORT=4173
+ENV HOST=0.0.0.0
+
+CMD ["sh", "-c", "pnpm db:push --force && pnpm build && pnpm exec playwright test"]

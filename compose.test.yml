@@ -1,0 +1,31 @@
+services:
+  test-db:
+    image: postgres:18-alpine
+    restart: 'no'
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: local_test
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U root -d local_test']
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgres://root:mysecretpassword@test-db:5432/local_test
+      ORIGIN: http://localhost:4173
+      BETTER_AUTH_SECRET: test-secret-at-least-32-characters-long-key
+      BETTER_AUTH_ALLOWED_HOSTS: localhost,localhost:4173
+      BETTER_AUTH_URL: http://localhost:4173
+      CI: 'true'
+    depends_on:
+      test-db:
+        condition: service_healthy

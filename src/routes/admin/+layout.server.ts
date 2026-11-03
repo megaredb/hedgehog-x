@@ -1,10 +1,8 @@
-import { redirect, type Actions } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { user as userTable } from '$lib/server/db/auth.schema';
-import { eq } from 'drizzle-orm';
+import { redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
+import type { LayoutServerLoad } from './$types';
 
-export const load = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals }) => {
 	if (!locals.user) {
 		throw redirect(303, '/auth?redirect=/admin');
 	}
@@ -16,18 +14,4 @@ export const load = async ({ locals }) => {
 		isAdmin,
 		isDev: dev
 	};
-};
-
-export const actions: Actions = {
-	makeSelfAdmin: async ({ locals }) => {
-		if (!locals.user) {
-			throw redirect(303, '/auth?redirect=/admin');
-		}
-		if (dev) {
-			await db.update(userTable).set({ role: 'admin' }).where(eq(userTable.id, locals.user.id));
-			locals.user.role = 'admin';
-			return { success: true };
-		}
-		return { success: false, message: 'Доступно только в режиме разработки' };
-	}
 };

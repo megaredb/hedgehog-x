@@ -47,7 +47,7 @@
 			<DropdownMenu.Separator />
 			{#each [{ href: resolve('/profile'), icon: User, label: 'Мой аккаунт' }, { href: resolve('/settings'), icon: Settings, label: 'Настройки' }] as link (link.href)}
 				{@const Icon = link.icon}
-				<a href={link.href} class="w-full" onclick={onLinkClick}>
+				<a href={resolve(link.href as '/')} class="w-full" onclick={onLinkClick}>
 					<DropdownMenu.Item class="cursor-pointer">
 						<Icon class="mr-2 h-4 w-4" />
 						{link.label}
@@ -65,7 +65,10 @@
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 {:else}
-	<a href={resolve(`/auth?from=${encodeURIComponent(authTarget)}`)} class={triggerClass}>
+	<a
+		href={resolve(`${resolve('/auth')}?from=${encodeURIComponent(authTarget)}` as '/')}
+		class={triggerClass}
+	>
 		<span class="flex items-center gap-2">
 			<LogIn class="h-4 w-4" />
 			<span class="text-sm font-medium">Войти</span>

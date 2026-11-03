@@ -66,6 +66,7 @@ export function useSession() {
 			}
 		} else if (state.data === null && !state.isPending) {
 			// Сервер ответил null без ошибки (пользователь не авторизован)
+			isPending = false;
 			if (typeof navigator !== 'undefined' && navigator.onLine) {
 				data = null;
 				clearCachedSession();

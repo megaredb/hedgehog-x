@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import postgres from 'postgres';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
-import { config as loadEnv } from 'dotenv';
-
-// Playwright-процесс не читает .env автоматически (это делает Vite через
-// $env/dynamic/private). Загружаем вручную, чтобы тест увидел DATABASE_URL
-// и BETTER_AUTH_SECRET для генерации подписанной сессионной cookie.
-loadEnv();
+// Playwright process reads .env if present (in Node 20.6+ via process.loadEnvFile)
+try {
+	process.loadEnvFile?.();
+} catch {
+	// .env might not exist in CI/container where env vars are passed directly
+}
 
 /**
  * Интеграционный тест реального эндпоинта POST /api/user/delete

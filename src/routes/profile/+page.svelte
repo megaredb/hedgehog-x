@@ -40,7 +40,9 @@
 	// (блок «Вы не авторизованы» на этой странице не рисуем вовсе)
 	$effect(() => {
 		if (!session.isPending && !session.user) {
-			void goto(resolve(`/auth?from=${encodeURIComponent(resolve('/profile'))}`));
+			void goto(
+				resolve(`${resolve('/auth')}?from=${encodeURIComponent(resolve('/profile'))}` as '/')
+			);
 		}
 	});
 

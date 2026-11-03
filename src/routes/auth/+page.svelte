@@ -25,7 +25,6 @@
 	// Если провайдер вернул нас с ошибкой (отмена авторизации, access_denied
 	// и т.п.) — показываем модальное окно с сообщением.
 	$effect(() => {
-		if (session.isPending) return;
 		if (session.user) return;
 		const params = page.url.searchParams;
 		const err = params.get('error') ?? params.get('error_description');

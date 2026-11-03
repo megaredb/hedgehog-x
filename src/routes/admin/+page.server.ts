@@ -1,12 +1,23 @@
 import { db } from '$lib/server/db';
 import { books, volumes, chapters, illustrations } from '$lib/server/db/schema';
 import { user as userTable } from '$lib/server/db/auth.schema';
-import { count, desc } from 'drizzle-orm';
-import { requireAdmin } from '$lib/server/admin';
+import { count, desc, eq } from 'drizzle-orm';
+import { dev } from '$app/environment';
+import { redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	requireAdmin(locals);
+	if (!locals.user) {
+		throw redirect(303, '/auth?redirect=/admin');
+	}
+
+	if (locals.user.role !== 'admin') {
+		return {
+			notAdmin: true,
+			counts: { books: 0, volumes: 0, chapters: 0, illustrations: 0, users: 0 },
+			recentBooks: []
+		};
+	}
 
 	const [[booksC], [volumesC], [chaptersC], [illustrationsC], [usersC]] = await Promise.all([
 		db.select({ count: count() }).from(books),
@@ -19,6 +30,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const recentBooks = await db.select().from(books).orderBy(desc(books.updatedAt)).limit(5);
 
 	return {
+		notAdmin: false,
 		counts: {
 			books: booksC?.count ?? 0,
 			volumes: volumesC?.count ?? 0,
@@ -28,4 +40,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 		},
 		recentBooks
 	};
+};
+
+export const actions: Actions = {
+	makeSelfAdmin: async ({ locals }) => {
+		if (!locals.user) {
+			throw redirect(303, '/auth?redirect=/admin');
+		}
+		if (dev) {
+			await db.update(userTable).set({ role: 'admin' }).where(eq(userTable.id, locals.user.id));
+			locals.user.role = 'admin';
+			return { success: true };
+		}
+		return { success: false, message: 'Доступно только в режиме разработки' };
+	}
 };
