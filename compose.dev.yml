@@ -20,13 +20,13 @@ services:
       - '127.0.0.1:3000:3000'
     environment:
       CONNECTIONS: local
-      CONNECTION_local_ENGINE: postgres
-      CONNECTION_local_SERVER: db
-      CONNECTION_local_PORT: 5432
-      CONNECTION_local_USER: ${POSTGRES_USER:-root}
-      CONNECTION_local_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
-      CONNECTION_local_DATABASE: ${POSTGRES_DB:-local}
-      CONNECTION_local_LABEL: 'PostgreSQL (Local)'
+      LABEL_local: 'PostgreSQL (Local)'
+      ENGINE_local: 'postgres@dbgate-plugin-postgres'
+      SERVER_local: db
+      PORT_local: 5432
+      USER_local: ${POSTGRES_USER:-root}
+      PASSWORD_local: ${POSTGRES_PASSWORD:-mysecretpassword}
+      DATABASE_local: ${POSTGRES_DB:-local}
       ENABLE_AUTO_UPDATES: 'false'
     depends_on:
       db:
