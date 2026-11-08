@@ -1,6 +1,7 @@
 import { db } from '$lib/server/db';
 import { volumeLikes, chapterLikes } from '$lib/server/db/schema';
 import { inArray, count } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 
 export const GET = async ({ params, request }) => {
 	const { bookId } = params;
@@ -10,9 +11,14 @@ export const GET = async ({ params, request }) => {
 		where: (books, { eq }) => eq(books.id, bookId),
 		with: {
 			volumes: {
+				orderBy: (volumes, { asc }) => [asc(volumes.volumeNumber)],
 				with: {
-					chapters: true,
-					illustrations: true
+					chapters: {
+						orderBy: (chapters, { asc }) => [asc(chapters.chapterNumber)]
+					},
+					illustrations: {
+						orderBy: (illustrations, { asc }) => [asc(illustrations.sortOrder)]
+					}
 				}
 			}
 		}
@@ -60,34 +66,25 @@ export const GET = async ({ params, request }) => {
 		}))
 	}));
 
-	const volumeUpdates = bookData.volumes.map((v) => v.updatedAt?.getTime() || 0);
-	const chapterUpdates = bookData.volumes.flatMap((v) =>
-		v.chapters.map((c) => c.updatedAt?.getTime() || 0)
-	);
-	const illustrationUpdates = bookData.volumes.flatMap((v) =>
-		v.illustrations.map((i) => i.updatedAt?.getTime() || 0)
-	);
-	const maxUpdatedAt = Math.max(
-		bookData.updatedAt?.getTime() || 0,
-		...volumeUpdates,
-		...chapterUpdates,
-		...illustrationUpdates
-	);
-
-	const etag = `W/"${maxUpdatedAt}"`;
-
-	// Check client If-None-Match ETag header
-	const clientEtag = request.headers.get('if-none-match');
-	if (clientEtag === etag) {
-		return new Response(null, { status: 304 });
-	}
-
 	const responsePayload = {
 		...bookData,
 		volumes: enrichedVolumes
 	};
 
 	const payloadString = JSON.stringify(responsePayload);
+	const etag = `W/"${createHash('sha1').update(payloadString).digest('hex')}"`;
+
+	// Check client If-None-Match ETag header
+	const clientEtag = request.headers.get('if-none-match');
+	if (clientEtag === etag) {
+		return new Response(null, {
+			status: 304,
+			headers: {
+				ETag: etag,
+				'Cache-Control': 'public, max-age=0, must-revalidate'
+			}
+		});
+	}
 
 	return new Response(payloadString, {
 		status: 200,

@@ -136,7 +136,7 @@ export const strings = {
 		copyCard: 'Скопировать номер карты',
 		copyCardShort: 'Скопировать карту',
 		cardCopied: 'Номер скопирован!',
-		sberPayAction: 'Перевести в СберБанк Онлайн',
+		sberPayAction: 'Перевод',
 		boostyTitle: 'Boosty',
 		boostyDesc: 'Ежемесячная подписка и донаты',
 		lavaTitle: 'Lava.top',

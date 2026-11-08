@@ -199,7 +199,7 @@
 							<span class="text-green-600">{strings.support.copied}</span>
 						{:else}
 							<Copy class="h-3.5 w-3.5" />
-							<span>{strings.support.copyCardShort}</span>
+							<span>{strings.support.copyCrypto}</span>
 						{/if}
 					</Button>
 				</div>
