@@ -82,6 +82,17 @@
 					<Radio class="mr-1.5 h-3.5 w-3.5 animate-pulse" />
 					Umami активен
 				</Badge>
+				{#if data.umamiHost}
+					<a
+						href={data.umamiHost}
+						target="_blank"
+						rel="external noopener noreferrer"
+						class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+					>
+						Панель
+						<ExternalLink class="h-3 w-3" />
+					</a>
+				{/if}
 			{:else}
 				<Badge variant="outline" class="border-amber-500/30 bg-amber-500/10 text-amber-500">
 					Umami не настроен
@@ -309,17 +320,22 @@
 			<div class="space-y-1">
 				<p class="text-sm font-semibold">Внешняя аналитика Umami</p>
 				<p class="text-xs text-muted-foreground">
-					Umami обеспечивает конфиденциальный сбор просмотров страниц и событий без использования
-					cookie. Для включения добавьте переменную окружения <code>PUBLIC_UMAMI_WEBSITE_ID</code>.
+					{#if data.isUmamiConfigured}
+						Umami подключен и собирает аналитику страниц и прослушиваний.
+					{:else}
+						Umami обеспечивает конфиденциальный сбор просмотров страниц и событий без использования
+						cookie. Для включения добавьте переменную окружения <code>PUBLIC_UMAMI_WEBSITE_ID</code>
+						в <code>.env</code>.
+					{/if}
 				</p>
 			</div>
 			<a
-				href="https://umami.is/docs"
+				href={data.isUmamiConfigured && data.umamiHost ? data.umamiHost : 'https://umami.is/docs'}
 				target="_blank"
-				rel="noreferrer"
+				rel="external noopener noreferrer"
 				class="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
 			>
-				Документация Umami
+				{data.isUmamiConfigured ? 'Панель управления Umami' : 'Документация Umami'}
 				<ExternalLink class="h-3.5 w-3.5" />
 			</a>
 		</CardContent>

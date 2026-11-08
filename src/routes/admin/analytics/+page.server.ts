@@ -1,4 +1,6 @@
 import { redirect } from '@sveltejs/kit';
+import { env as publicEnv } from '$env/dynamic/public';
+import { env as privateEnv } from '$env/dynamic/private';
 import { db } from '$lib/server/db';
 import {
 	dailyListeningStats,
@@ -31,7 +33,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			topBooks: [],
 			topChapters: [],
 			recentSessions: [],
-			isUmamiConfigured: false
+			isUmamiConfigured: false,
+			umamiHost: ''
 		};
 	}
 
@@ -171,8 +174,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}));
 
 	const isUmamiConfigured = Boolean(
-		process.env.PUBLIC_UMAMI_WEBSITE_ID || process.env.UMAMI_WEBSITE_ID
+		publicEnv.PUBLIC_UMAMI_WEBSITE_ID ||
+		privateEnv.UMAMI_WEBSITE_ID ||
+		process.env.PUBLIC_UMAMI_WEBSITE_ID ||
+		process.env.UMAMI_WEBSITE_ID
 	);
+
+	const umamiHost =
+		publicEnv.PUBLIC_UMAMI_HOST ||
+		privateEnv.UMAMI_HOST ||
+		process.env.PUBLIC_UMAMI_HOST ||
+		'https://cloud.umami.is';
 
 	return {
 		notAdmin: false,
@@ -187,6 +199,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		topBooks,
 		topChapters,
 		recentSessions,
-		isUmamiConfigured
+		isUmamiConfigured,
+		umamiHost
 	};
 };
