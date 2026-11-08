@@ -18,13 +18,15 @@
 		Image as ImageIcon,
 		LayoutDashboard,
 		ArrowLeft,
-		ShieldCheck
+		ShieldCheck,
+		ChartColumn
 	} from '@lucide/svelte';
 
 	let { data, children } = $props();
 
 	const navItems = [
 		{ href: '/admin', label: 'Обзор', icon: LayoutDashboard },
+		{ href: '/admin/analytics', label: 'Аналитика', icon: ChartColumn },
 		{ href: '/admin/books', label: 'Книги', icon: BookOpen },
 		{ href: '/admin/volumes', label: 'Тома', icon: Layers },
 		{ href: '/admin/chapters', label: 'Главы', icon: Disc3 },

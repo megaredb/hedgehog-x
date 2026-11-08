@@ -29,3 +29,6 @@ playwright-report
 
 certs/
 static/uploads/
+
+# Agents
+.agents/

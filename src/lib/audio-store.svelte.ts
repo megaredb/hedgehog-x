@@ -1,7 +1,12 @@
 import { htmlAudio, type Track } from '$lib/html-audio.js';
+import { resolveMediaUrl } from '$lib/utils/mirror.js';
 
 export type RepeatMode = 'none' | 'one' | 'all';
 export type InsertMode = 'first' | 'last' | 'after';
+
+export const SEEK_STEP_STORAGE_KEY = 'hedgehog:seek_step';
+export const AUTO_ADVANCE_STORAGE_KEY = 'hedgehog:auto_advance';
+export const PLAYBACK_RATE_STORAGE_KEY = 'hedgehog:playback_rate';
 
 // ─── Helper functions ────────────────────────────────────────────────────────
 
@@ -74,6 +79,10 @@ class AudioStore {
 	sleepTimerEndOnTrack = $state(false);
 	sleepTimerRemainingSec = $state(0);
 
+	// ── User preferences ────────────────────────────────────────────────────
+	seekStep = $state(10);
+	autoAdvance = $state(true);
+
 	// ── Track completion event ──────────────────────────────────────────────
 	lastCompletedTrackId: string | null = $state(null);
 	lastCompletedTrackAt = $state(0);
@@ -94,8 +103,18 @@ class AudioStore {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (!raw) return;
 			const d = JSON.parse(raw);
-			if (d.currentTrack !== undefined) this.currentTrack = d.currentTrack;
-			if (d.queue !== undefined) this.queue = d.queue;
+			if (d.currentTrack !== undefined && d.currentTrack !== null) {
+				this.currentTrack = {
+					...d.currentTrack,
+					url: resolveMediaUrl(d.currentTrack.url)
+				};
+			}
+			if (d.queue !== undefined && Array.isArray(d.queue)) {
+				this.queue = d.queue.map((t: Track) => ({
+					...t,
+					url: resolveMediaUrl(t.url)
+				}));
+			}
 			if (d.volume !== undefined) this.volume = d.volume;
 			if (d.isMuted !== undefined) this.isMuted = d.isMuted;
 			if (d.playbackRate !== undefined) this.playbackRate = d.playbackRate;
@@ -104,6 +123,37 @@ class AudioStore {
 			if (d.currentTime !== undefined) this.currentTime = d.currentTime;
 			if (d.insertMode !== undefined) this.insertMode = d.insertMode;
 			if (d.currentQueueIndex !== undefined) this.currentQueueIndex = d.currentQueueIndex;
+		} catch {
+			/* ignore */
+		}
+
+		try {
+			const storedSeek = localStorage.getItem(SEEK_STEP_STORAGE_KEY);
+			if (storedSeek) {
+				const val = parseInt(storedSeek, 10);
+				if ([5, 10, 15, 30].includes(val)) this.seekStep = val;
+			}
+		} catch {
+			/* ignore */
+		}
+
+		try {
+			const storedAuto = localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY);
+			if (storedAuto !== null) {
+				this.autoAdvance = storedAuto === 'true';
+			}
+		} catch {
+			/* ignore */
+		}
+
+		try {
+			const storedRate = localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY);
+			if (storedRate) {
+				const val = parseFloat(storedRate);
+				if (!isNaN(val) && val >= 0.25 && val <= 2) {
+					this.playbackRate = val;
+				}
+			}
 		} catch {
 			/* ignore */
 		}
@@ -245,14 +295,19 @@ class AudioStore {
 				this.currentTrack.id != null ? String(this.currentTrack.id) : null;
 			this.lastCompletedTrackAt = Date.now();
 		}
-		this.next();
+		if (this.autoAdvance) {
+			this.next();
+		} else {
+			this.pause();
+		}
 	}
 
 	// ── Queue actions ───────────────────────────────────────────────────────
 
 	setQueue(tracks: Track[], startIndex = 0): void {
-		const current = tracks[startIndex] ?? null;
-		this.queue = tracks;
+		const resolvedTracks = tracks.map((t) => ({ ...t, url: resolveMediaUrl(t.url) }));
+		const current = resolvedTracks[startIndex] ?? null;
+		this.queue = resolvedTracks;
 		this.currentQueueIndex = current ? startIndex : -1;
 		this.currentTrack = current;
 	}
@@ -262,26 +317,27 @@ class AudioStore {
 	}
 
 	addToQueue(track: Track, mode: InsertMode = 'last'): void {
+		const resolvedTrack: Track = { ...track, url: resolveMediaUrl(track.url) };
 		if (!this.currentTrack) {
-			this.currentTrack = track;
+			this.currentTrack = resolvedTrack;
 			this.currentQueueIndex = 0;
-			this.queue = [track];
+			this.queue = [resolvedTrack];
 			return;
 		}
 		switch (mode) {
 			case 'first':
-				this.queue = [track, ...this.queue];
+				this.queue = [resolvedTrack, ...this.queue];
 				this.currentQueueIndex++;
 				break;
 			case 'after':
 				this.queue = [
 					...this.queue.slice(0, this.currentQueueIndex + 1),
-					track,
+					resolvedTrack,
 					...this.queue.slice(this.currentQueueIndex + 1)
 				];
 				break;
 			default:
-				this.queue = [...this.queue, track];
+				this.queue = [...this.queue, resolvedTrack];
 		}
 	}
 
@@ -306,8 +362,9 @@ class AudioStore {
 
 	addTracksToEndOfQueue(tracks: Track[]): void {
 		if (!tracks?.length) return;
+		const resolvedTracks = tracks.map((t) => ({ ...t, url: resolveMediaUrl(t.url) }));
 		const ids = new Set(this.queue.map((s) => s.id));
-		const newTracks = tracks.filter((t) => !ids.has(t.id));
+		const newTracks = resolvedTracks.filter((t) => !ids.has(t.id));
 		if (newTracks.length) this.queue = [...this.queue, ...newTracks];
 	}
 
@@ -325,6 +382,41 @@ class AudioStore {
 	setPlaybackRate(rate: number): void {
 		if (this.duration && htmlAudio.isLive(this.duration)) return;
 		this.playbackRate = Math.max(0.25, Math.min(2, rate));
+	}
+
+	setDefaultPlaybackRate(rate: number): void {
+		this.setPlaybackRate(rate);
+		if (canUseDOM()) {
+			try {
+				localStorage.setItem(PLAYBACK_RATE_STORAGE_KEY, String(rate));
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	setSeekStep(step: number): void {
+		if ([5, 10, 15, 30].includes(step)) {
+			this.seekStep = step;
+			if (canUseDOM()) {
+				try {
+					localStorage.setItem(SEEK_STEP_STORAGE_KEY, String(step));
+				} catch {
+					/* ignore */
+				}
+			}
+		}
+	}
+
+	setAutoAdvance(val: boolean): void {
+		this.autoAdvance = val;
+		if (canUseDOM()) {
+			try {
+				localStorage.setItem(AUTO_ADVANCE_STORAGE_KEY, String(val));
+			} catch {
+				/* ignore */
+			}
+		}
 	}
 
 	changeRepeatMode(): void {
@@ -386,9 +478,10 @@ class AudioStore {
 			this.errorMessage = null;
 			return;
 		}
-		if (this.currentTrack?.id === track.id) return;
-		this.currentTrack = track;
-		this.queue = [track];
+		const resolvedTrack: Track = { ...track, url: resolveMediaUrl(track.url) };
+		if (this.currentTrack?.id === resolvedTrack.id) return;
+		this.currentTrack = resolvedTrack;
+		this.queue = [resolvedTrack];
 		this.currentQueueIndex = 0;
 		this.isLoading = true;
 		this.isPlaying = false;
@@ -396,7 +489,7 @@ class AudioStore {
 		this.duration = 0;
 		this.isError = false;
 		this.errorMessage = null;
-		this.loadAndPlayTrack(track, 0);
+		this.loadAndPlayTrack(resolvedTrack, 0);
 	}
 
 	/** Called by AudioProvider to sync audio element time into state. */
@@ -418,10 +511,12 @@ class AudioStore {
 	 * The actual audio loading is handled by AudioProvider via $effect.
 	 */
 	loadAndPlayTrack(track: Track, queueIndex: number): void {
+		const resolvedTrack: Track = { ...track, url: resolveMediaUrl(track.url) };
 		const isLiveStream =
-			track.live === true || (track.duration !== undefined && htmlAudio.isLive(track.duration));
+			resolvedTrack.live === true ||
+			(resolvedTrack.duration !== undefined && htmlAudio.isLive(resolvedTrack.duration));
 
-		this.currentTrack = track;
+		this.currentTrack = resolvedTrack;
 		this.currentQueueIndex = queueIndex;
 		this.isError = false;
 		this.errorMessage = null;

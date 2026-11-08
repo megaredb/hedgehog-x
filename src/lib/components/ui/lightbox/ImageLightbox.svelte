@@ -2,6 +2,7 @@
 	import { X, ZoomIn, ZoomOut, RotateCcw } from '@lucide/svelte';
 	import { fade, scale } from 'svelte/transition';
 	import { Button } from '$lib/components/ui/button';
+	import { Portal } from 'bits-ui';
 
 	interface Props {
 		open: boolean;
@@ -126,97 +127,101 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div
-		role="dialog"
-		aria-modal="true"
-		tabindex="-1"
-		class="fixed inset-0 z-[100] flex touch-none flex-col items-center justify-between bg-black/90 p-4 backdrop-blur-md select-none"
-		transition:fade={{ duration: 200 }}
-		onclick={(e) => {
-			if (e.target === e.currentTarget && !isDragging) close();
-		}}
-	>
-		<!-- Top control bar -->
-		<div class="z-10 flex w-full max-w-5xl items-center justify-between pt-2">
-			<div class="flex items-center gap-2">
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
-					onclick={handleZoomIn}
-					title="Zoom In (+)"
-				>
-					<ZoomIn class="h-4.5 w-4.5" />
-				</Button>
-				<Button
-					variant="ghost"
-					size="icon"
-					class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
-					onclick={handleZoomOut}
-					title="Zoom Out (-)"
-				>
-					<ZoomOut class="h-4.5 w-4.5" />
-				</Button>
-				{#if zoom > 1}
+	<Portal>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			class="fixed inset-0 z-[100] flex touch-none flex-col items-center justify-between bg-black/90 p-4 backdrop-blur-md select-none"
+			transition:fade={{ duration: 200 }}
+			onclick={(e) => {
+				if (e.target === e.currentTarget && !isDragging) close();
+			}}
+		>
+			<!-- Top control bar -->
+			<div class="z-10 flex w-full max-w-5xl items-center justify-between pt-2">
+				<div class="flex items-center gap-2">
 					<Button
 						variant="ghost"
-						size="sm"
-						class="h-9 gap-1.5 rounded-full bg-white/10 px-3 text-xs text-white hover:bg-white/20"
-						onclick={resetZoom}
-						title="Reset zoom"
+						size="icon"
+						class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
+						onclick={handleZoomIn}
+						title="Zoom In (+)"
 					>
-						<RotateCcw class="h-3.5 w-3.5" />
-						<span>100%</span>
+						<ZoomIn class="h-4.5 w-4.5" />
 					</Button>
-				{/if}
+					<Button
+						variant="ghost"
+						size="icon"
+						class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
+						onclick={handleZoomOut}
+						title="Zoom Out (-)"
+					>
+						<ZoomOut class="h-4.5 w-4.5" />
+					</Button>
+					{#if zoom > 1}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="h-9 gap-1.5 rounded-full bg-white/10 px-3 text-xs text-white hover:bg-white/20"
+							onclick={resetZoom}
+							title="Reset zoom"
+						>
+							<RotateCcw class="h-3.5 w-3.5" />
+							<span>100%</span>
+						</Button>
+					{/if}
+				</div>
+
+				<Button
+					variant="ghost"
+					size="icon"
+					class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
+					onclick={close}
+					title="Close (Esc)"
+				>
+					<X class="h-5 w-5" />
+				</Button>
 			</div>
 
-			<Button
-				variant="ghost"
-				size="icon"
-				class="h-9 w-9 rounded-full bg-white/10 text-white hover:bg-white/20"
-				onclick={close}
-				title="Close (Esc)"
+			<!-- Image viewport -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="relative flex w-full max-w-5xl flex-1 items-center justify-center overflow-hidden"
+				onwheel={handleWheel}
+				onmousedown={handleMouseDown}
+				onmousemove={handleMouseMove}
+				onmouseup={handleMouseUp}
+				onmouseleave={handleMouseUp}
+				ontouchstart={handleTouchStart}
+				ontouchmove={handleTouchMove}
+				ontouchend={handleTouchEnd}
 			>
-				<X class="h-5 w-5" />
-			</Button>
-		</div>
-
-		<!-- Image viewport -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="relative flex w-full max-w-5xl flex-1 items-center justify-center overflow-hidden"
-			onwheel={handleWheel}
-			onmousedown={handleMouseDown}
-			onmousemove={handleMouseMove}
-			onmouseup={handleMouseUp}
-			onmouseleave={handleMouseUp}
-			ontouchstart={handleTouchStart}
-			ontouchmove={handleTouchMove}
-			ontouchend={handleTouchEnd}
-		>
-			<img
-				{src}
-				{alt}
-				class="max-h-[85vh] max-w-[90vw] object-contain transition-transform duration-75 select-none"
-				style="transform: translate3d({panX}px, {panY}px, 0px) scale({zoom}); cursor: {zoom > 1
-					? isDragging
-						? 'grabbing'
-						: 'grab'
-					: 'default'};"
-				transition:scale={{ duration: 200, start: 0.95 }}
-				draggable="false"
-			/>
-		</div>
-
-		<!-- Image caption -->
-		{#if caption}
-			<div class="z-10 pb-4 text-center">
-				<p class="max-w-xl rounded-lg bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur-sm">
-					{caption}
-				</p>
+				<img
+					{src}
+					{alt}
+					class="max-h-[85vh] max-w-[90vw] object-contain transition-transform duration-75 select-none"
+					style="transform: translate3d({panX}px, {panY}px, 0px) scale({zoom}); cursor: {zoom > 1
+						? isDragging
+							? 'grabbing'
+							: 'grab'
+						: 'default'};"
+					transition:scale={{ duration: 200, start: 0.95 }}
+					draggable="false"
+				/>
 			</div>
-		{/if}
-	</div>
+
+			<!-- Image caption -->
+			{#if caption}
+				<div class="z-10 pb-4 text-center">
+					<p
+						class="max-w-xl rounded-lg bg-black/60 px-4 py-2 text-sm text-white/90 backdrop-blur-sm"
+					>
+						{caption}
+					</p>
+				</div>
+			{/if}
+		</div>
+	</Portal>
 {/if}

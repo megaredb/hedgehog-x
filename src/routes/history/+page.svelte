@@ -12,6 +12,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { Progress } from '$lib/components/ui/progress';
 	import { strings } from '$lib/constants/strings';
 	import { History, Play, Trash2, BookOpen, CheckCircle2, Clock } from '@lucide/svelte';
@@ -48,6 +49,13 @@
 	);
 
 	let isClearModalOpen = $state(false);
+
+	let currentPage = $state(1);
+	let pageSize = $state(10);
+
+	const paginatedHistory = $derived(
+		historyQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
 
 	function formatTime(seconds: number): string {
 		const h = Math.floor(seconds / 3600);
@@ -175,7 +183,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each historyQuery.data as item (item.chapterId)}
+			{#each paginatedHistory as item (item.chapterId)}
 				{@const duration = item.chapter?.durationSeconds || 1}
 				{@const progressPct = Math.min(100, Math.round((item.progressSeconds / duration) * 100))}
 				{@const isFinished = item.isCompleted || progressPct >= 95}
@@ -267,6 +275,10 @@
 				</Card.Root>
 			{/each}
 		</div>
+
+		{#if historyQuery.data.length > 0}
+			<PaginationBar totalItems={historyQuery.data.length} bind:currentPage bind:pageSize />
+		{/if}
 	{/if}
 </div>
 

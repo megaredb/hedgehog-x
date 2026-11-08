@@ -168,6 +168,16 @@
 	min-height: 0;
 }
 
+/* Isolated transition for persistent global audio player */
+.global-audio-player {
+	view-transition-name: global-audio-player;
+}
+
+::view-transition-group(global-audio-player) {
+	animation: none;
+	z-index: 50;
+}
+
 @keyframes fade-in {
 	from {
 		opacity: 0;

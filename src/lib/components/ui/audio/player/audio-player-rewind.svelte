@@ -31,7 +31,7 @@
 	function handleClick(e: MouseEvent) {
 		onclick?.(e);
 		if (!isLiveStream) {
-			audioStore.seek(Math.max(audioStore.currentTime - 10, 0));
+			audioStore.seek(Math.max(audioStore.currentTime - (audioStore.seekStep || 10), 0));
 		}
 	}
 </script>

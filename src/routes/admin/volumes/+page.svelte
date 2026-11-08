@@ -20,11 +20,29 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { Layers, Plus, Trash2, Edit, ExternalLink, Image as ImageIcon } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
 	const isEditing = $derived(!!data.editVolume);
+
+	function getInitialPage(): number {
+		if (data.editVolume) {
+			const index = data.volumes.findIndex((v) => v.id === data.editVolume?.id);
+			if (index !== -1) {
+				return Math.floor(index / 10) + 1;
+			}
+		}
+		return 1;
+	}
+
+	let currentPage = $state(getInitialPage());
+	let pageSize = $state(10);
+
+	const paginatedVolumes = $derived(
+		data.volumes.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
 </script>
 
 <div class="space-y-8">
@@ -79,7 +97,7 @@
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{#each data.volumes as vol (vol.id)}
+								{#each paginatedVolumes as vol (vol.id)}
 									<TableRow class={data.editVolume?.id === vol.id ? 'bg-primary/5' : ''}>
 										<TableCell class="p-2">
 											{#if vol.coverUrl}
@@ -164,6 +182,10 @@
 								{/each}
 							</TableBody>
 						</Table>
+
+						<div class="border-t px-4 py-2">
+							<PaginationBar totalItems={data.volumes.length} bind:currentPage bind:pageSize />
+						</div>
 					{/if}
 				</CardContent>
 			</Card>

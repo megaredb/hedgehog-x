@@ -1,9 +1,13 @@
 <script lang="ts">
-	import { Check, Copy, CreditCard, ExternalLink, QrCode, Coins } from '@lucide/svelte';
+	import { Check, Copy, CreditCard, ExternalLink, QrCode } from '@lucide/svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import BoostyIcon from '$lib/components/ui/brand-icons/BoostyIcon.svelte';
+	import LavaIcon from '$lib/components/ui/brand-icons/LavaIcon.svelte';
+	import TonIcon from '$lib/components/ui/brand-icons/TonIcon.svelte';
 
+	const SBER_PAY_URL = 'https://messenger.online.sberbank.ru/sl/2zRK0Js6nn0sbAhuy';
 	const CARD_NUMBER = '4817 7603 3434 7832';
 	const TON_ADDRESS = 'UQDoqpcudSDCZGqKWCoLDT008_BNhSKBUao_G5MZR9jcpf-i';
 
@@ -44,9 +48,9 @@
 		>
 			<div class="flex items-center gap-3">
 				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 font-bold text-orange-600"
+					class="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600"
 				>
-					B
+					<BoostyIcon size={22} class="text-orange-600" />
 				</div>
 				<div>
 					<p class="font-semibold text-foreground transition-colors group-hover:text-orange-600">
@@ -68,9 +72,9 @@
 		>
 			<div class="flex items-center gap-3">
 				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 font-bold text-violet-600"
+					class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600"
 				>
-					L
+					<LavaIcon size={22} class="text-violet-600" />
 				</div>
 				<div>
 					<p class="font-semibold text-foreground transition-colors group-hover:text-violet-600">
@@ -115,7 +119,17 @@
 						{CARD_NUMBER}
 					</span>
 				</div>
-				<div class="flex gap-2">
+				<div class="flex flex-wrap gap-2">
+					<Button
+						href={SBER_PAY_URL}
+						target="_blank"
+						rel="noopener noreferrer"
+						size="sm"
+						class="w-full gap-1.5 bg-[#21a038] text-white hover:bg-[#1b842e] sm:w-auto"
+					>
+						<ExternalLink class="h-4 w-4" />
+						<span>Перевести в СберБанк Онлайн</span>
+					</Button>
 					<Button
 						variant="outline"
 						size="sm"
@@ -140,7 +154,7 @@
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
-					<Coins class="h-5 w-5 text-sky-500" />
+					<TonIcon size={20} class="text-sky-500" />
 					<Card.Title class="text-base font-semibold">Криптовалюта (Сеть TON)</Card.Title>
 				</div>
 				<Button

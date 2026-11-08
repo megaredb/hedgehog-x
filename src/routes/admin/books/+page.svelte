@@ -20,6 +20,7 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import {
 		BookOpen,
 		Plus,
@@ -33,6 +34,23 @@
 	let { data, form } = $props();
 
 	const isEditing = $derived(!!data.editBook);
+
+	function getInitialPage(): number {
+		if (data.editBook) {
+			const index = data.books.findIndex((b) => b.id === data.editBook?.id);
+			if (index !== -1) {
+				return Math.floor(index / 10) + 1;
+			}
+		}
+		return 1;
+	}
+
+	let currentPage = $state(getInitialPage());
+	let pageSize = $state(10);
+
+	const paginatedBooks = $derived(
+		data.books.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
 </script>
 
 <div class="space-y-8">
@@ -87,7 +105,7 @@
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{#each data.books as book (book.id)}
+								{#each paginatedBooks as book (book.id)}
 									<TableRow class={data.editBook?.id === book.id ? 'bg-primary/5' : ''}>
 										<TableCell class="p-2">
 											{#if book.coverUrl}
@@ -174,6 +192,10 @@
 								{/each}
 							</TableBody>
 						</Table>
+
+						<div class="border-t px-4 py-2">
+							<PaginationBar totalItems={data.books.length} bind:currentPage bind:pageSize />
+						</div>
 					{/if}
 				</CardContent>
 			</Card>

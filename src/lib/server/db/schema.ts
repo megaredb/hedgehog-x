@@ -5,7 +5,9 @@ import {
 	boolean,
 	primaryKey,
 	timestamp,
-	varchar
+	varchar,
+	index,
+	uniqueIndex
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { user } from './auth.schema';
@@ -153,6 +155,95 @@ export const illustrationsRelations = relations(illustrations, ({ one }) => ({
 	volume: one(volumes, {
 		fields: [illustrations.volumeId],
 		references: [volumes.id]
+	})
+}));
+
+export const listeningSessions = pgTable(
+	'listening_sessions',
+	{
+		id: varchar('id', { length: 36 })
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+		bookId: varchar('book_id', { length: 128 }).references(() => books.id, { onDelete: 'cascade' }),
+		volumeId: varchar('volume_id', { length: 128 }).references(() => volumes.id, {
+			onDelete: 'cascade'
+		}),
+		chapterId: varchar('chapter_id', { length: 128 })
+			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		listenedSeconds: integer('listened_seconds').notNull(),
+		startedAt: timestamp('started_at').defaultNow().notNull(),
+		createdAt: timestamp('created_at').defaultNow().notNull()
+	},
+	(table) => [
+		index('listening_sessions_user_idx').on(table.userId),
+		index('listening_sessions_chapter_idx').on(table.chapterId),
+		index('listening_sessions_started_at_idx').on(table.startedAt)
+	]
+);
+
+export const dailyListeningStats = pgTable(
+	'daily_listening_stats',
+	{
+		id: varchar('id', { length: 128 }).primaryKey(),
+		date: varchar('date', { length: 10 }).notNull(), // 'YYYY-MM-DD'
+		userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+		bookId: varchar('book_id', { length: 128 }).references(() => books.id, { onDelete: 'cascade' }),
+		chapterId: varchar('chapter_id', { length: 128 }).references(() => chapters.id, {
+			onDelete: 'cascade'
+		}),
+		totalSeconds: integer('total_seconds').notNull().default(0),
+		sessionsCount: integer('sessions_count').notNull().default(1),
+		updatedAt: timestamp('updated_at')
+			.defaultNow()
+			.notNull()
+			.$onUpdate(() => new Date())
+	},
+	(table) => [
+		index('daily_stats_date_idx').on(table.date),
+		index('daily_stats_book_idx').on(table.bookId),
+		index('daily_stats_user_idx').on(table.userId),
+		uniqueIndex('daily_stats_unique_entry').on(
+			table.date,
+			table.bookId,
+			table.chapterId,
+			table.userId
+		)
+	]
+);
+
+export const listeningSessionsRelations = relations(listeningSessions, ({ one }) => ({
+	user: one(user, {
+		fields: [listeningSessions.userId],
+		references: [user.id]
+	}),
+	book: one(books, {
+		fields: [listeningSessions.bookId],
+		references: [books.id]
+	}),
+	volume: one(volumes, {
+		fields: [listeningSessions.volumeId],
+		references: [volumes.id]
+	}),
+	chapter: one(chapters, {
+		fields: [listeningSessions.chapterId],
+		references: [chapters.id]
+	})
+}));
+
+export const dailyListeningStatsRelations = relations(dailyListeningStats, ({ one }) => ({
+	user: one(user, {
+		fields: [dailyListeningStats.userId],
+		references: [user.id]
+	}),
+	book: one(books, {
+		fields: [dailyListeningStats.bookId],
+		references: [books.id]
+	}),
+	chapter: one(chapters, {
+		fields: [dailyListeningStats.chapterId],
+		references: [chapters.id]
 	})
 }));
 

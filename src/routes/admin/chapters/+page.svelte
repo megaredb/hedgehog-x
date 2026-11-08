@@ -18,11 +18,29 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { Disc3, Plus, Trash2, Edit, Play, MessageSquare } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
 	const isEditing = $derived(!!data.editChapter);
+
+	function getInitialPage(): number {
+		if (data.editChapter) {
+			const index = data.chapters.findIndex((c) => c.id === data.editChapter?.id);
+			if (index !== -1) {
+				return Math.floor(index / 10) + 1;
+			}
+		}
+		return 1;
+	}
+
+	let currentPage = $state(getInitialPage());
+	let pageSize = $state(10);
+
+	const paginatedChapters = $derived(
+		data.chapters.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
 
 	function formatDuration(sec: number): string {
 		const m = Math.floor(sec / 60);
@@ -105,7 +123,7 @@
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{#each data.chapters as ch (ch.id)}
+								{#each paginatedChapters as ch (ch.id)}
 									<TableRow class={data.editChapter?.id === ch.id ? 'bg-primary/5' : ''}>
 										<TableCell class="p-2 font-mono text-xs font-semibold">
 											{ch.chapterNumber}
@@ -174,6 +192,10 @@
 								{/each}
 							</TableBody>
 						</Table>
+
+						<div class="border-t px-4 py-2">
+							<PaginationBar totalItems={data.chapters.length} bind:currentPage bind:pageSize />
+						</div>
 					{/if}
 				</CardContent>
 			</Card>

@@ -4,16 +4,20 @@
 		db,
 		type OfflineChapter,
 		type OfflineProgress,
-		type OfflineVolume
+		type OfflineVolume,
+		type OfflineChapterLike
 	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { useSession } from '$lib/client/session.svelte';
+	import { likeService } from '$lib/client/services/likeService';
+	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Play, Pause, MessageSquare, Check } from '@lucide/svelte';
-	import { SvelteMap } from 'svelte/reactivity';
+	import { Play, Pause, MessageSquare, Check, Heart } from '@lucide/svelte';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	interface Props {
 		volume: OfflineVolume | undefined;
@@ -23,6 +27,9 @@
 	}
 
 	let { volume, chapters, bookId, isLoading = false }: Props = $props();
+
+	const session = useSession();
+	let isGuestModalOpen = $state(false);
 
 	// Load saved progress for all chapters
 	const progressQuery = useDexie(
@@ -38,6 +45,30 @@
 		}
 		return map;
 	});
+
+	// Load liked chapters from Dexie
+	const chapterLikesQuery = useDexie(
+		() => db.chapterLikes.toArray(),
+		() => [] as OfflineChapterLike[],
+		() => []
+	);
+
+	const likedChapterIds = $derived.by(() => {
+		const set = new SvelteSet<string>();
+		for (const l of chapterLikesQuery.data) {
+			set.add(l.chapterId);
+		}
+		return set;
+	});
+
+	async function handleToggleChapterLike(e: MouseEvent, chapter: OfflineChapter) {
+		e.stopPropagation();
+		if (!session.user) {
+			isGuestModalOpen = true;
+			return;
+		}
+		await likeService.toggleChapterLike(chapter.id, chapter.likesCount);
+	}
 
 	let selectedChapterForComments = $state<OfflineChapter | null>(null);
 	let isCommentsDrawerOpen = $state(false);
@@ -227,8 +258,31 @@
 							</div>
 						</div>
 
-						<!-- Правая часть: кнопка комментариев, скачивание, общая длительность -->
+						<!-- Правая часть: кнопка лайка, комментариев, скачивание -->
 						<div class="relative z-10 flex shrink-0 items-center gap-1 pl-2 sm:gap-2">
+							<!-- Кнопка лайка главы -->
+							<Button
+								variant="ghost"
+								size="sm"
+								class="h-8 gap-1 px-2 text-xs transition-colors {likedChapterIds.has(chapter.id)
+									? 'text-rose-500 hover:text-rose-600'
+									: 'text-muted-foreground hover:text-foreground'}"
+								onclick={(e) => handleToggleChapterLike(e, chapter)}
+								title={likedChapterIds.has(chapter.id) ? 'Убрать лайк' : 'Поставить лайк'}
+								aria-label={likedChapterIds.has(chapter.id)
+									? `Убрать лайк с ${chapter.title}`
+									: `Лайкнуть ${chapter.title}`}
+							>
+								<Heart
+									class="h-3.5 w-3.5 transition-transform active:scale-125 {likedChapterIds.has(
+										chapter.id
+									)
+										? 'fill-rose-500 text-rose-500'
+										: ''}"
+								/>
+								<span class="font-medium">{chapter.likesCount || 0}</span>
+							</Button>
+
 							<!-- Кнопка комментариев к конкретной главе -->
 							<Button
 								variant="ghost"
@@ -256,3 +310,6 @@
 	chapter={selectedChapterForComments}
 	volumeTitle={volume?.title}
 />
+
+<!-- Модальное окно авторизации для гостей при попытке лайкнуть главу -->
+<GuestAuthModal bind:open={isGuestModalOpen} />

@@ -69,6 +69,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			action?: 'upsert' | 'delete';
 		}> = body.bookmarkUpdates || [];
 
+		const volumeLikeUpdates: Array<{
+			id?: string;
+			volumeId?: string;
+			action: 'like' | 'unlike';
+			timestamp?: number;
+		}> = body.volumeLikeUpdates || [];
+
+		const chapterLikeUpdates: Array<{
+			id?: string;
+			chapterId?: string;
+			action: 'like' | 'unlike';
+			timestamp?: number;
+		}> = body.chapterLikeUpdates || [];
+
 		// Handle progress updates
 		if (Array.isArray(items) && items.length > 0) {
 			for (const item of items) {
@@ -124,10 +138,60 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Handle volume likes updates
+		let volumeLikesProcessed = 0;
+		if (Array.isArray(volumeLikeUpdates) && volumeLikeUpdates.length > 0) {
+			for (const v of volumeLikeUpdates) {
+				const volumeId = v.volumeId || v.id;
+				if (!volumeId) continue;
+				if (v.action === 'like') {
+					await db
+						.insert(volumeLikes)
+						.values({
+							userId: user.id,
+							volumeId,
+							createdAt: v.timestamp ? new Date(v.timestamp) : new Date()
+						})
+						.onConflictDoNothing();
+				} else if (v.action === 'unlike') {
+					await db
+						.delete(volumeLikes)
+						.where(and(eq(volumeLikes.userId, user.id), eq(volumeLikes.volumeId, volumeId)));
+				}
+				volumeLikesProcessed++;
+			}
+		}
+
+		// Handle chapter likes updates
+		let chapterLikesProcessed = 0;
+		if (Array.isArray(chapterLikeUpdates) && chapterLikeUpdates.length > 0) {
+			for (const c of chapterLikeUpdates) {
+				const chapterId = c.chapterId || c.id;
+				if (!chapterId) continue;
+				if (c.action === 'like') {
+					await db
+						.insert(chapterLikes)
+						.values({
+							userId: user.id,
+							chapterId,
+							createdAt: c.timestamp ? new Date(c.timestamp) : new Date()
+						})
+						.onConflictDoNothing();
+				} else if (c.action === 'unlike') {
+					await db
+						.delete(chapterLikes)
+						.where(and(eq(chapterLikes.userId, user.id), eq(chapterLikes.chapterId, chapterId)));
+				}
+				chapterLikesProcessed++;
+			}
+		}
+
 		return json({
 			success: true,
 			progressCount: items.length,
-			bookmarksCount: bookmarkUpdates.length
+			bookmarksCount: bookmarkUpdates.length,
+			volumeLikesCount: volumeLikesProcessed,
+			chapterLikesCount: chapterLikesProcessed
 		});
 	} catch (err) {
 		return json(

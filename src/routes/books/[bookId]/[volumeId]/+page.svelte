@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import { db, type OfflineVolume } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import type { Track } from '$lib/html-audio.js';
+	import { parseShareParams } from '$lib/components/share/share.js';
 	import * as Tabs from '$lib/components/ui/tabs';
 	import VolumeHeader from '$lib/components/volume/VolumeHeader.svelte';
 	import VolumeChaptersTab from '$lib/components/volume/VolumeChaptersTab.svelte';
 	import VolumeIllustrationsTab from '$lib/components/volume/VolumeIllustrationsTab.svelte';
 	import TelegramComments from '$lib/components/comments/TelegramComments.svelte';
 	import VolumeCompletionModal from '$lib/components/volume/VolumeCompletionModal.svelte';
+	import { OpenGraphMeta, formatVolumeOgTitle } from '$lib/components/seo';
 	import { Headphones, Image as ImageIcon, MessageSquare } from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { strings } from '$lib/constants/strings';
@@ -37,8 +41,59 @@
 		() => [data.bookId]
 	);
 
+	const bookQuery = useDexie(
+		() => db.books.get(data.bookId),
+		() => undefined,
+		() => [data.bookId]
+	);
+
 	const volume = $derived(volumeQuery.data);
 	const chapters = $derived(chaptersQuery.data);
+	const book = $derived(bookQuery.data);
+
+	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
+	let handledUrlParamsForVolumeId: string | null = null;
+
+	$effect(() => {
+		if (chaptersQuery.isLoading || chapters.length === 0 || !volume) return;
+		if (handledUrlParamsForVolumeId === data.volumeId) return;
+
+		const { chapterId, timestamp } = parseShareParams(page.url.searchParams);
+		if (!chapterId) return;
+
+		const targetIndex = chapters.findIndex((c) => c.id === chapterId);
+		if (targetIndex === -1) return;
+
+		handledUrlParamsForVolumeId = data.volumeId;
+		const targetChapter = chapters[targetIndex];
+		const seekTime = timestamp && timestamp > 0 ? timestamp : 0;
+
+		const tracks: Track[] = chapters.map((c) => ({
+			id: c.id,
+			url: c.audioUrl,
+			title: c.title,
+			duration: c.durationSeconds,
+			artwork: volume.coverUrl,
+			album: volume.title,
+			volumeId: volume.id,
+			bookId: data.bookId,
+			startTime: c.id === targetChapter.id ? seekTime : 0
+		}));
+
+		if (audioStore.currentTrack?.id === targetChapter.id) {
+			if (seekTime > 0) {
+				audioStore.seek(seekTime, false);
+			}
+			return;
+		}
+
+		audioStore.setQueueAndPlay(tracks, targetIndex);
+		if (seekTime > 0) {
+			setTimeout(() => {
+				audioStore.seek(seekTime, false);
+			}, 150);
+		}
+	});
 
 	// Next volume in this book series
 	const nextVolume = $derived.by(() => {
@@ -83,26 +138,28 @@
 		isCompletionModalOpen = false;
 		await goto(resolve(`/books/${data.bookId}/${nextVolume.id}`));
 	}
+
+	const ogTitle = $derived(formatVolumeOgTitle(volume?.title, book?.title, 'Hedgehog X'));
+
+	const audioOgUrl = $derived.by(() => {
+		if (audioStore.currentTrack?.volumeId === volume?.id && audioStore.currentTrack?.url) {
+			return audioStore.currentTrack.url;
+		}
+		return chapters[0]?.audioUrl || null;
+	});
 </script>
 
-<svelte:head>
-	<title>{volume?.title || 'Том'} | Аудиокнига | Hedgehog X</title>
-	<meta name="description" content={volume?.description || 'Слушайте аудиокнигу на Hedgehog X'} />
-
-	<!-- OpenGraph meta tags -->
-	<meta property="og:title" content="{volume?.title || 'Аудиокнига'} | Hedgehog X" />
-	<meta
-		property="og:description"
-		content={volume?.description || 'Слушайте аудиокнигу онлайн на Hedgehog X'}
-	/>
-	<meta property="og:image" content={volume?.coverUrl || '/logo.webp'} />
-	<meta property="og:type" content="music.album" />
-	<meta name="twitter:card" content="summary_large_image" />
-</svelte:head>
+<OpenGraphMeta
+	title={ogTitle}
+	description={volume?.description || 'Слушайте аудиокнигу онлайн на Hedgehog X'}
+	image={volume?.coverUrl}
+	type="music.album"
+	audio={audioOgUrl}
+/>
 
 <main class="layout-content mx-auto max-w-5xl py-4 md:py-8">
 	<!-- Volume header -->
-	<VolumeHeader {volume} {chapters} isLoading={volumeQuery.isLoading} />
+	<VolumeHeader {volume} {chapters} {book} bookId={data.bookId} isLoading={volumeQuery.isLoading} />
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">

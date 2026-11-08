@@ -8,6 +8,7 @@
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Item } from '$lib/components/ui/item';
 	import { Empty } from '$lib/components/ui/empty';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { resolve } from '$app/paths';
 	import { SvelteMap } from 'svelte/reactivity';
 
@@ -56,6 +57,16 @@
 			items
 		}));
 	});
+
+	let downloadedPage = $state(1);
+	let downloadedPageSize = $state(5);
+
+	const paginatedDownloadedGroups = $derived(
+		downloadedGroups.slice(
+			(downloadedPage - 1) * downloadedPageSize,
+			downloadedPage * downloadedPageSize
+		)
+	);
 </script>
 
 <svelte:head>
@@ -187,7 +198,7 @@
 			</Empty>
 		{:else}
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
-				{#each downloadedGroups as group (group.volumeId)}
+				{#each paginatedDownloadedGroups as group (group.volumeId)}
 					<Accordion.Item value={group.volumeId}>
 						<Accordion.Trigger class="px-4 transition-colors hover:bg-muted/30 hover:no-underline">
 							<div class="flex w-full items-center gap-4">
@@ -260,6 +271,14 @@
 					</Accordion.Item>
 				{/each}
 			</Accordion.Root>
+
+			{#if downloadedGroups.length > 0}
+				<PaginationBar
+					totalItems={downloadedGroups.length}
+					bind:currentPage={downloadedPage}
+					bind:pageSize={downloadedPageSize}
+				/>
+			{/if}
 		{/if}
 	</section>
 </div>

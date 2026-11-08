@@ -13,10 +13,15 @@
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import { createLogger } from '$lib/logger';
+	import { env } from '$env/dynamic/public';
 
 	const log = createLogger('SW');
 
 	let { children } = $props();
+
+	const umamiWebsiteId = env.PUBLIC_UMAMI_WEBSITE_ID || import.meta.env.PUBLIC_UMAMI_WEBSITE_ID;
+	const umamiHost =
+		env.PUBLIC_UMAMI_HOST || import.meta.env.PUBLIC_UMAMI_HOST || 'https://cloud.umami.is';
 
 	let displayVolume = $derived(`${Math.round(audioStore.volume * 100)}%`);
 	let displayRate = $derived(`${Math.round(audioStore.playbackRate * 100)}%`);
@@ -69,6 +74,13 @@
 	<link rel="icon" href={favicon} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html pwaInfo ? pwaInfo.webManifest.linkTag : ''}
+	{#if umamiWebsiteId}
+		<script
+			defer
+			src="{umamiHost.replace(/\/+$/, '')}/script.js"
+			data-website-id={umamiWebsiteId}
+		></script>
+	{/if}
 </svelte:head>
 
 <AudioProvider>
@@ -86,7 +98,7 @@
 			>
 				<AppBreadcrumbs />
 				<!-- Page Content -->
-				<main class="page-content-transition flex-1 pb-28">
+				<main class="page-content-transition flex-1">
 					{@render children()}
 				</main>
 				<GlobalPlayer />

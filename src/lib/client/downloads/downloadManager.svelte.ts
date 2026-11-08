@@ -2,6 +2,7 @@ import { db, type OfflineChapter, type OfflineDownload } from '$lib/client/db';
 import { liveQuery } from 'dexie';
 import { SvelteMap } from 'svelte/reactivity';
 import { createLogger } from '$lib/logger';
+import { resolveMediaUrl, getFallbackMediaUrl } from '$lib/utils/mirror';
 
 const log = createLogger('Downloads');
 
@@ -83,11 +84,36 @@ async function performDownload(chapter: OfflineChapter) {
 			createdAt: Date.now()
 		});
 
-		const fetchUrl = new URL(chapter.audioUrl);
-		fetchUrl.searchParams.set('_cors', '1');
-		const response = await fetch(fetchUrl.toString(), { signal: controller.signal });
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
+		const primaryUrl = resolveMediaUrl(chapter.audioUrl);
+		const fallbackUrl = getFallbackMediaUrl(primaryUrl);
+
+		const fetchWithCors = async (urlStr: string) => {
+			const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+			const fetchUrl = new URL(urlStr, baseUrl);
+			fetchUrl.searchParams.set('_cors', '1');
+			return fetch(fetchUrl.toString(), { signal: controller.signal });
+		};
+
+		let response: Response;
+		try {
+			response = await fetchWithCors(primaryUrl);
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+		} catch (primaryErr) {
+			if (controller.signal.aborted) throw primaryErr;
+			if (fallbackUrl && fallbackUrl !== primaryUrl) {
+				log.warn(
+					`Загрузка главы ${chapter.id} с основного зеркала не удалась, переключение на fallback:`,
+					primaryErr
+				);
+				response = await fetchWithCors(fallbackUrl);
+				if (!response.ok) {
+					throw new Error(`Fallback HTTP error! status: ${response.status}`, { cause: primaryErr });
+				}
+			} else {
+				throw primaryErr;
+			}
 		}
 
 		const contentLength = response.headers.get('content-length');
@@ -111,6 +137,8 @@ async function performDownload(chapter: OfflineChapter) {
 		// Clean previous cached copy if present
 		try {
 			const cache = await caches.open('audio-cache');
+			await cache.delete(primaryUrl);
+			if (fallbackUrl) await cache.delete(fallbackUrl);
 			await cache.delete(chapter.audioUrl);
 		} catch {
 			// ignore

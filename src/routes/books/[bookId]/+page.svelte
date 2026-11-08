@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { OpenGraphMeta } from '$lib/components/seo';
 	import { LayoutGrid, List as ListIcon } from '@lucide/svelte';
 
 	let { data } = $props();
@@ -19,11 +20,18 @@
 		() => [],
 		() => [data.bookId]
 	);
+
+	const ogTitle = $derived(
+		bookQuery.data?.title ? `${bookQuery.data.title} | Тома` : 'Книга | Тома'
+	);
 </script>
 
-<svelte:head>
-	<title>{bookQuery.data?.title || 'Книга'} | Тома</title>
-</svelte:head>
+<OpenGraphMeta
+	title={ogTitle}
+	description={bookQuery.data?.description || 'Список томов аудиокниги на Hedgehog X'}
+	image={bookQuery.data?.coverUrl}
+	type="book"
+/>
 
 <main class="layout-content py-4 md:py-8">
 	<div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">

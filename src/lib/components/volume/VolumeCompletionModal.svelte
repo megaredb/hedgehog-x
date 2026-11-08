@@ -20,6 +20,21 @@
 		onPlayNextVolume
 	}: Props = $props();
 
+	let wasOpen = false;
+
+	$effect(() => {
+		if (open && !wasOpen) {
+			try {
+				const jingle = new Audio('/audio/volume-complete.mp3');
+				jingle.volume = 0.6;
+				jingle.play().catch(() => {});
+			} catch {
+				// Autoplay restriction or audio API unavailable
+			}
+		}
+		wasOpen = open;
+	});
+
 	function handlePlayNext() {
 		open = false;
 		if (onPlayNextVolume) onPlayNextVolume();

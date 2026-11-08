@@ -142,7 +142,7 @@
 
 {#if audioStore.queue.length > 0}
 	<AudioPlayer.Root
-		class="sticky bottom-0 z-50 w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
+		class="global-audio-player sticky bottom-0 z-50 w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
 	>
 		<!-- Undo seek floating badge -->
 		{#if audioStore.undoSeekAvailable && audioStore.lastSeekFrom !== null}

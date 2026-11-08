@@ -13,6 +13,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
+	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { strings } from '$lib/constants/strings';
 	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
 
@@ -47,6 +48,13 @@
 
 	let bookmarkToDelete = $state<EnrichedBookmark | null>(null);
 	let isDeleteModalOpen = $state(false);
+
+	let currentPage = $state(1);
+	let pageSize = $state(10);
+
+	const paginatedBookmarks = $derived(
+		bookmarksQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+	);
 
 	function formatTime(seconds: number): string {
 		const h = Math.floor(seconds / 3600);
@@ -158,7 +166,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each bookmarksQuery.data as item (item.id)}
+			{#each paginatedBookmarks as item (item.id)}
 				<Card.Root
 					class="group overflow-hidden border-border/60 bg-card/60 transition-all duration-200 hover:border-border hover:shadow-md"
 				>
@@ -244,6 +252,10 @@
 				</Card.Root>
 			{/each}
 		</div>
+
+		{#if bookmarksQuery.data.length > 0}
+			<PaginationBar totalItems={bookmarksQuery.data.length} bind:currentPage bind:pageSize />
+		{/if}
 	{/if}
 </div>
 

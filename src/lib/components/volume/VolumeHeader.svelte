@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { audioStore } from '$lib/audio-store.svelte';
-	import type { OfflineVolume, OfflineChapter } from '$lib/client/db';
+	import { db, type OfflineVolume, type OfflineChapter, type OfflineBook } from '$lib/client/db';
+	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { useSession } from '$lib/client/session.svelte';
+	import { likeService } from '$lib/client/services/likeService';
+	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
+	import ShareModal from '$lib/components/share/ShareModal.svelte';
 	import { extractAverageColor } from '$lib/utils/color';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -13,23 +18,59 @@
 		Download as DownloadIcon,
 		ZoomIn,
 		Music,
-		Sparkles
+		Sparkles,
+		Heart
 	} from '@lucide/svelte';
 	import { useDownloads } from '$lib/client/downloads/downloadManager.svelte';
 
 	interface Props {
 		volume: OfflineVolume | undefined;
 		chapters: OfflineChapter[];
+		book?: OfflineBook;
+		bookId?: string;
 		isLoading?: boolean;
 	}
 
-	let { volume, chapters, isLoading = false }: Props = $props();
+	let { volume, chapters, book, bookId, isLoading = false }: Props = $props();
 
+	const session = useSession();
 	const manager = useDownloads();
 
 	let isLightboxOpen = $state(false);
+	let isGuestModalOpen = $state(false);
+	let isShareModalOpen = $state(false);
 	let accentColor = $state('59 130 246');
-	let copiedShare = $state(false);
+
+	const targetBookId = $derived(book?.id || bookId || volume?.bookId);
+	const liveBookQuery = useDexie(
+		() => (targetBookId ? db.books.get(targetBookId) : Promise.resolve(undefined)),
+		() => undefined,
+		() => targetBookId
+	);
+	const activeBook = $derived(book ?? liveBookQuery.data);
+
+	const volumeLikeQuery = useDexie(
+		() => (volume?.id ? db.volumeLikes.get(volume.id) : Promise.resolve(undefined)),
+		() => undefined,
+		() => volume?.id
+	);
+	const isLiked = $derived(!!volumeLikeQuery.data);
+
+	const liveVolumeQuery = useDexie(
+		() => (volume?.id ? db.volumes.get(volume.id) : Promise.resolve(undefined)),
+		() => undefined,
+		() => volume?.id
+	);
+	const likesCount = $derived(liveVolumeQuery.data?.likesCount ?? volume?.likesCount ?? 0);
+
+	async function handleToggleLike() {
+		if (!volume?.id) return;
+		if (!session.user) {
+			isGuestModalOpen = true;
+			return;
+		}
+		await likeService.toggleVolumeLike(volume.id, likesCount);
+	}
 
 	const isPlayingThisVolume = $derived(
 		audioStore.isPlaying && audioStore.currentTrack?.volumeId === volume?.id
@@ -55,32 +96,15 @@
 		}
 	});
 
-	async function handleShare() {
-		const shareData = {
-			title: volume?.title ? `${volume.title} | Hedgehog X` : 'Hedgehog X',
-			text: volume?.description || 'Слушайте аудиокнигу на Hedgehog X',
-			url: typeof window !== 'undefined' ? window.location.href : ''
-		};
-
-		if (typeof navigator !== 'undefined' && navigator.share) {
-			try {
-				await navigator.share(shareData);
-				return;
-			} catch {
-				// User cancelled or share failed, fallback to clipboard
-			}
-		}
-
-		if (typeof navigator !== 'undefined' && navigator.clipboard) {
-			await navigator.clipboard.writeText(window.location.href);
-			copiedShare = true;
-			setTimeout(() => (copiedShare = false), 2000);
-		}
+	function handleShare() {
+		isShareModalOpen = true;
 	}
 </script>
 
 <div
-	class="relative mb-8 overflow-hidden rounded-3xl border border-border/60 bg-card p-6 shadow-sm transition-all duration-500"
+	class="relative mb-8 overflow-hidden rounded-3xl border bg-card p-6 shadow-sm transition-all duration-500 {isPlayingThisVolume
+		? 'border-primary/40 shadow-md ring-1 ring-primary/20'
+		: 'border-border/60'}"
 	style="--vol-accent: {accentColor};"
 >
 	<!-- Фоновый мягкий градиент от цвета обложки -->
@@ -88,6 +112,28 @@
 		class="pointer-events-none absolute -top-32 -left-32 h-96 w-96 rounded-full blur-3xl transition-opacity duration-700"
 		style="background: radial-gradient(circle, rgb(var(--vol-accent) / 0.22) 0%, transparent 70%);"
 	></div>
+
+	<!-- Переливающийся градиент и плавающие фигуры при воспроизведении тома -->
+	{#if isPlayingThisVolume}
+		<div
+			class="volume-iridescent-bg pointer-events-none absolute inset-0 opacity-20 transition-opacity duration-1000 dark:opacity-30"
+		></div>
+
+		<div class="pointer-events-none absolute inset-0 overflow-hidden">
+			<div
+				class="volume-orb volume-orb-1"
+				style="background: radial-gradient(circle, rgb(var(--vol-accent) / 0.45) 0%, transparent 70%);"
+			></div>
+			<div
+				class="volume-orb volume-orb-2"
+				style="background: radial-gradient(circle, rgba(236, 72, 153, 0.35) 0%, transparent 70%);"
+			></div>
+			<div
+				class="volume-orb volume-orb-3"
+				style="background: radial-gradient(circle, rgba(139, 92, 246, 0.35) 0%, transparent 70%);"
+			></div>
+		</div>
+	{/if}
 
 	<div
 		class="relative z-10 flex flex-col items-center gap-6 text-center sm:flex-row sm:items-start sm:text-left"
@@ -97,7 +143,7 @@
 			<!-- Анимированная переливающаяся аура при воспроизведении -->
 			{#if isPlayingThisVolume}
 				<div
-					class="absolute -inset-1.5 animate-pulse rounded-2xl opacity-90 blur-md transition-all duration-700"
+					class="absolute -inset-1.5 scale-105 animate-pulse rounded-2xl opacity-90 blur-md transition-transform duration-500"
 					style="background: linear-gradient(135deg, rgb(var(--vol-accent)), #ec4899, #8b5cf6, rgb(var(--vol-accent))); background-size: 300% 300%; animation: gradient-flow 4s ease infinite, pulse 3s infinite;"
 				></div>
 			{/if}
@@ -110,7 +156,9 @@
 					role="button"
 					tabindex="0"
 					onclick={() => (isLightboxOpen = true)}
-					class="relative cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-transform duration-300 group-hover:scale-102 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					class="relative cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-transform duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {isPlayingThisVolume
+						? 'scale-105 shadow-xl'
+						: 'group-hover:scale-102'}"
 					title="Нажмите, чтобы приблизить обложку"
 				>
 					<img
@@ -227,15 +275,32 @@
 					size="sm"
 					class="gap-1.5 text-muted-foreground hover:text-foreground"
 					onclick={handleShare}
+					aria-label="Поделиться томом или таймкодом"
 				>
-					{#if copiedShare}
-						<Check class="h-4 w-4 text-green-600" />
-						<span class="text-green-600">Ссылка скопирована!</span>
-					{:else}
-						<Share2 class="h-4 w-4" />
-						<span>Поделиться</span>
-					{/if}
+					<Share2 class="h-4 w-4" />
+					<span>Поделиться</span>
 				</Button>
+
+				<!-- Кнопка Лайк тома -->
+				{#if volume}
+					<Button
+						variant={isLiked ? 'secondary' : 'outline'}
+						size="sm"
+						class="gap-1.5 shadow-sm transition-colors {isLiked
+							? 'border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400'
+							: 'text-muted-foreground hover:text-foreground'}"
+						onclick={handleToggleLike}
+						aria-label={isLiked ? 'Убрать лайк' : 'Поставить лайк'}
+						title={isLiked ? 'Убрать лайк' : 'Поставить лайк'}
+					>
+						<Heart
+							class="h-4 w-4 transition-transform active:scale-125 {isLiked
+								? 'fill-rose-500 text-rose-500'
+								: ''}"
+						/>
+						<span class="font-medium">{likesCount}</span>
+					</Button>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -251,6 +316,21 @@
 	/>
 {/if}
 
+<!-- Модальное окно авторизации для гостей при попытке поставить лайк -->
+<GuestAuthModal bind:open={isGuestModalOpen} />
+
+<!-- Модальное окно «Поделиться» томом / таймкодом -->
+<ShareModal
+	bind:open={isShareModalOpen}
+	book={activeBook}
+	{volume}
+	{chapters}
+	currentChapterId={audioStore.currentTrack?.volumeId === volume?.id
+		? String(audioStore.currentTrack?.id)
+		: undefined}
+	currentTime={audioStore.currentTrack?.volumeId === volume?.id ? audioStore.currentTime : 0}
+/>
+
 <style>
 	@keyframes gradient-flow {
 		0% {
@@ -262,5 +342,72 @@
 		100% {
 			background-position: 0% 50%;
 		}
+	}
+
+	@keyframes gradient-shimmer {
+		0% {
+			background-position: 0% 50%;
+		}
+		50% {
+			background-position: 100% 50%;
+		}
+		100% {
+			background-position: 0% 50%;
+		}
+	}
+
+	@keyframes float-orb {
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		50% {
+			transform: translate(25px, -20px) scale(1.1);
+		}
+	}
+
+	.volume-iridescent-bg {
+		background: linear-gradient(
+			-45deg,
+			rgb(var(--vol-accent) / 0.3),
+			rgba(236, 72, 153, 0.25),
+			rgba(139, 92, 246, 0.25),
+			rgba(59, 130, 246, 0.25),
+			rgb(var(--vol-accent) / 0.3)
+		);
+		background-size: 300% 300%;
+		animation: gradient-shimmer 7s ease infinite;
+	}
+
+	.volume-orb {
+		position: absolute;
+		border-radius: 9999px;
+		filter: blur(40px);
+		will-change: transform;
+		pointer-events: none;
+	}
+
+	.volume-orb-1 {
+		top: -20%;
+		right: -10%;
+		width: 260px;
+		height: 260px;
+		animation: float-orb 10s ease-in-out infinite;
+	}
+
+	.volume-orb-2 {
+		bottom: -20%;
+		left: 15%;
+		width: 220px;
+		height: 220px;
+		animation: float-orb 14s ease-in-out infinite reverse;
+	}
+
+	.volume-orb-3 {
+		top: 25%;
+		right: 30%;
+		width: 180px;
+		height: 180px;
+		animation: float-orb 8s ease-in-out infinite 2s;
 	}
 </style>
