@@ -151,7 +151,7 @@
 		{/if}
 	</div>
 
-	<!-- Модалка об ошибке авторизации -->
+	<!-- Auth error modal -->
 	<BaseModal
 		bind:open={errorModalOpen}
 		title="Не удалось войти"

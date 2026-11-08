@@ -2,7 +2,7 @@
 	let { class: className = '', size = 20 }: { class?: string; size?: number } = $props();
 </script>
 
-<!-- Официальная иконка TON Diamond (The Open Network) -->
+<!-- Official TON Diamond icon (The Open Network) -->
 <svg
 	viewBox="0 0 24 24"
 	width={size}

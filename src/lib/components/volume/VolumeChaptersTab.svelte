@@ -177,7 +177,7 @@
 							? 'bg-primary/5'
 							: 'hover:bg-muted/30'}"
 					>
-						<!-- Интерактивный фон-прогрессбар для активной главы -->
+						<!-- Interactive background progress for active chapter -->
 						{#if isCurrent}
 							<div
 								class="pointer-events-none absolute inset-y-0 left-0 bg-primary/10 transition-all duration-150"
@@ -185,9 +185,9 @@
 							></div>
 						{/if}
 
-						<!-- Левая часть: кнопка воспроизведения, номер, название, прогресс -->
+						<!-- Left section: play button, number, title, progress -->
 						<div class="relative z-10 flex min-w-0 flex-1 items-center gap-3.5">
-							<!-- Кнопка Play / Pause -->
+							<!-- Play / Pause Button -->
 							<button
 								type="button"
 								onclick={(e) => {
@@ -211,7 +211,7 @@
 								{/if}
 							</button>
 
-							<!-- Название главы и статус прогресса -->
+							<!-- Chapter title and progress status -->
 							<div class="min-w-0 flex-1 pr-2">
 								<h3
 									class="truncate text-sm font-medium transition-colors {isCurrent
@@ -245,7 +245,7 @@
 										<span class="font-mono">{formatDuration(chapter.durationSeconds)}</span>
 									{/if}
 
-									<!-- Тонкая полоска прогресса для непроигрываемых глав -->
+									<!-- Progress bar for non-active chapters -->
 									{#if !isCurrent && saved && !saved.isCompleted && saved.progressSeconds > 0}
 										<div class="h-1 w-12 overflow-hidden rounded-full bg-muted">
 											<div
@@ -258,9 +258,9 @@
 							</div>
 						</div>
 
-						<!-- Правая часть: кнопка лайка, комментариев, скачивание -->
+						<!-- Right section: likes, comments, downloads -->
 						<div class="relative z-10 flex shrink-0 items-center gap-1 pl-2 sm:gap-2">
-							<!-- Кнопка лайка главы -->
+							<!-- Chapter like button -->
 							<Button
 								variant="ghost"
 								size="sm"
@@ -283,7 +283,7 @@
 								<span class="font-medium">{chapter.likesCount || 0}</span>
 							</Button>
 
-							<!-- Кнопка комментариев к конкретной главе -->
+							<!-- Comments button for chapter -->
 							<Button
 								variant="ghost"
 								size="icon"
@@ -294,7 +294,7 @@
 								<MessageSquare class="h-4 w-4" />
 							</Button>
 
-							<!-- Кнопка скачивания главы -->
+							<!-- Chapter download button -->
 							<DownloadButton {chapter} class="h-8 w-8" />
 						</div>
 					</div>
@@ -304,12 +304,12 @@
 	{/if}
 </div>
 
-<!-- Модальное окно с комментариями Telegram выбранной главы -->
+<!-- Telegram comments drawer for selected chapter -->
 <ChapterCommentsDrawer
 	bind:open={isCommentsDrawerOpen}
 	chapter={selectedChapterForComments}
 	volumeTitle={volume?.title}
 />
 
-<!-- Модальное окно авторизации для гостей при попытке лайкнуть главу -->
+<!-- Guest authorization modal on like attempt -->
 <GuestAuthModal bind:open={isGuestModalOpen} />

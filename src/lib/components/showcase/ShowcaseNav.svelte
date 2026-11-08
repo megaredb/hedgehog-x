@@ -24,7 +24,7 @@
 <div
 	class="pointer-events-auto absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col items-center gap-4 md:right-8"
 >
-	<!-- Навигация -->
+	<!-- Navigation controls -->
 	<div
 		class="flex flex-col overflow-hidden rounded-full border border-border/40 bg-background/50 shadow-xl backdrop-blur-md"
 	>
@@ -55,7 +55,7 @@
 		</Button>
 	</div>
 
-	<!-- Управление видео -->
+	<!-- Video playback control -->
 	<Button
 		variant="outline"
 		size="icon"

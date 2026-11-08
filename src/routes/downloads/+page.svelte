@@ -83,7 +83,7 @@
 		оффлайн-прослушивания.
 	</p>
 
-	<!-- Активная очередь -->
+	<!-- Active download queue -->
 	<section class="mb-10">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-4">
 			<h2 class="text-xl font-semibold">Активные загрузки и очередь</h2>
@@ -187,7 +187,7 @@
 		{/if}
 	</section>
 
-	<!-- Сохраненные тома -->
+	<!-- Saved offline volumes -->
 	<section>
 		<h2 class="mb-4 text-xl font-semibold">Сохраненные тома</h2>
 

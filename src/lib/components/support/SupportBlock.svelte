@@ -6,10 +6,11 @@
 	import BoostyIcon from '$lib/components/ui/brand-icons/BoostyIcon.svelte';
 	import LavaIcon from '$lib/components/ui/brand-icons/LavaIcon.svelte';
 	import TonIcon from '$lib/components/ui/brand-icons/TonIcon.svelte';
+	import { strings } from '$lib/constants/strings';
 
 	const SBER_PAY_URL = 'https://messenger.online.sberbank.ru/sl/2zRK0Js6nn0sbAhuy';
-	const CARD_NUMBER = '4817 7603 3434 7832';
-	const TON_ADDRESS = 'UQDoqpcudSDCZGqKWCoLDT008_BNhSKBUao_G5MZR9jcpf-i';
+	const CARD_NUMBER = strings.support.cardNumber;
+	const TON_ADDRESS = strings.support.cryptoAddress;
 
 	let copiedCard = $state(false);
 	let copiedTon = $state(false);
@@ -38,7 +39,7 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Платформы подписки (Boosty, Lava.top) -->
+	<!-- Subscription platforms (Boosty, Lava.top) -->
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 		<a
 			href="https://boosty.to/hedgehoginc"
@@ -54,9 +55,9 @@
 				</div>
 				<div>
 					<p class="font-semibold text-foreground transition-colors group-hover:text-orange-600">
-						Boosty
+						{strings.support.boostyTitle}
 					</p>
-					<p class="text-xs text-muted-foreground">Ежемесячная подписка и донаты</p>
+					<p class="text-xs text-muted-foreground">{strings.support.boostyDesc}</p>
 				</div>
 			</div>
 			<ExternalLink
@@ -78,9 +79,9 @@
 				</div>
 				<div>
 					<p class="font-semibold text-foreground transition-colors group-hover:text-violet-600">
-						Lava.top
+						{strings.support.lavaTitle}
 					</p>
-					<p class="text-xs text-muted-foreground">Подписка картами всего мира</p>
+					<p class="text-xs text-muted-foreground">{strings.support.lavaDesc}</p>
 				</div>
 			</div>
 			<ExternalLink
@@ -89,109 +90,116 @@
 		</a>
 	</div>
 
-	<!-- Банковский перевод и карта -->
+	<!-- Bank transfer & card -->
 	<Card.Root class="overflow-hidden border border-border/60 bg-card/60 shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
 					<CreditCard class="h-5 w-5 text-primary" />
-					<Card.Title class="text-base font-semibold">Перевод по карте</Card.Title>
+					<Card.Title class="text-base font-semibold"
+						>{strings.support.cardTransferTitle}</Card.Title
+					>
 				</div>
 				<Button
 					variant="ghost"
 					size="sm"
 					class="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-					aria-label="QR-код карты"
+					aria-label={strings.support.cardQrAriaLabel}
 					onclick={() => openQr('bank')}
 				>
 					<QrCode class="h-3.5 w-3.5" />
-					<span>QR-код</span>
+					<span>{strings.support.qrCodeBtn}</span>
 				</Button>
 			</div>
 			<Card.Description class="text-xs">
-				Банковский перевод. Отсканируйте QR-код или нажмите на него
+				{strings.support.bankQrSubtitle}
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="pt-0">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div class="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/50 p-3">
-					<span class="font-mono text-base font-medium tracking-wider text-foreground select-all">
+				<!-- Group card number and copy button tightly together -->
+				<div
+					class="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-muted/50 p-1.5 sm:p-2"
+				>
+					<span
+						class="px-2 font-mono text-sm font-medium tracking-wider text-foreground select-all sm:text-base"
+					>
 						{CARD_NUMBER}
 					</span>
-				</div>
-				<div class="flex flex-wrap gap-2">
 					<Button
-						href={SBER_PAY_URL}
-						target="_blank"
-						rel="noopener noreferrer"
+						variant="secondary"
 						size="sm"
-						class="w-full gap-1.5 bg-[#21a038] text-white hover:bg-[#1b842e] sm:w-auto"
-					>
-						<ExternalLink class="h-4 w-4" />
-						<span>Перевести в СберБанк Онлайн</span>
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						class="w-full gap-1.5 sm:w-auto"
+						class="h-8 shrink-0 gap-1.5 text-xs font-medium"
 						onclick={() => copyToClipboard(CARD_NUMBER, 'card')}
 					>
 						{#if copiedCard}
-							<Check class="h-4 w-4 text-green-600" />
-							<span class="text-green-600">Скопировано!</span>
+							<Check class="h-3.5 w-3.5 text-green-600" />
+							<span class="text-green-600">{strings.support.copied}</span>
 						{:else}
-							<Copy class="h-4 w-4" />
-							<span>Скопировать карту</span>
+							<Copy class="h-3.5 w-3.5" />
+							<span>{strings.support.copyCardShort}</span>
 						{/if}
 					</Button>
 				</div>
+
+				<!-- Direct bank pay action -->
+				<Button
+					href={SBER_PAY_URL}
+					target="_blank"
+					rel="noopener noreferrer"
+					size="sm"
+					class="w-full gap-1.5 bg-[#21a038] text-white hover:bg-[#1b842e] sm:w-auto"
+				>
+					<ExternalLink class="h-4 w-4" />
+					<span>{strings.support.sberPayAction}</span>
+				</Button>
 			</div>
 		</Card.Content>
 	</Card.Root>
 
-	<!-- Криптовалюта TON -->
+	<!-- TON Crypto -->
 	<Card.Root class="overflow-hidden border border-border/60 bg-card/60 shadow-sm">
 		<Card.Header class="pb-3">
 			<div class="flex items-center justify-between">
 				<div class="flex items-center gap-2">
 					<TonIcon size={20} class="text-sky-500" />
-					<Card.Title class="text-base font-semibold">Криптовалюта (Сеть TON)</Card.Title>
+					<Card.Title class="text-base font-semibold">{strings.support.cryptoTitle}</Card.Title>
 				</div>
 				<Button
 					variant="ghost"
 					size="sm"
 					class="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-					aria-label="QR-код TON"
+					aria-label={strings.support.tonQrAriaLabel}
 					onclick={() => openQr('ton')}
 				>
 					<QrCode class="h-3.5 w-3.5" />
-					<span>QR-код</span>
+					<span>{strings.support.qrCodeBtn}</span>
 				</Button>
 			</div>
 			<Card.Description class="text-xs">
-				Поддерживаются любые кошельки в сети The Open Network (TON, USDT-TON)
+				{strings.support.cryptoSubtitle}
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="pt-0">
 			<div class="flex flex-col gap-3">
-				<div class="overflow-x-auto rounded-lg border border-border/40 bg-muted/50 p-3">
-					<p class="font-mono text-xs break-all text-foreground select-all">
+				<div
+					class="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-muted/50 p-1.5 sm:p-2"
+				>
+					<p class="px-2 font-mono text-xs break-all text-foreground select-all">
 						{TON_ADDRESS}
 					</p>
-				</div>
-				<div class="flex justify-end">
 					<Button
-						variant="outline"
+						variant="secondary"
 						size="sm"
-						class="w-full gap-1.5 sm:w-auto"
+						class="h-8 shrink-0 gap-1.5 text-xs font-medium"
 						onclick={() => copyToClipboard(TON_ADDRESS, 'ton')}
 					>
 						{#if copiedTon}
-							<Check class="h-4 w-4 text-green-600" />
-							<span class="text-green-600">Скопировано!</span>
+							<Check class="h-3.5 w-3.5 text-green-600" />
+							<span class="text-green-600">{strings.support.copied}</span>
 						{:else}
-							<Copy class="h-4 w-4" />
-							<span>Скопировать адрес</span>
+							<Copy class="h-3.5 w-3.5" />
+							<span>{strings.support.copyCardShort}</span>
 						{/if}
 					</Button>
 				</div>
@@ -200,17 +208,17 @@
 	</Card.Root>
 </div>
 
-<!-- Модальное окно для увеличенного просмотра QR-кода -->
+<!-- Modal Dialog for enlarged QR code -->
 <Dialog.Root bind:open={qrModalOpen}>
 	<Dialog.Content class="text-center sm:max-w-xs">
 		<Dialog.Header>
 			<Dialog.Title>
-				{qrModalType === 'bank' ? 'QR-код банковского перевода' : 'QR-код TON'}
+				{qrModalType === 'bank'
+					? strings.support.qrModalBankTitle
+					: strings.support.qrModalTonTitle}
 			</Dialog.Title>
 			<Dialog.Description class="text-xs">
-				{qrModalType === 'bank'
-					? 'Отсканируйте камерой смартфона или в приложении банка'
-					: 'Отсканируйте кошельком Tonkeeper / Telegram Wallet'}
+				{qrModalType === 'bank' ? strings.support.qrModalBankDesc : strings.support.qrModalTonDesc}
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="my-4 flex items-center justify-center rounded-xl border bg-white p-4 shadow-inner">

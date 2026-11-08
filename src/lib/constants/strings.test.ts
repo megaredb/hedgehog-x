@@ -25,4 +25,12 @@ test('strings: contains valid translation namespaces and keys', () => {
 	assert.ok(strings.history.title);
 	assert.ok(strings.history.emptyTitle);
 	assert.ok(strings.volume.volumeCompletedTitle);
+
+	// Share & Settings & Support
+	assert.ok(strings.share.title);
+	assert.ok(strings.share.directLink);
+	assert.ok(strings.settings.title);
+	assert.ok(strings.settings.audioSection);
+	assert.equal(strings.support.cardQrAriaLabel, 'QR-код карты');
+	assert.equal(strings.support.tonQrAriaLabel, 'QR-код TON');
 });

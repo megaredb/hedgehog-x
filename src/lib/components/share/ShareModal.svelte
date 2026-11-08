@@ -4,6 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import type { OfflineBook, OfflineVolume, OfflineChapter } from '$lib/client/db';
 	import { buildShareUrl, buildShareText, formatShareTime } from './share.js';
+	import { strings } from '$lib/constants/strings';
 	import { Share2, Copy, Check, Clock, BookOpen, Radio } from '@lucide/svelte';
 
 	interface Props {
@@ -40,6 +41,7 @@
 	let userSelectedChapterId = $state<string | null>(null);
 	let userIncludeTimestamp = $state<boolean | null>(null);
 	let userCustomTimestamp = $state<number | null>(null);
+	let customTimeInput = $state<string | null>(null);
 
 	let copiedLink = $state(false);
 	let copiedText = $state(false);
@@ -52,6 +54,18 @@
 		userSelectedChapterId = null;
 		userIncludeTimestamp = null;
 		userCustomTimestamp = null;
+		customTimeInput = null;
+	}
+
+	function parseTimeInput(input: string): number {
+		const parts = input.trim().split(':');
+		if (parts.length === 2) {
+			const mins = parseInt(parts[0], 10) || 0;
+			const secs = parseInt(parts[1], 10) || 0;
+			return Math.max(0, mins * 60 + secs);
+		}
+		const rawSecs = parseInt(input, 10);
+		return isNaN(rawSecs) ? 0 : Math.max(0, rawSecs);
 	}
 
 	const defaultScope: ShareScope = $derived(
@@ -68,6 +82,16 @@
 
 	const defaultSeconds = $derived(Math.max(0, Math.floor(currentTime || 0)));
 	const customTimestamp = $derived(userCustomTimestamp ?? defaultSeconds);
+
+	const timeInputValue = $derived(customTimeInput ?? formatShareTime(customTimestamp));
+
+	function handleTimeInputBlur() {
+		if (customTimeInput !== null) {
+			userCustomTimestamp = parseTimeInput(customTimeInput);
+			userIncludeTimestamp = true;
+			customTimeInput = null;
+		}
+	}
 
 	const defaultIncludeTimestamp = $derived(defaultScope === 'chapter' && defaultSeconds > 0);
 	const includeTimestamp = $derived(userIncludeTimestamp ?? defaultIncludeTimestamp);
@@ -143,28 +167,33 @@
 	}
 
 	async function handleNativeShare() {
-		if (!canNativeShare) return;
 		try {
-			await navigator.share({
-				title: shareTitle,
-				text: shareText,
-				url: shareUrl
-			});
-		} catch {
-			/* user cancelled share */
+			if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+				await navigator.share({
+					title: shareTitle,
+					text: shareText,
+					url: shareUrl
+				});
+				return;
+			}
+		} catch (err: unknown) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				return;
+			}
 		}
+		await handleCopyLink();
 	}
 </script>
 
 <BaseModal
 	bind:open
-	title="Поделиться"
-	description="Отправьте ссылку на весь том или конкретный таймкод главы."
+	title={strings.share.title}
+	description={strings.share.description}
 	widthClass="sm:max-w-lg"
 	onClose={handleModalClose}
 >
 	<div class="flex flex-col gap-5 py-2">
-		<!-- Карточка информации о томе -->
+		<!-- Volume info card -->
 		{#if volume}
 			<div class="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 p-3">
 				{#if volume.coverUrl}
@@ -176,7 +205,7 @@
 				{/if}
 				<div class="min-w-0 flex-1">
 					<p class="truncate text-xs font-medium text-muted-foreground">
-						{book?.title || 'Аудиокнига'}
+						{book?.title || strings.common.appName}
 					</p>
 					<h3 class="truncate text-sm font-bold text-foreground">
 						{volume.title}
@@ -188,10 +217,10 @@
 			</div>
 		{/if}
 
-		<!-- Переключатель: Весь том / Конкретная глава -->
+		<!-- Switcher: Entire volume / Specific chapter -->
 		<div class="space-y-1.5">
 			<div class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-				Что отправить
+				{strings.share.whatToSend}
 			</div>
 			<div class="grid grid-cols-2 gap-2 rounded-xl bg-muted/60 p-1">
 				<button
@@ -203,7 +232,7 @@
 						: 'text-muted-foreground hover:text-foreground'}"
 				>
 					<BookOpen class="h-3.5 w-3.5" />
-					<span>Весь том</span>
+					<span>{strings.share.entireVolume}</span>
 				</button>
 				<button
 					type="button"
@@ -219,17 +248,17 @@
 						: 'text-muted-foreground hover:text-foreground'}"
 				>
 					<Radio class="h-3.5 w-3.5" />
-					<span>Глава и таймкод</span>
+					<span>{strings.share.chapterAndTimestamp}</span>
 				</button>
 			</div>
 		</div>
 
-		<!-- Настройки главы и таймкода при выборе "Глава и таймкод" -->
+		<!-- Chapter & Timestamp options -->
 		{#if scope === 'chapter'}
 			<div class="space-y-3 rounded-2xl border border-border/60 bg-card p-3.5 shadow-2xs">
 				<div class="space-y-1">
 					<label for="share-chapter-select" class="text-xs font-medium text-foreground">
-						Выберите главу:
+						{strings.share.selectChapter}
 					</label>
 					{#if chapters.length > 0}
 						<select
@@ -245,55 +274,84 @@
 							{/each}
 						</select>
 					{:else}
-						<p class="text-xs text-muted-foreground">В этом томе нет доступных глав.</p>
+						<p class="text-xs text-muted-foreground">{strings.share.noChapters}</p>
 					{/if}
 				</div>
 
-				<!-- Чекбокс привязки к текущему времени -->
-				<div class="flex items-center justify-between border-t border-border/40 pt-1">
-					<label
-						for="share-timestamp-toggle"
-						class="flex cursor-pointer items-center gap-2 text-xs font-medium select-none"
-					>
-						<input
-							type="checkbox"
-							id="share-timestamp-toggle"
-							checked={includeTimestamp}
-							onchange={(e) => (userIncludeTimestamp = e.currentTarget.checked)}
-							class="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-						/>
-						<span class="flex items-center gap-1">
-							<Clock class="h-3.5 w-3.5 text-muted-foreground" />
-							<span>Указать таймкод:</span>
-							<strong class="font-bold text-foreground">
-								{formatShareTime(customTimestamp)}
-							</strong>
-						</span>
-					</label>
+				<!-- Timestamp input controls -->
+				<div class="space-y-2 border-t border-border/40 pt-2">
+					<div class="flex items-center justify-between">
+						<label
+							for="share-timestamp-toggle"
+							class="flex cursor-pointer items-center gap-2 text-xs font-medium select-none"
+						>
+							<input
+								type="checkbox"
+								id="share-timestamp-toggle"
+								checked={includeTimestamp}
+								onchange={(e) => (userIncludeTimestamp = e.currentTarget.checked)}
+								class="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+							/>
+							<span class="flex items-center gap-1">
+								<Clock class="h-3.5 w-3.5 text-muted-foreground" />
+								<span>{strings.share.setTimestamp}</span>
+							</span>
+						</label>
 
-					{#if currentTime > 0}
-						<button
+						<div class="flex items-center gap-1.5">
+							<Input
+								type="text"
+								class="h-7 w-20 px-2 py-0 text-center font-mono text-xs font-semibold"
+								placeholder={strings.share.timePlaceholder}
+								value={timeInputValue}
+								oninput={(e) => (customTimeInput = e.currentTarget.value)}
+								onblur={handleTimeInputBlur}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') handleTimeInputBlur();
+								}}
+							/>
+						</div>
+					</div>
+
+					<div class="flex items-center justify-end gap-2">
+						<Button
 							type="button"
+							variant="ghost"
+							size="sm"
+							class="h-6 px-2 text-[11px] text-primary hover:underline"
 							onclick={() => {
 								userCustomTimestamp = defaultSeconds;
 								userIncludeTimestamp = true;
+								customTimeInput = null;
 							}}
-							class="text-[11px] font-semibold text-primary hover:underline"
 						>
-							Сбросить на текущее
-						</button>
-					{/if}
+							{strings.share.resetToCurrent}
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							class="h-6 px-2 text-[11px] text-muted-foreground hover:underline"
+							onclick={() => {
+								userCustomTimestamp = 0;
+								userIncludeTimestamp = true;
+								customTimeInput = null;
+							}}
+						>
+							{strings.share.startOfChapter}
+						</Button>
+					</div>
 				</div>
 			</div>
 		{/if}
 
-		<!-- Поле со ссылкой и кнопкой копирования -->
+		<!-- Direct Link -->
 		<div class="space-y-1.5">
 			<label
 				for="share-url-input"
 				class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 			>
-				Прямая ссылка
+				{strings.share.directLink}
 			</label>
 			<div class="flex items-center gap-2">
 				<Input
@@ -311,20 +369,20 @@
 				>
 					{#if copiedLink}
 						<Check class="h-3.5 w-3.5 text-emerald-500" />
-						<span class="text-emerald-500">Скопировано</span>
+						<span class="text-emerald-500">{strings.share.copied}</span>
 					{:else}
 						<Copy class="h-3.5 w-3.5" />
-						<span>Копировать</span>
+						<span>{strings.share.copy}</span>
 					{/if}
 				</Button>
 			</div>
 		</div>
 
-		<!-- Предпросмотр текста сообщения для мессенджеров -->
+		<!-- Messenger text preview -->
 		<div class="space-y-1.5">
 			<div class="flex items-center justify-between text-xs">
 				<span class="font-semibold tracking-wider text-muted-foreground uppercase">
-					Для мессенджеров
+					{strings.share.forMessengers}
 				</span>
 				<button
 					type="button"
@@ -333,10 +391,10 @@
 				>
 					{#if copiedText}
 						<Check class="h-3 w-3 text-emerald-500" />
-						<span class="font-semibold text-emerald-500">Текст скопирован!</span>
+						<span class="font-semibold text-emerald-500">{strings.share.textCopied}</span>
 					{:else}
 						<Copy class="h-3 w-3" />
-						<span>Скопировать текст</span>
+						<span>{strings.share.copyText}</span>
 					{/if}
 				</button>
 			</div>
@@ -356,31 +414,24 @@
 				onclick={() => (open = false)}
 				class="text-xs text-muted-foreground"
 			>
-				Закрыть
+				{strings.common.close}
 			</Button>
 
 			<div class="flex items-center gap-2">
-				{#if canNativeShare}
-					<Button
-						variant="default"
-						size="sm"
-						class="gap-1.5 text-xs shadow-sm"
-						onclick={handleNativeShare}
-					>
+				<Button
+					variant="default"
+					size="sm"
+					class="gap-1.5 text-xs shadow-sm"
+					onclick={handleNativeShare}
+				>
+					{#if copiedLink}
+						<Check class="h-3.5 w-3.5 text-emerald-300" />
+						<span>{strings.share.copied}</span>
+					{:else}
 						<Share2 class="h-3.5 w-3.5" />
-						<span>Поделиться...</span>
-					</Button>
-				{:else}
-					<Button
-						variant="default"
-						size="sm"
-						class="gap-1.5 text-xs shadow-sm"
-						onclick={handleCopyLink}
-					>
-						<Copy class="h-3.5 w-3.5" />
-						<span>Скопировать ссылку</span>
-					</Button>
-				{/if}
+						<span>{canNativeShare ? strings.share.shareAction : strings.share.shareLink}</span>
+					{/if}
+				</Button>
 			</div>
 		</div>
 	{/snippet}

@@ -2,7 +2,7 @@
 	let { class: className = '', size = 20 }: { class?: string; size?: number } = $props();
 </script>
 
-<!-- Векторная иконка Lava.top -->
+<!-- Vector Lava.top icon -->
 <svg
 	viewBox="0 0 24 24"
 	width={size}

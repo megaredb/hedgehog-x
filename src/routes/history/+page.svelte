@@ -191,85 +191,88 @@
 				<Card.Root
 					class="group overflow-hidden border-border/60 bg-card/60 transition-all duration-200 hover:border-border hover:shadow-md"
 				>
-					<div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-						<!-- Book & Chapter info -->
-						<div class="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
-							{#if item.volume?.coverUrl || item.book?.coverUrl}
-								<img
-									src={item.volume?.coverUrl || item.book?.coverUrl}
-									alt={item.volume?.title || item.chapter?.title || 'Cover'}
-									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
-								/>
-							{:else}
-								<div
-									class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-20 sm:w-14"
-								>
-									<BookOpen class="h-6 w-6" />
-								</div>
-							{/if}
+					<div class="flex items-start gap-3.5 p-4 sm:gap-4">
+						<!-- Book & Chapter cover -->
+						{#if item.volume?.coverUrl || item.book?.coverUrl}
+							<img
+								src={item.volume?.coverUrl || item.book?.coverUrl}
+								alt={item.volume?.title || item.chapter?.title || 'Cover'}
+								class="h-20 w-14 shrink-0 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
+							/>
+						{:else}
+							<div
+								class="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-24 sm:w-16"
+							>
+								<BookOpen class="h-6 w-6" />
+							</div>
+						{/if}
 
-							<div class="min-w-0 flex-1 space-y-2">
-								<div class="flex flex-wrap items-center gap-2">
-									{#if isFinished}
-										<span
-											class="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500"
-										>
-											<CheckCircle2 class="h-3 w-3" />
-											<span>{strings.history.completed}</span>
-										</span>
-									{:else}
-										<span
-											class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
-										>
-											<Clock class="h-3 w-3" />
-											<span>{progressPct}%</span>
-										</span>
-									{/if}
-
-									{#if item.updatedAt}
-										<span class="text-xxs text-muted-foreground/70">
-											{formatRelativeTime(item.updatedAt)}
-										</span>
-									{/if}
-								</div>
-
-								<div>
-									<h3 class="truncate text-base font-semibold text-foreground">
-										{item.chapter?.title ?? strings.player.chapterFallback}
-									</h3>
-									<p class="truncate text-xs text-muted-foreground">
-										{#if item.book?.title}
-											<span>{item.book.title}</span>
-											{#if item.volume?.title}
-												<span> &bull; {item.volume.title}</span>
-											{/if}
-										{:else if item.volume?.title}
-											<span>{item.volume.title}</span>
+						<!-- Unified Content Block -->
+						<div class="flex min-w-0 flex-1 flex-col gap-2.5">
+							<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<div class="min-w-0 flex-1 space-y-1">
+									<div class="flex flex-wrap items-center gap-2">
+										{#if isFinished}
+											<span
+												class="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-500"
+											>
+												<CheckCircle2 class="h-3 w-3" />
+												<span>{strings.history.completed}</span>
+											</span>
+										{:else}
+											<span
+												class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+											>
+												<Clock class="h-3 w-3" />
+												<span>{progressPct}%</span>
+											</span>
 										{/if}
-									</p>
-								</div>
 
-								<!-- Progress bar -->
-								<div class="space-y-1 pt-1">
-									<Progress value={progressPct} class="h-1.5 w-full max-w-md" />
-									<div class="text-xxs flex max-w-md justify-between text-muted-foreground">
-										<span>{formatTime(item.progressSeconds)}</span>
-										<span>{formatTime(duration)}</span>
+										{#if item.updatedAt}
+											<span class="text-xxs text-muted-foreground/70">
+												{formatRelativeTime(item.updatedAt)}
+											</span>
+										{/if}
+									</div>
+
+									<div>
+										<h3 class="truncate text-base font-semibold text-foreground">
+											{item.chapter?.title ?? strings.player.chapterFallback}
+										</h3>
+										<p class="truncate text-xs text-muted-foreground">
+											{#if item.book?.title}
+												<span>{item.book.title}</span>
+												{#if item.volume?.title}
+													<span> &bull; {item.volume.title}</span>
+												{/if}
+											{:else if item.volume?.title}
+												<span>{item.volume.title}</span>
+											{/if}
+										</p>
 									</div>
 								</div>
-							</div>
-						</div>
 
-						<!-- Resume Action -->
-						<div class="flex items-center justify-end gap-2 pt-2 sm:pt-0">
-							<Button
-								size="sm"
-								class="gap-1.5 rounded-xl font-medium"
-								onclick={() => handleResume(item)}
-							>
-								<Play class="h-3.5 w-3.5 fill-current" />
-								<span>{strings.history.resume}</span>
-							</Button>
+								<!-- Resume Action inside content header -->
+								<div class="shrink-0 pt-1 sm:pt-0">
+									<Button
+										size="sm"
+										class="gap-1.5 rounded-xl font-medium"
+										onclick={() => handleResume(item)}
+									>
+										<Play class="h-3.5 w-3.5 fill-current" />
+										<span>{strings.history.resume}</span>
+									</Button>
+								</div>
+							</div>
+
+							<!-- Full-width progress bar and timers -->
+							<div class="w-full space-y-1 pt-0.5">
+								<Progress value={progressPct} class="h-1.5 w-full" />
+								<div class="text-xxs flex w-full justify-between text-muted-foreground">
+									<span>{formatTime(item.progressSeconds)}</span>
+									<span>{formatTime(duration)}</span>
+								</div>
+							</div>
 						</div>
 					</div>
 				</Card.Root>

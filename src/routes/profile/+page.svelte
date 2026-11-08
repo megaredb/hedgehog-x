@@ -170,7 +170,7 @@
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>
 	{:else}
 		{#if session.user}
-			<!-- карточка профиля -->
+			<!-- Profile card -->
 			<section class="mt-8 rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
 				<div class="flex items-center gap-5">
 					<div
@@ -205,7 +205,7 @@
 				</dl>
 			</section>
 
-			<!-- способы входа -->
+			<!-- Authentication methods -->
 			<section class="mt-8">
 				<h2 class="text-xl font-bold tracking-tight">Способы входа</h2>
 				<p class="mt-1 text-sm text-muted-foreground">
@@ -233,7 +233,7 @@
 								class="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-card p-4"
 							>
 								<div class="flex min-w-0 items-center gap-3">
-									<!-- Аватар из платформы (для привязанного способа), иначе — иконка -->
+									<!-- Platform avatar if linked, otherwise brand icon -->
 									{#if linked && avatar}
 										<div
 											class="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-border/60"
@@ -241,7 +241,7 @@
 											<img src={avatar} alt={provider.label} class="h-11 w-11 object-cover" />
 										</div>
 									{:else if linked && username}
-										<!-- Аватара нет — показываем первую букву username -->
+										<!-- Fallback: first letter of username -->
 										<div
 											class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-muted/60 font-semibold text-muted-foreground"
 										>
@@ -310,7 +310,7 @@
 				{/if}
 			</section>
 
-			<!-- опасная зона: удаление аккаунта -->
+			<!-- Danger zone: account deletion -->
 			<section class="mt-10 rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
 				<div class="flex items-center gap-2 text-destructive">
 					<ShieldAlert class="size-5" />
@@ -334,9 +334,7 @@
 				</div>
 			</section>
 
-			<!-- модалка подтверждения удаления: 4 кнопки (3 «отмены» + «подтверждение»),
-		 перемешивание при каждом нажатии, текст подтверждения меняется, без эмодзи.
-		 Крестик скрыт (showCloseButton={false}) — чтобы не было двух «крестиков». -->
+			<!-- Account deletion confirmation modal -->
 			<BaseModal
 				bind:open={deleteModalOpen}
 				title={DELETE_CONFIRM_TEXTS[deleteConfirmStep]}
@@ -373,7 +371,7 @@
 				{/snippet}
 			</BaseModal>
 
-			<!-- модалка подтверждения отвязки провайдера -->
+			<!-- Provider unlink confirmation modal -->
 			<ConfirmModal
 				bind:open={unlinkModalOpen}
 				title={unlinkProviderId

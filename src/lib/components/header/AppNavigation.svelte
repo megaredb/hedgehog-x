@@ -9,7 +9,8 @@
 		Users,
 		Heart,
 		Info,
-		Menu
+		Menu,
+		Settings
 	} from '@lucide/svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Sheet from '$lib/components/ui/sheet';
@@ -47,7 +48,8 @@
 			links: [
 				{ href: resolve('/community'), icon: Users, label: strings.nav.community },
 				{ href: resolve('/support'), icon: Heart, label: strings.nav.support },
-				{ href: resolve('/about'), icon: Info, label: strings.nav.about }
+				{ href: resolve('/about'), icon: Info, label: strings.nav.about },
+				{ href: resolve('/settings'), icon: Settings, label: strings.nav.settings }
 			]
 		}
 	];

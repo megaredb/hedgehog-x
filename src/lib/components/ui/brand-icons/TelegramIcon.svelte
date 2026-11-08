@@ -2,7 +2,7 @@
 	let { class: className = '', size = 20 }: { class?: string; size?: number } = $props();
 </script>
 
-<!-- Официальная иконка Telegram (simpleicons.com) в фирменном цвете #26A5E4 -->
+<!-- Official Telegram icon (simpleicons.com) in brand color #26A5E4 -->
 <svg
 	viewBox="0 0 24 24"
 	width={size}

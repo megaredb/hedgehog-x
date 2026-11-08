@@ -105,7 +105,7 @@
 			</Button>
 		</div>
 	{:else}
-		<!-- Контейнер для виджета Telegram через Svelte Action -->
+		<!-- Telegram comments widget container via Svelte action -->
 		<div
 			use:telegramWidget={{ discussion: parsedDiscussion, dark: isDark }}
 			class="flex min-h-40 w-full justify-center overflow-hidden"

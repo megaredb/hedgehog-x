@@ -31,4 +31,5 @@ certs/
 static/uploads/
 
 # Agents
+.agents
 .agents/

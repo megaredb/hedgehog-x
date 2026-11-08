@@ -107,13 +107,13 @@
 		: 'border-border/60'}"
 	style="--vol-accent: {accentColor};"
 >
-	<!-- Фоновый мягкий градиент от цвета обложки -->
+	<!-- Soft radial background glow matching cover accent -->
 	<div
 		class="pointer-events-none absolute -top-32 -left-32 h-96 w-96 rounded-full blur-3xl transition-opacity duration-700"
 		style="background: radial-gradient(circle, rgb(var(--vol-accent) / 0.22) 0%, transparent 70%);"
 	></div>
 
-	<!-- Переливающийся градиент и плавающие фигуры при воспроизведении тома -->
+	<!-- Iridescent gradient and floating orbs while playing this volume -->
 	{#if isPlayingThisVolume}
 		<div
 			class="volume-iridescent-bg pointer-events-none absolute inset-0 opacity-20 transition-opacity duration-1000 dark:opacity-30"
@@ -138,9 +138,9 @@
 	<div
 		class="relative z-10 flex flex-col items-center gap-6 text-center sm:flex-row sm:items-start sm:text-left"
 	>
-		<!-- Обложка тома с анимированным градиентом при воспроизведении -->
+		<!-- Volume cover with animated gradient when playing -->
 		<div class="group relative shrink-0">
-			<!-- Анимированная переливающаяся аура при воспроизведении -->
+			<!-- Animated iridescent aura while playing -->
 			{#if isPlayingThisVolume}
 				<div
 					class="absolute -inset-1.5 scale-105 animate-pulse rounded-2xl opacity-90 blur-md transition-transform duration-500"
@@ -166,7 +166,7 @@
 						alt={volume.title}
 						class="aspect-2/3 w-36 object-cover sm:w-48"
 					/>
-					<!-- Оверлей при наведении с лупой -->
+					<!-- Hover overlay with zoom icon -->
 					<div
 						class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
 					>
@@ -178,7 +178,7 @@
 						</div>
 					</div>
 
-					<!-- Индикатор играющего тома -->
+					<!-- Playing volume indicator -->
 					{#if isPlayingThisVolume}
 						<div
 							class="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-md"
@@ -191,7 +191,7 @@
 			{/if}
 		</div>
 
-		<!-- Метаданные тома -->
+		<!-- Volume metadata -->
 		<div class="flex flex-1 flex-col justify-between">
 			<div>
 				<div class="mb-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
@@ -235,9 +235,9 @@
 				{/if}
 			</div>
 
-			<!-- Панель быстрых действий -->
+			<!-- Quick action panel -->
 			<div class="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
-				<!-- Кнопка Скачать все / Отменить -->
+				<!-- Download all / Cancel button -->
 				{#if volume}
 					{#if isVolumeDownloading}
 						<Button
@@ -269,7 +269,7 @@
 					{/if}
 				{/if}
 
-				<!-- Кнопка Поделиться -->
+				<!-- Share button -->
 				<Button
 					variant="ghost"
 					size="sm"
@@ -281,7 +281,7 @@
 					<span>Поделиться</span>
 				</Button>
 
-				<!-- Кнопка Лайк тома -->
+				<!-- Volume like button -->
 				{#if volume}
 					<Button
 						variant={isLiked ? 'secondary' : 'outline'}
@@ -306,7 +306,7 @@
 	</div>
 </div>
 
-<!-- Модальное окно увеличения обложки тома -->
+<!-- Lightbox modal for enlarged volume cover -->
 {#if volume?.coverUrl}
 	<ImageLightbox
 		bind:open={isLightboxOpen}
@@ -316,10 +316,10 @@
 	/>
 {/if}
 
-<!-- Модальное окно авторизации для гостей при попытке поставить лайк -->
+<!-- Guest authorization modal on like attempt -->
 <GuestAuthModal bind:open={isGuestModalOpen} />
 
-<!-- Модальное окно «Поделиться» томом / таймкодом -->
+<!-- Share modal for volume / chapter timestamp -->
 <ShareModal
 	bind:open={isShareModalOpen}
 	book={activeBook}

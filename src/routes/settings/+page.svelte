@@ -47,6 +47,7 @@
 		type SeekStep,
 		type PlaybackRate
 	} from './settings-helpers';
+	import { strings } from '$lib/constants/strings';
 
 	// ── State: Audio & Playback ──────────────────────────────────────────────
 	let currentSeekStep = $state<SeekStep>(10);
@@ -195,20 +196,20 @@
 </script>
 
 <svelte:head>
-	<title>Настройки — Hedgehog X</title>
+	<title>{strings.settings.title} — {strings.common.appName}</title>
 </svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-8 p-4 sm:p-6 lg:p-8">
 	<!-- Page Header -->
 	<div class="space-y-1">
-		<h1 class="text-3xl font-bold tracking-tight">Настройки</h1>
+		<h1 class="text-3xl font-bold tracking-tight">{strings.settings.title}</h1>
 		<p class="text-sm text-muted-foreground sm:text-base">
-			Управление параметрами плеера, зеркалами CDN, офлайн-хранилищем и синхронизацией.
+			{strings.settings.subtitle}
 		</p>
 	</div>
 
 	<div class="grid grid-cols-1 gap-6">
-		<!-- ─── КАРТОЧКА 1: Аудио и воспроизведение ─────────────────────────────── -->
+		<!-- ─── CARD 1: Audio & Playback ────────────────────────────────────────── -->
 		<Card class="border-border/60 shadow-xs">
 			<CardHeader class="pb-4">
 				<div class="flex items-center gap-2.5">
@@ -216,19 +217,21 @@
 						<SlidersHorizontal class="size-5" />
 					</div>
 					<div>
-						<CardTitle class="text-lg">Аудио и воспроизведение</CardTitle>
+						<CardTitle class="text-lg">{strings.settings.audioSection}</CardTitle>
 						<CardDescription>
-							Шаг перемотки, скорость воспроизведения и параметры автоперехода
+							{strings.settings.seekStepDesc}
 						</CardDescription>
 					</div>
 				</div>
 			</CardHeader>
 			<CardContent class="space-y-6 pt-2">
-				<!-- Шаг перемотки -->
+				<!-- Seek Step -->
 				<div class="space-y-2.5">
 					<div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-						<label for="seek-step-group" class="text-sm font-medium">Шаг перемотки</label>
-						<span class="text-xs text-muted-foreground">Кнопки перемотки в панели плеера</span>
+						<label for="seek-step-group" class="text-sm font-medium"
+							>{strings.settings.seekStep}</label
+						>
+						<span class="text-xs text-muted-foreground">{strings.settings.seekStepDesc}</span>
 					</div>
 					<div id="seek-step-group" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 						{#each SEEK_STEPS as step (step)}
@@ -246,14 +249,14 @@
 
 				<Separator />
 
-				<!-- Скорость по умолчанию -->
+				<!-- Default playback rate -->
 				<div class="space-y-2.5">
 					<div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
 						<div class="flex items-center gap-1.5">
 							<Gauge class="size-4 text-muted-foreground" />
-							<span class="text-sm font-medium">Скорость воспроизведения по умолчанию</span>
+							<span class="text-sm font-medium">{strings.settings.playbackRate}</span>
 						</div>
-						<span class="text-xs text-muted-foreground">Применяется при запуске новых глав</span>
+						<span class="text-xs text-muted-foreground">{strings.settings.playbackRateDesc}</span>
 					</div>
 					<div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
 						{#each PLAYBACK_RATES as rate (rate)}
@@ -271,27 +274,27 @@
 
 				<Separator />
 
-				<!-- Автопереход к следующей главе -->
+				<!-- Auto advance -->
 				<div class="flex items-center justify-between gap-4">
 					<div class="space-y-0.5">
 						<label for="auto-advance-toggle" class="cursor-pointer text-sm font-medium">
-							Автопереход к следующей главе
+							{strings.settings.autoAdvance}
 						</label>
 						<p class="text-xs text-muted-foreground">
-							Автоматически запускать следующую главу книги в очереди после окончания текущей
+							{strings.settings.autoAdvanceDesc}
 						</p>
 					</div>
 					<Switch
 						id="auto-advance-toggle"
 						checked={autoAdvance}
 						onCheckedChange={handleAutoAdvanceChange}
-						aria-label="Автопереход к следующей главе"
+						aria-label={strings.settings.autoAdvance}
 					/>
 				</div>
 			</CardContent>
 		</Card>
 
-		<!-- ─── КАРТОЧКА 2: Сеть и CDN-зеркала ─────────────────────────────────── -->
+		<!-- ─── CARD 2: Network & CDN mirrors ──────────────────────────────────── -->
 		<Card class="border-border/60 shadow-xs">
 			<CardHeader class="pb-4">
 				<div class="flex items-center gap-2.5">
@@ -299,9 +302,9 @@
 						<Globe class="size-5" />
 					</div>
 					<div>
-						<CardTitle class="text-lg">Сеть и CDN-зеркала</CardTitle>
+						<CardTitle class="text-lg">{strings.settings.networkSection}</CardTitle>
 						<CardDescription>
-							Выбор источника загрузки аудиофайлов и обложек для стабильного воспроизведения
+							{strings.settings.mirrorPreferenceDesc}
 						</CardDescription>
 					</div>
 				</div>
@@ -346,7 +349,7 @@
 					{/each}
 				</div>
 
-				<!-- Активный хост бейдж -->
+				<!-- Active host badge -->
 				<div
 					class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-muted/30 p-3 sm:px-4"
 				>
@@ -361,7 +364,7 @@
 			</CardContent>
 		</Card>
 
-		<!-- ─── КАРТОЧКА 3: Хранилище и кэш PWA ────────────────────────────────── -->
+		<!-- ─── CARD 3: Storage & Cache ──────────────────────────────────────── -->
 		<Card class="border-border/60 shadow-xs">
 			<CardHeader class="pb-4">
 				<div class="flex items-center gap-2.5">
@@ -369,18 +372,18 @@
 						<HardDrive class="size-5" />
 					</div>
 					<div>
-						<CardTitle class="text-lg">Хранилище и кэш PWA</CardTitle>
+						<CardTitle class="text-lg">{strings.settings.storageSection}</CardTitle>
 						<CardDescription>
-							Оценка занятого места, загруженные офлайн-главы и очистка временных файлов
+							{strings.settings.storageUsage}
 						</CardDescription>
 					</div>
 				</div>
 			</CardHeader>
 			<CardContent class="space-y-6 pt-2">
-				<!-- Оценка размера -->
+				<!-- Storage estimate -->
 				<div class="space-y-2">
 					<div class="flex items-center justify-between text-sm">
-						<span class="font-medium">Занято памяти приложения</span>
+						<span class="font-medium">{strings.settings.storageUsage}</span>
 						<span class="font-mono text-xs text-muted-foreground">
 							{storageInfo.formattedUsage} из {storageInfo.formattedQuota} ({storageInfo.percentage}%)
 						</span>
@@ -390,7 +393,7 @@
 
 				<Separator />
 
-				<!-- Загруженные офлайн главы -->
+				<!-- Downloaded offline chapters -->
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div class="space-y-0.5">
 						<div class="flex items-center gap-2">
@@ -413,10 +416,12 @@
 
 				<Separator />
 
-				<!-- Кнопка очистки -->
+				<!-- Clear Cache Button -->
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div class="space-y-0.5">
-						<span class="text-sm font-medium text-destructive">Очистка локального кэша</span>
+						<span class="text-sm font-medium text-destructive"
+							>{strings.settings.clearCacheBtn}</span
+						>
 						<p class="text-xs text-muted-foreground">
 							Удаляет кэш CacheStorage, загруженные аудиофайлы и данные из локальной БД
 						</p>
@@ -428,13 +433,13 @@
 						onclick={() => (isClearModalOpen = true)}
 					>
 						<Trash2 class="mr-1.5 size-4" />
-						Очистить локальный кэш
+						{strings.settings.clearCacheBtn}
 					</Button>
 				</div>
 			</CardContent>
 		</Card>
 
-		<!-- ─── КАРТОЧКА 4: Синхронизация и оффлайн ─────────────────────────────── -->
+		<!-- ─── CARD 4: Sync & Offline ─────────────────────────────────────────── -->
 		<Card class="border-border/60 shadow-xs">
 			<CardHeader class="pb-4">
 				<div class="flex items-center gap-2.5">
@@ -442,15 +447,15 @@
 						<ArrowUpDown class="size-5" />
 					</div>
 					<div>
-						<CardTitle class="text-lg">Синхронизация и оффлайн</CardTitle>
+						<CardTitle class="text-lg">{strings.settings.syncSection}</CardTitle>
 						<CardDescription>
-							Статус сетевого подключения и отправка отложенных операций на сервер
+							{strings.settings.syncStatus}
 						</CardDescription>
 					</div>
 				</div>
 			</CardHeader>
 			<CardContent class="space-y-6 pt-2">
-				<!-- Сетевой статус -->
+				<!-- Online status -->
 				<div class="flex items-center justify-between">
 					<div class="space-y-0.5">
 						<span class="text-sm font-medium">Статус подключения</span>
@@ -482,10 +487,10 @@
 
 				<Separator />
 
-				<!-- Очередь синхронизации -->
+				<!-- Sync queue count -->
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div class="space-y-0.5">
-						<span class="text-sm font-medium">Очередь синхронизации</span>
+						<span class="text-sm font-medium">{strings.settings.queueCount}</span>
 						<p class="text-xs text-muted-foreground">
 							Отложенные действия (лайки, закладки, прогресс), ожидающие отправки на сервер
 						</p>
@@ -505,10 +510,10 @@
 
 				<Separator />
 
-				<!-- Ручная синхронизация -->
+				<!-- Manual sync trigger -->
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div class="space-y-0.5">
-						<span class="text-sm font-medium">Принудительная отправка</span>
+						<span class="text-sm font-medium">{strings.settings.syncNowBtn}</span>
 						<p class="text-xs text-muted-foreground">
 							Отправить все накопившиеся локальные изменения на сервер прямо сейчас
 						</p>
@@ -521,7 +526,7 @@
 						onclick={handleManualSync}
 					>
 						<RefreshCw class="mr-1.5 size-4 {isSyncing ? 'animate-spin' : ''}" />
-						{isSyncing ? 'Синхронизация...' : 'Синхронизировать сейчас'}
+						{isSyncing ? 'Синхронизация...' : strings.settings.syncNowBtn}
 					</Button>
 				</div>
 			</CardContent>
@@ -529,7 +534,7 @@
 	</div>
 </div>
 
-<!-- Модальное окно подтверждения очистки кэша -->
+<!-- Cache clear confirmation modal -->
 <ConfirmModal
 	bind:open={isClearModalOpen}
 	title="Очистить локальный кэш и загрузки?"
@@ -541,7 +546,7 @@
 	onCancel={() => (isClearModalOpen = false)}
 />
 
-<!-- Всплывающее уведомление (Toast) -->
+<!-- Toast notification feedback -->
 {#if toastMessage}
 	<div
 		transition:fade={{ duration: 150 }}

@@ -5,6 +5,7 @@
 	import { User, Settings, LogOut, LogIn } from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { useSession } from '$lib/client/session.svelte';
+	import { strings } from '$lib/constants/strings';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -41,9 +42,9 @@
 			{@render children()}
 		</DropdownMenu.Trigger>
 		<DropdownMenu.Content class="w-56" {align} {side}>
-			<DropdownMenu.Label>Личный кабинет</DropdownMenu.Label>
+			<DropdownMenu.Label>{strings.nav.profile}</DropdownMenu.Label>
 			<DropdownMenu.Separator />
-			{#each [{ href: resolve('/profile'), icon: User, label: 'Мой аккаунт' }, { href: resolve('/settings'), icon: Settings, label: 'Настройки' }] as link (link.href)}
+			{#each [{ href: resolve('/profile'), icon: User, label: strings.nav.profile }, { href: resolve('/settings'), icon: Settings, label: strings.nav.settings }] as link (link.href)}
 				{@const Icon = link.icon}
 				<a href={resolve(link.href as '/')} class="w-full" onclick={onLinkClick}>
 					<DropdownMenu.Item class="cursor-pointer">
@@ -58,18 +59,36 @@
 				onclick={signOut}
 			>
 				<LogOut class="mr-2 h-4 w-4" />
-				Выйти
+				{strings.common.signOut}
 			</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
 {:else}
-	<a
-		href={resolve(`${resolve('/auth')}?from=${encodeURIComponent(authTarget)}` as '/')}
-		class={triggerClass}
-	>
-		<span class="flex items-center gap-2">
-			<LogIn class="h-4 w-4" />
-			<span class="text-sm font-medium">Войти</span>
-		</span>
-	</a>
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger class={triggerClass}>
+			{@render children()}
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content class="w-56" {align} {side}>
+			<DropdownMenu.Label>{strings.common.guest}</DropdownMenu.Label>
+			<DropdownMenu.Separator />
+			<a
+				href={resolve(`${resolve('/auth')}?from=${encodeURIComponent(authTarget)}` as '/')}
+				class="w-full"
+				onclick={onLinkClick}
+			>
+				<DropdownMenu.Item
+					class="cursor-pointer font-medium text-primary focus:bg-primary/10 focus:text-primary"
+				>
+					<LogIn class="mr-2 h-4 w-4" />
+					{strings.common.signIn}
+				</DropdownMenu.Item>
+			</a>
+			<a href={resolve('/settings')} class="w-full" onclick={onLinkClick}>
+				<DropdownMenu.Item class="cursor-pointer">
+					<Settings class="mr-2 h-4 w-4" />
+					{strings.nav.settings}
+				</DropdownMenu.Item>
+			</a>
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
 {/if}

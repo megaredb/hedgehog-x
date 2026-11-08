@@ -83,7 +83,7 @@
 </svelte:head>
 
 <div class="layout-content mx-auto max-w-4xl space-y-10 py-6 md:py-10">
-	<!-- Заголовок -->
+	<!-- Page Header -->
 	<div class="text-center sm:text-left">
 		<div
 			class="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary"
@@ -97,7 +97,7 @@
 		</p>
 	</div>
 
-	<!-- Сетка социальных сетей -->
+	<!-- Social networks grid -->
 	<div>
 		<h2 class="mb-4 text-xl font-bold tracking-tight">Наши каналы и площадки</h2>
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -137,7 +137,7 @@
 		</div>
 	</div>
 
-	<!-- Почему стоит подписаться -->
+	<!-- Why join section -->
 	<div class="rounded-2xl border border-border/60 bg-muted/20 p-6 sm:p-8">
 		<h2 class="mb-6 text-center text-xl font-bold tracking-tight sm:text-left">
 			Почему стоит подписаться?

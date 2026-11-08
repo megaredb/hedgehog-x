@@ -2,7 +2,7 @@
 	let { class: className = '', size = 20 }: { class?: string; size?: number } = $props();
 </script>
 
-<!-- Официальная иконка Discord (simpleicons.com) в фирменном цвете #5865F2 -->
+<!-- Official Discord icon (simpleicons.com) in brand color #5865F2 -->
 <svg
 	viewBox="0 0 24 24"
 	width={size}

@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
 			}
 		},
 		error: (err) => {
-			log.error('Ошибка подписки liveQuery для загрузок:', err);
+			log.error('Downloads liveQuery subscription error:', err);
 		}
 	});
 }
@@ -104,7 +104,7 @@ async function performDownload(chapter: OfflineChapter) {
 			if (controller.signal.aborted) throw primaryErr;
 			if (fallbackUrl && fallbackUrl !== primaryUrl) {
 				log.warn(
-					`Загрузка главы ${chapter.id} с основного зеркала не удалась, переключение на fallback:`,
+					`Download of chapter ${chapter.id} from primary mirror failed, switching to fallback:`,
 					primaryErr
 				);
 				response = await fetchWithCors(fallbackUrl);
@@ -177,9 +177,9 @@ async function performDownload(chapter: OfflineChapter) {
 		progressMap[chapter.id] = { percentage: 100, downloadedBytes: totalBytes, totalBytes };
 	} catch (err: unknown) {
 		if (err instanceof Error && err.name === 'AbortError') {
-			log.debug(`Загрузка главы ${chapter.id} отменена`);
+			log.debug(`Download of chapter ${chapter.id} was aborted`);
 		} else {
-			log.error(`Ошибка загрузки главы ${chapter.id}:`, err);
+			log.error(`Error downloading chapter ${chapter.id}:`, err);
 			await db.downloads.put({
 				chapterId: chapter.id,
 				status: 'error',
@@ -295,8 +295,10 @@ export function useDownloads() {
 		try {
 			const opfsRoot = await navigator.storage.getDirectory();
 			await opfsRoot.removeEntry(chapterId);
-		} catch (e) {
-			log.error('Ошибка при удалении отменённого аудио из OPFS:', e);
+		} catch (e: unknown) {
+			if (e instanceof Error && e.name !== 'NotFoundError') {
+				log.warn('Failed to remove audio file from OPFS:', e);
+			}
 		}
 
 		await db.downloads.delete(chapterId);

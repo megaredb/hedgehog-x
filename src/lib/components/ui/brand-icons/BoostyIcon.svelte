@@ -2,7 +2,7 @@
 	let { class: className = '', size = 20 }: { class?: string; size?: number } = $props();
 </script>
 
-<!-- Официальная иконка Boosty (simple-icons) -->
+<!-- Official Boosty icon (simple-icons) -->
 <svg
 	viewBox="0 0 24 24"
 	width={size}

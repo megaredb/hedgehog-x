@@ -231,9 +231,17 @@ export async function clearAppCache(
 			if (typeof navigator !== 'undefined' && navigator.storage?.getDirectory) {
 				try {
 					const opfsRoot = await navigator.storage.getDirectory();
-					// Iterate entries if available
-					if (typeof opfsRoot.keys === 'function') {
-						for await (const name of opfsRoot.keys()) {
+					// Iterate entries if available safely using type-safe async iterable
+					const rootIter = opfsRoot as unknown as {
+						keys?: () => AsyncIterable<string>;
+						entries?: () => AsyncIterable<[string, FileSystemHandle]>;
+					};
+					if (typeof rootIter.keys === 'function') {
+						for await (const name of rootIter.keys()) {
+							await opfsRoot.removeEntry(name, { recursive: true });
+						}
+					} else if (typeof rootIter.entries === 'function') {
+						for await (const [name] of rootIter.entries()) {
 							await opfsRoot.removeEntry(name, { recursive: true });
 						}
 					}

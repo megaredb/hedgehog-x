@@ -16,7 +16,7 @@ export const books = pgTable('books', {
 	id: varchar('id', { length: 128 }).primaryKey(),
 	title: varchar('title', { length: 255 }).notNull(),
 	description: text('description'),
-	coverUrl: varchar('cover_url', { length: 255 }),
+	coverUrl: varchar('cover_url', { length: 1024 }),
 	blurhash: varchar('blurhash', { length: 100 }),
 	themeColor: varchar('theme_color', { length: 6 }),
 	status: varchar('status', { length: 50 }).default('ongoing'),
@@ -34,7 +34,7 @@ export const volumes = pgTable('volumes', {
 	volumeNumber: integer('volume_number').notNull(),
 	title: varchar('title', { length: 255 }).notNull(),
 	description: text('description'),
-	coverUrl: varchar('cover_url', { length: 255 }),
+	coverUrl: varchar('cover_url', { length: 1024 }),
 	blurhash: varchar('blurhash', { length: 100 }),
 	status: varchar('status', { length: 50 }).default('ongoing'),
 	createdAt: timestamp('created_at').defaultNow(),
@@ -50,9 +50,9 @@ export const chapters = pgTable('chapters', {
 		.notNull(),
 	chapterNumber: integer('chapter_number').notNull(),
 	title: varchar('title', { length: 255 }).notNull(),
-	audioUrl: varchar('audio_url', { length: 512 }).notNull(),
+	audioUrl: varchar('audio_url', { length: 1024 }).notNull(),
 	durationSeconds: integer('duration_seconds').notNull(),
-	telegramPostUrl: varchar('telegram_post_url', { length: 255 }),
+	telegramPostUrl: varchar('telegram_post_url', { length: 1024 }),
 	createdAt: timestamp('created_at').defaultNow(),
 	updatedAt: timestamp('updated_at')
 		.defaultNow()
@@ -121,7 +121,7 @@ export const illustrations = pgTable('illustrations', {
 	volumeId: varchar('volume_id', { length: 128 })
 		.references(() => volumes.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 		.notNull(),
-	imageUrl: varchar('image_url', { length: 512 }).notNull(),
+	imageUrl: varchar('image_url', { length: 1024 }).notNull(),
 	blurhash: varchar('blurhash', { length: 100 }),
 	caption: varchar('caption', { length: 255 }),
 	sortOrder: integer('sort_order').notNull().default(0),

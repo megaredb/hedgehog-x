@@ -201,12 +201,14 @@
 				<img
 					{src}
 					{alt}
-					class="max-h-[85vh] max-w-[90vw] object-contain transition-transform duration-75 select-none"
+					class="max-h-[85vh] max-w-[90vw] object-contain select-none {isDragging
+						? 'transition-none'
+						: 'transition-transform duration-150 ease-out'}"
 					style="transform: translate3d({panX}px, {panY}px, 0px) scale({zoom}); cursor: {zoom > 1
 						? isDragging
 							? 'grabbing'
 							: 'grab'
-						: 'default'};"
+						: 'default'}; will-change: transform;"
 					transition:scale={{ duration: 200, start: 0.95 }}
 					draggable="false"
 				/>

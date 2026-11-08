@@ -40,7 +40,7 @@
 </svelte:head>
 
 <div class="layout-content space-y-12 py-10 md:py-16">
-	<!-- Заголовок страницы -->
+	<!-- Page Header -->
 	<div class="mx-auto max-w-2xl space-y-4 text-center">
 		<h1
 			class="bg-linear-to-r from-foreground to-foreground/75 bg-clip-text text-4xl font-extrabold tracking-tight text-balance text-transparent md:text-5xl"
@@ -53,7 +53,7 @@
 		</p>
 	</div>
 
-	<!-- Блок автора контента -->
+	<!-- Content Creator Section -->
 	<div class="space-y-6">
 		<div class="flex items-center gap-2 border-b border-border/40 pb-2">
 			<Award class="h-5 w-5 text-primary" />
@@ -63,7 +63,7 @@
 		<div
 			class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-md md:p-8"
 		>
-			<!-- Декоративное свечение -->
+			<!-- Decorative glow -->
 			<div
 				class="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-primary/5 opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100"
 			></div>
@@ -98,7 +98,7 @@
 		</div>
 	</div>
 
-	<!-- Блок разработчиков -->
+	<!-- Developers Section -->
 	<div class="space-y-6">
 		<div class="flex items-center gap-2 border-b border-border/40 pb-2">
 			<Code class="h-5 w-5 text-primary" />
@@ -160,7 +160,7 @@
 		</div>
 	</div>
 
-	<!-- Копирайт и футер страницы -->
+	<!-- Copyright and page footer -->
 	<div
 		class="flex flex-col items-center justify-between gap-4 border-t border-border/30 pt-8 text-xs text-muted-foreground/80 sm:flex-row"
 	>

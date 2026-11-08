@@ -32,13 +32,13 @@
 
 <div class="absolute inset-0 -z-20 overflow-hidden bg-background">
 	{#each books as book, i (book.id)}
-		<!-- Контейнер для каждой пары фон-видео с плавным переходом -->
+		<!-- Background & video container with crossfade transition -->
 		<div
 			class="absolute inset-0 transition-opacity duration-700 ease-in-out"
 			class:opacity-100={currentIndex === i}
 			class:opacity-0={currentIndex !== i}
 		>
-			<!-- Изображение -->
+			<!-- Background image -->
 			<img
 				src={book.bgImage}
 				alt={book.title}
@@ -47,7 +47,7 @@
 				class:scale-100={currentIndex !== i}
 			/>
 
-			<!-- Видео -->
+			<!-- Background video -->
 			<video
 				bind:this={videoElements[i]}
 				src={book.bgVideo}
@@ -61,7 +61,7 @@
 		</div>
 	{/each}
 
-	<!-- Темный градиент поверх медиа для читаемости текста -->
+	<!-- Dark gradient overlay for text readability -->
 	<div
 		class="pointer-events-none absolute inset-0 bg-linear-to-t from-background via-background/60 to-background/10"
 	></div>
