@@ -1,0 +1,28 @@
+# Production Docker Compose overrides for Hedgehog Audiobook PWA
+# Usage: docker compose -f compose.yaml -f compose.prod.yml up -d
+# (or set COMPOSE_FILE=compose.yaml:compose.prod.yml in .env)
+
+services:
+  traefik:
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # Automatic Let's Encrypt SSL/TLS certificate resolver
+      TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_EMAIL: ${ACME_EMAIL:-admin@hedgehog.inc}
+      TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_STORAGE: /acme/acme.json
+      TRAEFIK_CERTIFICATESRESOLVERS_LE_ACME_TLSCHALLENGE: 'true'
+    volumes:
+      - acme_data:/acme
+
+  umami:
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.umami.rule=Host(`${UMAMI_HOST:-umami.hedgehog.inc}`)'
+      - 'traefik.http.routers.umami.entrypoints=websecure'
+      - 'traefik.http.routers.umami.tls=true'
+      - 'traefik.http.routers.umami.tls.certresolver=le'
+      - 'traefik.http.services.umami.loadbalancer.server.port=3000'
+
+volumes:
+  acme_data:
