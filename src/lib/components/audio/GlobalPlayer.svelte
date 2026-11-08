@@ -180,15 +180,8 @@
 		<!-- ── Desktop ── -->
 		<div class="hidden px-4 py-2 md:block">
 			<AudioPlayer.ControlBar class="flex items-center justify-between">
-				<div class="w-1/4 min-w-0">
+				<div class="flex w-fit min-w-0 items-center gap-2">
 					{@render shortBookInfo()}
-				</div>
-
-				<div class="flex max-w-2xl flex-1 flex-col items-center gap-2">
-					{@render desktopControls()}
-				</div>
-
-				<div class="flex w-1/4 items-center justify-end gap-2">
 					<Button
 						variant="ghost"
 						size="icon"
@@ -198,6 +191,13 @@
 					>
 						<BookmarkIcon class="h-4 w-4" />
 					</Button>
+				</div>
+
+				<div class="flex max-w-2xl flex-1 flex-col items-center gap-2">
+					{@render desktopControls()}
+				</div>
+
+				<div class="flex w-1/4 items-center justify-end gap-2">
 					<AudioPlayer.Download />
 					<AudioPlayer.SleepTimer />
 					<AudioPlayer.Speed />
