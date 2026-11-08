@@ -11,35 +11,53 @@
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { strings } from '$lib/constants/strings';
 	import { cn } from '$lib/utils';
-	import { Bookmark as BookmarkIcon, RotateCcw, X } from '@lucide/svelte';
+	import { formatTimecode, formatTimeRange, parseTimecode } from '$lib/utils/timecode';
+	import { Bookmark as BookmarkIcon, Clock, RotateCcw, X } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 
 	let isDrawerOpen = $state(false);
 	let isBookmarkModalOpen = $state(false);
 	let bookmarkNote = $state('');
+	let bookmarkStartSeconds = $state(0);
+	let bookmarkEndInput = $state('');
 	let isSavingBookmark = $state(false);
 	let isBookmarkSaved = $state(false);
 
-	function formatTime(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
+	const parsedBookmarkEnd = $derived(
+		bookmarkEndInput.trim() ? parseTimecode(bookmarkEndInput) : null
+	);
+
+	const bookmarkEndError = $derived.by(() => {
+		if (!bookmarkEndInput.trim()) return null;
+		if (parsedBookmarkEnd === null) return strings.bookmarks.endTimeInvalidFormat;
+		if (parsedBookmarkEnd <= bookmarkStartSeconds) return strings.bookmarks.endTimeMustBeAfterStart;
+		if (audioStore.duration > 0 && parsedBookmarkEnd > Math.floor(audioStore.duration)) {
+			return strings.bookmarks.endTimeExceedsDuration;
+		}
+		return null;
+	});
 
 	function openBookmarkModal() {
 		if (!audioStore.currentTrack) return;
+		bookmarkStartSeconds = Math.floor(audioStore.currentTime);
+		bookmarkEndInput = '';
 		bookmarkNote = '';
 		isBookmarkSaved = false;
 		isBookmarkModalOpen = true;
 	}
 
+	function useCurrentTimeForBookmarkEnd() {
+		bookmarkEndInput = formatTimecode(audioStore.currentTime);
+	}
+
 	async function handleSaveBookmark() {
-		if (!audioStore.currentTrack) return;
+		if (!audioStore.currentTrack || bookmarkEndError) return;
 		isSavingBookmark = true;
 		try {
 			await bookmarkService.addBookmark({
 				chapterId: String(audioStore.currentTrack.id),
-				timestampSeconds: audioStore.currentTime,
+				timestampSeconds: bookmarkStartSeconds,
+				endTimestampSeconds: parsedBookmarkEnd,
 				note: bookmarkNote
 			});
 			isBookmarkSaved = true;
@@ -152,7 +170,7 @@
 			>
 				<RotateCcw class="h-3.5 w-3.5 text-primary" />
 				<span class="text-muted-foreground"
-					>{strings.player.undoSeekTo} {formatTime(audioStore.lastSeekFrom)}</span
+					>{strings.player.undoSeekTo} {formatTimecode(audioStore.lastSeekFrom)}</span
 				>
 				<button
 					type="button"
@@ -336,9 +354,53 @@
 						{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 					</p>
 				</div>
-				<span class="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-					{formatTime(audioStore.currentTime)}
+				<span
+					class="shrink-0 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary tabular-nums"
+				>
+					{formatTimeRange(
+						bookmarkStartSeconds,
+						parsedBookmarkEnd !== null && !bookmarkEndError ? parsedBookmarkEnd : null
+					)}
 				</span>
+			</div>
+			<div class="space-y-1.5">
+				<label
+					for="bookmark-end"
+					class="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground"
+				>
+					<span>{strings.bookmarks.endLabel}</span>
+					<span class="font-normal text-muted-foreground/70">
+						{strings.bookmarks.endOptional}
+					</span>
+				</label>
+				<div class="flex items-center gap-2">
+					<Input
+						id="bookmark-end"
+						bind:value={bookmarkEndInput}
+						placeholder={strings.bookmarks.endPlaceholder}
+						autocomplete="off"
+						aria-invalid={bookmarkEndError ? 'true' : undefined}
+						aria-describedby="bookmark-end-hint"
+						class="tabular-nums"
+					/>
+					<Button
+						type="button"
+						variant="outline"
+						class="h-9 shrink-0 gap-1.5 px-2.5 text-xs font-medium tabular-nums"
+						onclick={useCurrentTimeForBookmarkEnd}
+						title={strings.bookmarks.useCurrentTime}
+						aria-label={strings.bookmarks.useCurrentTime}
+					>
+						<Clock class="h-3.5 w-3.5" />
+						{formatTimecode(audioStore.currentTime)}
+					</Button>
+				</div>
+				<p
+					id="bookmark-end-hint"
+					class="text-xs {bookmarkEndError ? 'text-destructive' : 'text-muted-foreground/80'}"
+				>
+					{bookmarkEndError ?? strings.bookmarks.endTimeHint}
+				</p>
 			</div>
 			<div class="space-y-1.5">
 				<label for="bookmark-note" class="text-xs font-medium text-muted-foreground">
@@ -356,7 +418,7 @@
 			<Button variant="outline" onclick={() => (isBookmarkModalOpen = false)}>
 				{strings.common.cancel}
 			</Button>
-			<Button onclick={handleSaveBookmark} disabled={isSavingBookmark}>
+			<Button onclick={handleSaveBookmark} disabled={isSavingBookmark || !!bookmarkEndError}>
 				{isBookmarkSaved ? strings.player.bookmarkSaved : strings.bookmarks.saveBookmark}
 			</Button>
 		</Dialog.Footer>

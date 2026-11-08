@@ -15,6 +15,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { strings } from '$lib/constants/strings';
+	import { formatTimeRange } from '$lib/utils/timecode';
 	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
 
 	interface EnrichedBookmark extends OfflineBookmark {
@@ -56,16 +57,6 @@
 		bookmarksQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
 
-	function formatTime(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-		}
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
-
 	function formatDate(timestamp: number): string {
 		if (!timestamp) return '';
 		return new Date(timestamp).toLocaleDateString('ru-RU', {
@@ -92,7 +83,8 @@
 			artist: item.book?.title || 'Hedgehog',
 			artwork: item.volume?.coverUrl || item.book?.coverUrl,
 			bookId: item.book?.id,
-			volumeId: item.volume?.id
+			volumeId: item.volume?.id,
+			startTime: ch.id === item.chapterId ? item.timestampSeconds : 0
 		}));
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
@@ -100,6 +92,12 @@
 			audioStore.setQueueAndPlay(tracks, startIndex);
 			setTimeout(() => {
 				audioStore.seek(item.timestampSeconds, false);
+				if (item.endTimestampSeconds && item.endTimestampSeconds > item.timestampSeconds) {
+					audioStore.setPlaybackRange(item.endTimestampSeconds);
+				}
+				// Resuming a track that was already loaded does not go through the
+				// provider's load effect, so make sure playback actually starts.
+				audioStore.play();
 			}, 100);
 		}
 	}
@@ -190,10 +188,10 @@
 							<div class="min-w-0 flex-1 space-y-1">
 								<div class="flex flex-wrap items-center gap-2">
 									<span
-										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
+										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary tabular-nums"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatTime(item.timestampSeconds)}</span>
+										<span>{formatTimeRange(item.timestampSeconds, item.endTimestampSeconds)}</span>
 									</span>
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">

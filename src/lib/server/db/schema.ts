@@ -112,6 +112,7 @@ export const bookmarks = pgTable('bookmarks', {
 		.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 		.notNull(),
 	timestampSeconds: integer('timestamp_seconds').notNull(),
+	endTimestampSeconds: integer('end_timestamp_seconds'),
 	note: varchar('note', { length: 500 }),
 	createdAt: timestamp('created_at').defaultNow()
 });
