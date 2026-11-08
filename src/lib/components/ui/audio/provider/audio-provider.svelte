@@ -6,6 +6,7 @@
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
 	import { progressSync } from '$lib/client/services/progressSync.svelte.js';
+	import { listeningTracker } from '$lib/client/services/listeningTracker.svelte.js';
 
 	interface Props {
 		tracks?: Track[];
@@ -77,6 +78,16 @@
 				})
 				.catch(() => {});
 			progressSync.recordProgress(chapterId, progressSeconds, false);
+		}
+
+		// Track listening duration during active playback
+		if (audioStore.currentTrack?.id && audioStore.isPlaying && !audio.paused) {
+			const track = audioStore.currentTrack;
+			listeningTracker.tick(
+				String(track.id),
+				typeof track.bookId === 'string' ? track.bookId : undefined,
+				typeof track.volumeId === 'string' ? track.volumeId : undefined
+			);
 		}
 	}
 
@@ -161,6 +172,7 @@
 			audioStore.isPlaying = false;
 			audioStore.isBuffering = false;
 			progressSync.flushImmediately();
+			listeningTracker.flush();
 		};
 
 		const handleError = async (e: Event) => {
@@ -206,6 +218,7 @@
 		const handleEnded = async () => {
 			audioStore.isPlaying = false;
 			audioStore.isBuffering = false;
+			listeningTracker.flush();
 			const audioDuration = audio.duration || 0;
 			const isLiveStream = htmlAudio.isLive(audioDuration);
 
@@ -339,6 +352,7 @@
 		return () => {
 			ctrl.abort();
 			htmlAudio.removeEventListener('bufferUpdate', handleBufferUpdate);
+			listeningTracker.flush();
 			if (preloadAudio) {
 				preloadAudio.src = '';
 				preloadAudio = null;
@@ -358,6 +372,7 @@
 		const track = audioStore.currentTrack;
 		const trackId = track?.id;
 		if (!track || trackId === prevTrackId) return;
+		listeningTracker.flush();
 		prevTrackId = trackId;
 
 		const audio = htmlAudio.getAudioElement();

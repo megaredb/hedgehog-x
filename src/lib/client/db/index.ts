@@ -70,7 +70,8 @@ export interface SyncItem {
 		| 'LIKE_CHAPTER'
 		| 'UNLIKE_CHAPTER'
 		| 'ADD_BOOKMARK'
-		| 'REMOVE_BOOKMARK';
+		| 'REMOVE_BOOKMARK'
+		| 'LISTEN_SESSION';
 	payload: unknown;
 	timestamp: number;
 }

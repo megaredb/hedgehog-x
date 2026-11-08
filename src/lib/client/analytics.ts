@@ -36,11 +36,18 @@ export interface ListenHeartbeatPayload {
 	startedAt?: string;
 }
 
+export interface ListenHeartbeatBatchPayload {
+	sessions: ListenHeartbeatPayload[];
+}
+
 /**
  * Dispatches a listening duration heartbeat to /api/analytics/listen.
+ * Supports both single session payloads and batch session payloads.
  * Returns true if accepted, false on network or validation errors.
  */
-export async function sendListenHeartbeat(payload: ListenHeartbeatPayload): Promise<boolean> {
+export async function sendListenHeartbeat(
+	payload: ListenHeartbeatPayload | ListenHeartbeatBatchPayload
+): Promise<boolean> {
 	if (typeof window === 'undefined') return false;
 
 	try {
