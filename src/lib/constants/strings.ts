@@ -139,8 +139,6 @@ export const strings = {
 		sberPayAction: 'Перевод',
 		boostyTitle: 'Boosty',
 		boostyDesc: 'Ежемесячная подписка и донаты',
-		lavaTitle: 'Lava.top',
-		lavaDesc: 'Подписка картами всего мира',
 		bankQrTitle: 'Банковский перевод',
 		bankQrSubtitle: 'Отсканируйте QR-код или нажмите на него',
 		cryptoTitle: 'Криптовалюта (Сеть TON)',

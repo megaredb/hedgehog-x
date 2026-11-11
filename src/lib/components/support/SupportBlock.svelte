@@ -4,7 +4,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import BoostyIcon from '$lib/components/ui/brand-icons/BoostyIcon.svelte';
-	import LavaIcon from '$lib/components/ui/brand-icons/LavaIcon.svelte';
 	import TonIcon from '$lib/components/ui/brand-icons/TonIcon.svelte';
 	import { strings } from '$lib/constants/strings';
 
@@ -39,8 +38,8 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Subscription platforms (Boosty, Lava.top) -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+	<!-- Subscription platform (Boosty) -->
+	<div class="grid grid-cols-1 gap-4">
 		<a
 			href="https://boosty.to/hedgehoginc"
 			target="_blank"
@@ -58,30 +57,6 @@
 						{strings.support.boostyTitle}
 					</p>
 					<p class="text-xs text-muted-foreground">{strings.support.boostyDesc}</p>
-				</div>
-			</div>
-			<ExternalLink
-				class="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-			/>
-		</a>
-
-		<a
-			href="https://app.lava.top/hedgehoginc"
-			target="_blank"
-			rel="noopener noreferrer"
-			class="group flex items-center justify-between rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 hover:border-violet-500/50 hover:bg-violet-500/5 hover:shadow-md"
-		>
-			<div class="flex items-center gap-3">
-				<div
-					class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600"
-				>
-					<LavaIcon size={22} class="text-violet-600" />
-				</div>
-				<div>
-					<p class="font-semibold text-foreground transition-colors group-hover:text-violet-600">
-						{strings.support.lavaTitle}
-					</p>
-					<p class="text-xs text-muted-foreground">{strings.support.lavaDesc}</p>
 				</div>
 			</div>
 			<ExternalLink

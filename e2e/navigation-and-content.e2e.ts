@@ -18,7 +18,6 @@ test.describe('Навигация и новые разделы сайта (PWA)'
 		await expect(page.getByRole('link', { name: 'Mushoku Tensei' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Discord' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Boosty' })).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Lava.top' })).toBeVisible();
 
 		// Проверка преимуществ
 		await expect(page.getByRole('heading', { name: 'Уведомления' })).toBeVisible();

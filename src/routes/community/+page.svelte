@@ -3,7 +3,6 @@
 	import TelegramIcon from '$lib/components/ui/brand-icons/TelegramIcon.svelte';
 	import DiscordIcon from '$lib/components/ui/brand-icons/DiscordIcon.svelte';
 	import BoostyIcon from '$lib/components/ui/brand-icons/BoostyIcon.svelte';
-	import LavaIcon from '$lib/components/ui/brand-icons/LavaIcon.svelte';
 
 	const socialLinks = [
 		{
@@ -40,13 +39,6 @@
 			url: 'https://boosty.to/hedgehoginc',
 			icon: BoostyIcon,
 			colorClass: 'text-orange-500 bg-orange-500/10 border-orange-500/20'
-		},
-		{
-			title: 'Lava.top',
-			description: 'Подписка и донаты зарубежными картами',
-			url: 'https://app.lava.top/hedgehoginc',
-			icon: LavaIcon,
-			colorClass: 'text-violet-500 bg-violet-500/10 border-violet-500/20'
 		}
 	];
 
