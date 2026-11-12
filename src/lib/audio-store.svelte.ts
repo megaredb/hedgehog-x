@@ -92,6 +92,10 @@ class AudioStore {
 	undoSeekAvailable = $state(false);
 	private undoTimer: ReturnType<typeof setTimeout> | null = null;
 
+	// ── Playback range (bookmark fragments) ─────────────────────────────────
+	rangeEnd: number | null = $state(null);
+	private rangeTrackId: string | null = null;
+
 	constructor() {
 		if (canUseDOM()) this.loadFromStorage();
 	}
@@ -228,6 +232,25 @@ class AudioStore {
 			this.lastSeekFrom = null;
 			this.seek(target, false);
 		}
+	}
+
+	/**
+	 * Stops playback once the current track reaches the given position.
+	 * Used when playing a bookmark fragment.
+	 */
+	setPlaybackRange(endSeconds: number): void {
+		if (!Number.isFinite(endSeconds) || endSeconds <= 0) {
+			this.clearPlaybackRange();
+			return;
+		}
+		this.rangeEnd = endSeconds;
+		const id = this.currentTrack?.id;
+		this.rangeTrackId = id != null ? String(id) : null;
+	}
+
+	clearPlaybackRange(): void {
+		this.rangeEnd = null;
+		this.rangeTrackId = null;
 	}
 
 	dismissUndoSeek(): void {
@@ -467,6 +490,7 @@ class AudioStore {
 
 	setCurrentTrack(track: Track | null): void {
 		if (!track) {
+			this.clearPlaybackRange();
 			this.currentTrack = null;
 			this.currentQueueIndex = -1;
 			this.isPlaying = false;
@@ -497,6 +521,15 @@ class AudioStore {
 		this.currentTime = currentTime;
 		this.duration = duration;
 		this.progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+		if (this.rangeEnd === null) return;
+		const trackId = this.currentTrack?.id != null ? String(this.currentTrack.id) : null;
+		if (trackId !== this.rangeTrackId) {
+			this.clearPlaybackRange();
+		} else if (this.isPlaying && currentTime >= this.rangeEnd) {
+			this.pause();
+			this.clearPlaybackRange();
+		}
 	}
 
 	setError(message: string | null): void {
@@ -516,6 +549,7 @@ class AudioStore {
 			resolvedTrack.live === true ||
 			(resolvedTrack.duration !== undefined && htmlAudio.isLive(resolvedTrack.duration));
 
+		this.clearPlaybackRange();
 		this.currentTrack = resolvedTrack;
 		this.currentQueueIndex = queueIndex;
 		this.isError = false;

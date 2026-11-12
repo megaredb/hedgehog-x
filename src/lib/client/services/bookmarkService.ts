@@ -10,12 +10,15 @@ export const bookmarkService = {
 	async addBookmark(params: {
 		chapterId: string;
 		timestampSeconds: number;
+		endTimestampSeconds?: number | null;
 		note?: string;
 	}): Promise<OfflineBookmark> {
 		const bookmark: OfflineBookmark = {
 			id: crypto.randomUUID(),
 			chapterId: params.chapterId,
 			timestampSeconds: Math.floor(params.timestampSeconds),
+			endTimestampSeconds:
+				params.endTimestampSeconds != null ? Math.floor(params.endTimestampSeconds) : null,
 			note: params.note?.trim() || '',
 			createdAt: Date.now()
 		};

@@ -41,6 +41,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			id: b.id,
 			chapterId: b.chapterId,
 			timestampSeconds: b.timestampSeconds,
+			endTimestampSeconds: b.endTimestampSeconds ?? null,
 			note: b.note || '',
 			createdAt: b.createdAt?.getTime() || 0
 		}))
@@ -65,6 +66,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			id: string;
 			chapterId: string;
 			timestampSeconds: number;
+			endTimestampSeconds?: number | null;
 			note?: string;
 			action?: 'upsert' | 'delete';
 		}> = body.bookmarkUpdates || [];
@@ -116,20 +118,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						.delete(bookmarks)
 						.where(and(eq(bookmarks.id, b.id), eq(bookmarks.userId, user.id)));
 				} else {
+					const timestampSeconds = Math.floor(b.timestampSeconds || 0);
+					const endTimestampSeconds =
+						typeof b.endTimestampSeconds === 'number' && b.endTimestampSeconds > timestampSeconds
+							? Math.floor(b.endTimestampSeconds)
+							: null;
 					await db
 						.insert(bookmarks)
 						.values({
 							id: b.id,
 							userId: user.id,
 							chapterId: b.chapterId,
-							timestampSeconds: b.timestampSeconds || 0,
+							timestampSeconds,
+							endTimestampSeconds,
 							note: b.note || '',
 							createdAt: new Date()
 						})
 						.onConflictDoUpdate({
 							target: bookmarks.id,
 							set: {
-								timestampSeconds: b.timestampSeconds,
+								timestampSeconds,
+								endTimestampSeconds,
 								note: b.note || '',
 								createdAt: new Date()
 							}

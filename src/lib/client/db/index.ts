@@ -57,6 +57,8 @@ export interface OfflineBookmark {
 	id: string;
 	chapterId: string;
 	timestampSeconds: number;
+	/** Optional end of the saved fragment; null or missing for point bookmarks. */
+	endTimestampSeconds?: number | null;
 	note: string;
 	createdAt: number;
 }
