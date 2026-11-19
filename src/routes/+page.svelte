@@ -125,6 +125,7 @@
 	<!-- Scroll up indicator -->
 	{#if currentIndex > 0}
 		<button
+			type="button"
 			transition:fade={{ duration: 300 }}
 			onclick={() => {
 				currentIndex = currentIndex - 1;
@@ -148,6 +149,7 @@
 	<!-- Scroll down indicator -->
 	{#if currentIndex < showcaseBooks.length - 1}
 		<button
+			type="button"
 			transition:fade={{ duration: 300 }}
 			onclick={() => {
 				currentIndex = currentIndex + 1;

@@ -60,7 +60,7 @@
 			{#each filtered as book, i (book.id)}
 				<a
 					href={resolve(`/books/${encodeURIComponent(book.id)}` as '/')}
-					class="group overflow-hidden rounded-2xl border border-border/60 bg-card/50"
+					class="group overflow-hidden rounded-2xl border border-border/60 bg-card/50 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
 				>
 					<div class="relative aspect-[16/9] overflow-hidden bg-muted">
 						{#if book.coverUrl}
@@ -69,7 +69,7 @@
 								alt={book.title}
 								width={640}
 								height={360}
-								class="absolute inset-0 h-full w-full object-cover"
+								class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
 								loading={i < 2 ? 'eager' : 'lazy'}
 								fetchpriority={i === 0 ? 'high' : 'auto'}
 							/>

@@ -71,6 +71,7 @@
 			class="flex items-center gap-1 self-start rounded-lg border border-border/50 bg-muted/50 p-1 sm:self-auto"
 		>
 			<button
+				type="button"
 				class="rounded-md p-2 transition-colors {viewMode === 'grid'
 					? 'bg-background text-foreground shadow-sm'
 					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
@@ -80,6 +81,7 @@
 				<LayoutGrid class="h-5 w-5" />
 			</button>
 			<button
+				type="button"
 				class="rounded-md p-2 transition-colors {viewMode === 'list'
 					? 'bg-background text-foreground shadow-sm'
 					: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
@@ -106,7 +108,7 @@
 					href={resolve(`/books/${data.bookId}/${volume.id}`)}
 					class="group flex {viewMode === 'grid'
 						? 'min-h-[18rem] flex-col'
-						: 'flex-row'} overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm md:rounded-2xl"
+						: 'flex-row'} overflow-hidden rounded-xl border border-border/60 bg-card/50 text-card-foreground shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none md:rounded-2xl"
 				>
 					<div
 						class="{viewMode === 'grid'
@@ -119,7 +121,7 @@
 								alt={`Обложка ${volume.title}`}
 								width={300}
 								height={400}
-								class="absolute inset-0 h-full w-full object-cover"
+								class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
 								loading={i < 4 ? 'eager' : 'lazy'}
 								fetchpriority={i < 4 ? 'high' : 'auto'}
 							/>
