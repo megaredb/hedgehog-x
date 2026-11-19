@@ -45,8 +45,7 @@ function allowUpload(event: RequestEvent): boolean {
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const isUploadRequest =
-		event.request.method === 'POST' &&
-		(event.url.pathname.startsWith('/admin') || event.url.pathname === '/api/admin/upload');
+		event.request.method === 'POST' && event.url.pathname.startsWith('/admin');
 	if (isUploadRequest) {
 		const length = Number(event.request.headers.get('content-length') ?? '0');
 		if (Number.isFinite(length) && length > MAX_UPLOAD_REQUEST_BYTES) {
@@ -71,7 +70,15 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 		event.locals.user = session.user;
 	}
 
-	return svelteKitHandler({ event, resolve, auth, building });
+	const response = await svelteKitHandler({ event, resolve, auth, building });
+	// Baseline hardening; CSP is intentionally not enforced until the app's
+	// inline Umami/bootstrap requirements are moved behind a nonce.
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+	response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+	return response;
 };
 
 export const handle: Handle = handleBetterAuth;

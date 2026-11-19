@@ -23,12 +23,11 @@ import {
 
 const log = createLogger('Sync');
 
-type ServerBook = typeof import('$lib/server/db/schema').books.$inferSelect;
 type ServerVolume = typeof import('$lib/server/db/schema').volumes.$inferSelect;
 type ServerChapter = typeof import('$lib/server/db/schema').chapters.$inferSelect;
 type ServerIllustration = typeof import('$lib/server/db/schema').illustrations.$inferSelect;
 
-type ServerBookWithRelations = ServerBook & {
+type ServerBookWithRelations = typeof import('$lib/server/db/schema').books.$inferSelect & {
 	volumes: (ServerVolume & {
 		chapters: ServerChapter[];
 		illustrations: ServerIllustration[];
@@ -253,30 +252,6 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 let activeUserSync: Promise<UserSyncResult> | null = null;
 
 export const syncService = {
-	/**
-	 * Fetches the book catalog from the server and hydrates local Dexie storage.
-	 */
-	async syncBooks(fetchFn: typeof fetch = fetch) {
-		try {
-			const res = await fetchFn('/api/books');
-			if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-
-			const serverBooks: ServerBook[] = await res.json();
-			const offlineBooks = serverBooks.map(mapServerBookToOfflineBook);
-
-			if (browser) {
-				await hydrate('books', offlineBooks, 'all');
-			}
-			return offlineBooks;
-		} catch (e) {
-			log.info('Catalog sync skipped (Offline). Using cached Dexie data.', e);
-			if (browser) {
-				return await db.books.toArray();
-			}
-			return [];
-		}
-	},
-
 	/**
 	 * Fetches book details with relations (volumes, chapters, illustrations).
 	 * Supports ETag: skips hydration if 304 Not Modified.

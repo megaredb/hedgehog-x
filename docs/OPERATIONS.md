@@ -78,7 +78,7 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5173"
 cp .env.example .env      # заполнить секреты
 pnpm install
 docker compose up -d      # Postgres + Traefik + Umami + dbgate
-pnpm db:migrate           # первый запуск: 0000–0007
+pnpm db:migrate           # первый запуск: 0000–0008
 pnpm db:seed              # первый запуск: демо-контент
 pnpm dev                  # Vite на 5173
 ```
@@ -94,7 +94,7 @@ pnpm dev                  # Vite на 5173
 ```bash
 docker compose up -d db
 pnpm install
-pnpm db:migrate           # собрать схему из миграций 0000–0007
+pnpm db:migrate           # собрать схему из миграций 0000–0008
 pnpm db:seed              # опционально; сервер выполняет seed сам при старте
 pnpm dev
 ```
@@ -136,7 +136,7 @@ pnpm dev
 | ------------------ | ------------------------------------------ | ---------------------------------- |
 | `pnpm db:push`     | dev-shortcut, может удалять колонки        | только осознанно, не основной путь |
 | `pnpm db:generate` | генерирует SQL-миграцию + snapshot из diff | после правки schema                |
-| `pnpm db:migrate`  | применяет 0000–0007                        | **рабочий способ**                 |
+| `pnpm db:migrate`  | применяет 0000–0008                        | **рабочий способ**                 |
 | `pnpm db:seed`     | идемпотентный сид                          | вручную/тест                       |
 | `pnpm db:studio`   | Drizzle Studio                             | отладка                            |
 | `pnpm auth:schema` | перегенерирует auth.schema.ts              | после изменения auth-конфига       |
@@ -158,7 +158,7 @@ docker exec hedgehog-x-db-1 pg_dump -U root -d local -Fc -f /tmp/hedgehog_before
 ```bash
 docker compose down -v      # удалит volume pgdata — все данные!
 docker compose up -d db
-pnpm db:migrate             # 0000–0007
+pnpm db:migrate             # 0000–0008
 pnpm db:seed
 ```
 
@@ -229,7 +229,7 @@ docker build -t hedgehog-x:prod .
 curl http://127.0.0.1:3000/health
 ```
 
-Результат текущего прогона: миграции `8`, seed `2` книги, `/health` 200,
+Результат текущего прогона: миграции `9`, seed `2` книги, `/health` 200,
 `/api/books` 200, `/api/user/sync` 401, restart сохраняет данные, `docker stop`
 завершается с exit 0.
 
@@ -277,7 +277,7 @@ pnpm exec playwright test --workers=1   # стабильнее
 - Без `BETTER_AUTH_SECRET` webServer падает: `BetterAuthError: default secret`.
 - Тесты Telegram/Discord редиректов мокают провайдерские домены
   (`oauth.telegram.org`, `discord.com`), поэтому e2e не ходят в сеть.
-  В текущем прогоне: **41/41** при `--workers=1`;
+  В текущем прогоне: **42/42** при `--workers=1`;
   `e2e/sync-data-safety.e2e.ts` покрывает P0-01 (9 сценариев, включая consent),
   `e2e/bookmark-sync.e2e.ts` — P0-03 (offline → online flush),
   `e2e/session-isolation.e2e.ts` — P0-05 (logout/owner).
@@ -372,7 +372,7 @@ node ./node_modules/vite/bin/vite.js build
 | `pnpm check` падает                                              | раньше была `auth.ts:47` (исправлено); проверьте новую ошибку и `svelte-kit sync`        |
 | `db:migrate`: column "telegram_id" ... does not exist            | у вас старая ревизия с дублем в `0005`; обновите `drizzle/` (текущий `0005` — no-op)     |
 | `db:migrate` → relation ... already exists                       | БД создана `db:push` без истории; пересоберите из миграций (§4.3) или сделайте baseline  |
-| `db:seed` → column "status" of relation "volumes" does not exist | БД неполная/старая; пересоберите из `0000–0007`                                          |
+| `db:seed` → column "status" of relation "volumes" does not exist | БД неполная/старая; пересоберите из `0000–0008`                                          |
 | `db:generate` снова создаёт миграцию                             | `schema.ts` и snapshot разошлись; проверьте и закоммитьте новую миграцию                 |
 | Страница вечно «Загрузка...»                                     | нет данных в Dexie: API/БД недоступны, книга не существует, или JS не загрузился         |
 | `/admin` после входа ведёт на `/`                                | redirect= vs from= (AUDIT P1-08); откройте `/admin` снова                                |
@@ -413,7 +413,7 @@ node ./node_modules/vite/bin/vite.js build
 | Lint                | prettier + eslint                             | ✅                                                                  |
 | Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 185 pass                                                         |
 | E2E (3 файла)       | `playwright test auth profile navigation`     | ✅ 23/23 (в текущем прогоне)                                        |
-| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 41/41 (сеть для OAuth-редиректов всё ещё нужна)                  |
+| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 42/42 (сеть для OAuth-редиректов всё ещё нужна)                  |
 | Sync safety e2e     | `e2e/sync-data-safety.e2e.ts`                 | ✅ 9/9 (P0-01 + guest consent)                                      |
 | Bookmark queue e2e  | `e2e/bookmark-sync.e2e.ts`                    | ✅ 1/1 (P0-03)                                                      |
 | Session isolation   | `e2e/session-isolation.e2e.ts`                | ✅ 5/5 (P0-05)                                                      |

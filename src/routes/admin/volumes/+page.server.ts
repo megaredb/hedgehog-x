@@ -6,16 +6,8 @@ import { requireAdmin } from '$lib/server/admin';
 import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
+import { slugify } from '$lib/utils/slugify';
 import type { PageServerLoad } from './$types';
-
-function slugify(text: string): string {
-	return text
-		.toLowerCase()
-		.trim()
-		.replace(/[^\w\s-]/g, '')
-		.replace(/[\s_-]+/g, '_')
-		.replace(/^-+|-+$/g, '');
-}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdmin(locals);
@@ -64,6 +56,8 @@ export const actions: Actions = {
 		const description = (form.get('description') as string)?.trim() || null;
 		const status = (form.get('status') as string) || 'ongoing';
 		let coverUrl = (form.get('coverUrl') as string)?.trim() || null;
+		let coverWidth: number | null = null;
+		let coverHeight: number | null = null;
 		let blurhash: string | null = null;
 
 		if (!bookId) {
@@ -89,6 +83,8 @@ export const actions: Actions = {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'volumes', filenamePrefix: id });
 				coverUrl = uploaded.url;
+				coverWidth = uploaded.width;
+				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
 				return fail(500, {
@@ -105,6 +101,8 @@ export const actions: Actions = {
 				title,
 				description,
 				coverUrl,
+				coverWidth,
+				coverHeight,
 				blurhash,
 				status
 			});
@@ -130,6 +128,8 @@ export const actions: Actions = {
 		const description = (form.get('description') as string)?.trim() || null;
 		const status = (form.get('status') as string) || 'ongoing';
 		let coverUrl = (form.get('coverUrl') as string)?.trim() || null;
+		let coverWidth: number | null = null;
+		let coverHeight: number | null = null;
 		let blurhash: string | null = null;
 
 		if (!id || !bookId || !title || isNaN(volumeNumber)) {
@@ -148,6 +148,8 @@ export const actions: Actions = {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'volumes', filenamePrefix: id });
 				coverUrl = uploaded.url;
+				coverWidth = uploaded.width;
+				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
 				return fail(500, {
@@ -164,6 +166,8 @@ export const actions: Actions = {
 				description: string | null;
 				status: string;
 				coverUrl?: string | null;
+				coverWidth?: number | null;
+				coverHeight?: number | null;
 				blurhash?: string | null;
 			} = {
 				bookId,
@@ -173,11 +177,18 @@ export const actions: Actions = {
 				status
 			};
 
-			if (coverUrl !== null) {
+			if (coverFile instanceof File && coverFile.size > 0) {
 				updateData.coverUrl = coverUrl;
-			}
-			if (blurhash !== null) {
-				updateData.blurhash = blurhash;
+				updateData.coverWidth = coverWidth;
+				updateData.coverHeight = coverHeight;
+				if (blurhash !== null) updateData.blurhash = blurhash;
+			} else if (form.has('coverUrl')) {
+				updateData.coverUrl = coverUrl || null;
+				if (!coverUrl) {
+					updateData.blurhash = null;
+					updateData.coverWidth = null;
+					updateData.coverHeight = null;
+				}
 			}
 
 			await db.update(volumes).set(updateData).where(eq(volumes.id, id));

@@ -52,6 +52,10 @@
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
+	const totalPages = $derived(Math.max(1, Math.ceil(bookmarksQuery.data.length / pageSize)));
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+	});
 
 	const paginatedBookmarks = $derived(
 		bookmarksQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)

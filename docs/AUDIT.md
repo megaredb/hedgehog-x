@@ -56,7 +56,7 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 | ESLint             | eslint .                                                  | OK                                                        |
 | Unit               | node --import tsx --test "src/**/*.test.ts"               | 185 tests, 0 fail                                         |
 | E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                              |
-| E2E full, 1 worker | playwright test --workers=1                               | ✅ 41/41 (сеть для OAuth-редиректов всё ещё нужна)        |
+| E2E full, 1 worker | playwright test --workers=1                               | ✅ 42/42 (сеть для OAuth-редиректов всё ещё нужна)        |
 | Sync safety e2e    | e2e/sync-data-safety.e2e.ts                               | ✅ 9/9 (guest, offline, owner, switch, consent)           |
 | Bookmark queue e2e | e2e/bookmark-sync.e2e.ts                                  | ✅ 1/1 (offline → online POST)                            |
 | Session isolation  | e2e/session-isolation.e2e.ts                              | ✅ 5/5 (logout, offline, revoked, owner, /bookmarks sync) |
@@ -275,8 +275,8 @@ pnpm check = exit 1. vite build проходит, поэтому ошибка н
   → флап при медленной/заблокированной сети.
 - pnpm test:e2e не стартует без BETTER_AUTH_SECRET (webServer падает).
 - Все тесты выставляют hedgehog-welcome-modal-dismissed, хотя модалки нет.
-- Нет fixtures/page-objects; покрытие — 7 файлов.
-- В текущем прогоне: 41/41 при 1 worker; тесты всё ещё зависят от сети.
+- Нет fixtures/page-objects; покрытие — 8 файлов.
+- В текущем прогоне: 42/42 при 1 worker; тесты всё ещё зависят от сети.
   Предыдущий прогон давал 24/26 из-за этих же переходов.
   **Фикс:** мокать https://oauth.telegram.org/** и https://discord.com/** (fulfill
   redirect), задавать env в CI, убрать мёртвый ключ, детерминированные моки.
@@ -573,7 +573,7 @@ UPDATE role='admin' админка недоступна.
    частичная заготовка, не i18n.
 8. **«Индексы на FK, enum/check, notNull timestamps»** из исторического
    ARCHITECTURE.md не реализованы: контентные FK без индексов, status/theme — текст.
-9. **«Миграции обязаны накатываться на чистую БД»** — ✅ исправлено: 0000–0007
+9. **«Миграции обязаны накатываться на чистую БД»** — ✅ исправлено: 0000–0008
    проходят на чистой БД; `0005` no-op, `0006` catch-up; `generate` — no-op.
 10. **«R2 + fallback»** — fallback работает только в dev; в prod тихо ломается;
     удаление объектов не реализовано.
@@ -581,7 +581,7 @@ UPDATE role='admin' админка недоступна.
 12. **«PWA offline»** — страницы кэшируются, но персонализированные и аудио-кэш
     без политики; OPFS-скачивание не везде доступно.
 13. **Тестовая дисциплина** (page-objects, fixtures, моки внешних сервисов) из
-    исторических документов не поддерживается: 7 файлов, реальные OAuth-переходы.
+    исторических документов не поддерживается: 8 файлов, реальные OAuth-переходы.
 14. **Главная — витрина**, но нет каталога; books/ редиректит. Это не отражено
     в UI как ограничение.
 15. **Плеер с queue/repeat/shuffle** — store богаче UI; функции недоступны

@@ -12,11 +12,11 @@
 | `.ts`                              | 118                                                   |
 | Всего строк `src/**/*.{ts,svelte}` | ~25 147                                               |
 | Маршрутов-страниц                  | 19 путей (19 директорий)                              |
-| API-эндпоинтов своих               | 11 обработчиков (9 путей) + `/api/auth/*` better-auth |
+| API-эндпоинтов своих               | 10 обработчиков (8 путей) + `/api/auth/*` better-auth |
 | Таблиц БД                          | 14 (10 доменных + 4 auth)                             |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)             |
 | Unit-тестов                        | 185 в 19 файлах                                       |
-| E2E-тестов                         | 41 в 7 файлах                                         |
+| E2E-тестов                         | 42 в 8 файлах                                         |
 
 ```
 .
@@ -41,8 +41,8 @@
 ├── Dockerfile                 # multi-stage production image
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
-├── drizzle/                   # 7 SQL-миграций 0000–0007 + meta (актуальны)
-├── e2e/                       # 7 файлов Playwright
+├── drizzle/                   # 9 SQL-миграций 0000–0008 + meta (актуальны)
+├── e2e/                       # 8 файлов Playwright
 ├── dynamic/dev.yaml           # Traefik file-provider для dev
 ├── docker/init-umami-db.sh
 ├── static/                    # assets (аудио, картинки, видео, QR, PWA)
@@ -102,7 +102,6 @@
 | `GET /api/books`                | `api/books/+server.ts`            | нет                       | —                                                                                | Все книги, `ORDER BY created_at DESC`; без кэша/пагинации                                                                                   |
 | `GET /api/books/[bookId]`       | `api/books/[bookId]/+server.ts`   | нет                       | `If-None-Match` (опц.)                                                           | Книга + volumes + chapters + illustrations + `likesCount`; weak ETag SHA1; 304/200/404; `Cache-Control: public, max-age=0, must-revalidate` |
 | `GET /api/media/[...key]`       | `api/media/[...key]/+server.ts`   | нет                       | Range (для аудио)                                                                | Потоковая отдача объекта из R2; `206` + `Content-Range`; локальный media-proxy                                                              |
-| `POST /api/admin/upload`        | `api/admin/upload/+server.ts`     | admin                     | multipart: file,type,folder,prefix                                               | `uploadImage`/`uploadAudio`; **клиентом не используется**                                                                                   |
 | `POST /api/analytics/listen`    | `api/analytics/listen/+server.ts` | гость/пользователь        | `{chapterId,bookId?,volumeId?,listenedSeconds,startedAt}` или `{sessions:[...]}` | Валидация 1..300 сек; INSERT `listening_sessions`; UPSERT `daily_listening_stats`; 400 при любой невалидной сессии                          |
 | `GET /api/user/sync`            | `api/user/sync/+server.ts`        | обязательна (гость → 401) | —                                                                                | `{userId,userName,isNewUser,chapterLikes,volumeLikes,listeningProgress,bookmarks}`; timestamps в ms                                         |
 | `GET /health`                   | `health/+server.ts`               | нет                       | —                                                                                | `{status:'ok',database:'ok'}` или 503; используется Docker healthcheck                                                                      |
@@ -387,7 +386,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |
-| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0007)            |
+| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0008)            |
 | `auth:schema`                     | better-auth generate                          | может перезаписать ручные поля      |
 
 ### 8.3. Конфиги

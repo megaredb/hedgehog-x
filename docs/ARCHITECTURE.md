@@ -538,7 +538,7 @@ static/uploads после сборки.
   runtime-only deps; entrypoint применяет миграции, `/health` проверяет БД;
   Traefik-роутер на `${APP_HOST}`/`${APP_HOST_RU}`, non-root, graceful shutdown. Подробности —
   OPERATIONS §5.1.
-- **Миграции**: db:migrate — рабочий способ (0000–0007); db:push — dev-shortcut,
+- **Миграции**: db:migrate — рабочий способ (0000–0008); db:push — dev-shortcut,
   может удалять колонки. Перед reset/migrate — pg_dump.
 - **R2**: без кредов — локальный fallback (dev only).
 - **Traefik dev**: dynamic/dev.yaml ссылается на /certs/*.pem, которых нет в
@@ -548,7 +548,7 @@ static/uploads после сборки.
 
 - Unit — node:test + tsx; 185 тестов; включают policy P0-01, но не покрывают
   downloadManager/audioStore/API.
-- E2E — Playwright; 7 файлов; 41 тест; включая `sync-data-safety` (9),
+- E2E — Playwright; 8 файлов; 42 теста; включая `sync-data-safety` (9),
   `bookmark-sync` (offline → online flush) и `session-isolation` (5).
 - pnpm check — 0 ошибок; pnpm build — зелёный; pnpm lint — зелёный.
 - pnpm test:e2e требует BETTER_AUTH_SECRET; тесты внешних OAuth-редиректов
@@ -571,7 +571,7 @@ static/uploads после сборки.
 | Публичная аналитика             | гость тоже слушает                     | нет rate limit; пачка отклоняется целиком; id может переполниться             |
 | «Единый словарь строк»          | i18n-заготовка                         | половина UI хардкодит русский, словарь частично не используется               |
 | «Индексы на FK, enum/check»     | дисциплина схемы                       | индексов на контентные FK нет; status/theme — свободный текст                 |
-| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0007 проходят на чистой БД; 0005 no-op, 0006 catch-up; generate no-op |
+| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0008 проходят на чистой БД; 0005 no-op, 0006 catch-up; generate no-op |
 | «SSR/SEO»                       | OG для соцсетей                        | книги/тома SSR + OG; unknown → 404                                            |
 
 Исторический ARCHITECTURE.md (коммит fd70f92, не в текущем дереве) описывал

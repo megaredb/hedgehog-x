@@ -125,9 +125,10 @@
 	async function handleConfirmClearCache() {
 		isClearing = true;
 		try {
-			const res = await clearAppCache({ clearDownloads: true });
+			// Cache cleanup must not silently delete the user's offline library.
+			const res = await clearAppCache({ clearDownloads: false });
 			if (res.success) {
-				showToast('Локальный кэш и загрузки успешно очищены');
+				showToast('Кэш страниц очищен; скачанные главы сохранены');
 			} else {
 				showToast('Не удалось полностью очистить кэш');
 			}
@@ -424,7 +425,7 @@
 							>{strings.settings.clearCacheBtn}</span
 						>
 						<p class="text-xs text-muted-foreground">
-							Удаляет кэш CacheStorage, загруженные аудиофайлы и данные из локальной БД
+							Очищает кэш страниц. Скачанные главы и данные локальной БД остаются.
 						</p>
 					</div>
 					<Button

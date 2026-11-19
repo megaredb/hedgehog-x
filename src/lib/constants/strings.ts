@@ -49,10 +49,12 @@ export const strings = {
 		profile: 'Профиль',
 		settings: 'Настройки',
 		admin: 'Панель управления',
+		analytics: 'Аналитика',
 		chapters: 'Главы',
 		volumes: 'Тома',
 		illustrations: 'Иллюстрации',
-		auth: 'Авторизация'
+		auth: 'Авторизация',
+		unknown: 'Раздел'
 	},
 	player: {
 		play: 'Воспроизвести',

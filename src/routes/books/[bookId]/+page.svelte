@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { db, type OfflineBook, type OfflineVolume } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
-	import { OpenGraphMeta } from '$lib/components/seo';
+	import { OpenGraphMeta, formatBookOgTitle } from '$lib/components/seo';
 	import { LayoutGrid, List as ListIcon } from '@lucide/svelte';
 
 	let { data } = $props();
@@ -32,7 +32,7 @@
 		volumesQuery.data.length > 0 ? volumesQuery.data : (serverData.volumes ?? [])
 	);
 
-	const ogTitle = $derived(book?.title ? `${book.title} | Тома` : 'Книга | Тома');
+	const ogTitle = $derived(formatBookOgTitle(book?.title));
 </script>
 
 <OpenGraphMeta

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import AppNavigation from '$lib/components/header/AppNavigation.svelte';
 	import AppBreadcrumbs from '$lib/components/layout/AppBreadcrumbs.svelte';
 	import GlobalPlayer from '$lib/components/audio/GlobalPlayer.svelte';
@@ -107,7 +106,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/pwa-64x64.png" type="image/png" />
 	<meta name="theme-color" content={themeColor} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html pwaInfo ? pwaInfo.webManifest.linkTag : ''}

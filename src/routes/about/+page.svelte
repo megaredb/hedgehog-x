@@ -168,6 +168,6 @@
 			<Heart class="h-4 w-4 animate-pulse text-destructive" />
 			<span>Сделано с любовью командой разработчиков</span>
 		</div>
-		<div class="font-medium">Copyright © 2025 HEDGEHOG.INC</div>
+		<div class="font-medium">Copyright © 2026 HEDGEHOG.INC</div>
 	</div>
 </div>

@@ -5,16 +5,8 @@ import { requireAdmin } from '$lib/server/admin';
 import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
+import { slugify } from '$lib/utils/slugify';
 import type { PageServerLoad } from './$types';
-
-function slugify(text: string): string {
-	return text
-		.toLowerCase()
-		.trim()
-		.replace(/[^\w\s-]/g, '')
-		.replace(/[\s_-]+/g, '_')
-		.replace(/^-+|-+$/g, '');
-}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	requireAdmin(locals);
@@ -39,6 +31,8 @@ export const actions: Actions = {
 		const description = (form.get('description') as string)?.trim() || null;
 		const status = (form.get('status') as string) || 'ongoing';
 		let coverUrl = (form.get('coverUrl') as string)?.trim() || null;
+		let coverWidth: number | null = null;
+		let coverHeight: number | null = null;
 		let blurhash: string | null = null;
 		let themeColor = (form.get('themeColor') as string)?.trim()?.replace(/^#/, '') || null;
 
@@ -58,6 +52,8 @@ export const actions: Actions = {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'books', filenamePrefix: id });
 				coverUrl = uploaded.url;
+				coverWidth = uploaded.width;
+				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 				if (!themeColor) {
 					themeColor = uploaded.themeColor;
@@ -75,6 +71,8 @@ export const actions: Actions = {
 				title,
 				description,
 				coverUrl,
+				coverWidth,
+				coverHeight,
 				blurhash,
 				themeColor: themeColor?.slice(0, 6) || null,
 				status
@@ -96,6 +94,8 @@ export const actions: Actions = {
 		const description = (form.get('description') as string)?.trim() || null;
 		const status = (form.get('status') as string) || 'ongoing';
 		let coverUrl = (form.get('coverUrl') as string)?.trim() || null;
+		let coverWidth: number | null = null;
+		let coverHeight: number | null = null;
 		let themeColor = (form.get('themeColor') as string)?.trim()?.replace(/^#/, '') || null;
 		let blurhash: string | null = null;
 
@@ -115,6 +115,8 @@ export const actions: Actions = {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'books', filenamePrefix: id });
 				coverUrl = uploaded.url;
+				coverWidth = uploaded.width;
+				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 				if (!themeColor) {
 					themeColor = uploaded.themeColor;
@@ -132,6 +134,8 @@ export const actions: Actions = {
 				description: string | null;
 				status: string;
 				coverUrl?: string | null;
+				coverWidth?: number | null;
+				coverHeight?: number | null;
 				blurhash?: string | null;
 				themeColor?: string | null;
 			} = {
@@ -143,10 +147,16 @@ export const actions: Actions = {
 			// Explicit empty values clear the cover/theme; fields not present mean "not supplied".
 			if (coverFile instanceof File && coverFile.size > 0) {
 				updateData.coverUrl = coverUrl;
+				updateData.coverWidth = coverWidth;
+				updateData.coverHeight = coverHeight;
 				if (blurhash !== null) updateData.blurhash = blurhash;
 			} else if (form.has('coverUrl')) {
 				updateData.coverUrl = coverUrl || null;
-				if (!coverUrl) updateData.blurhash = null;
+				if (!coverUrl) {
+					updateData.blurhash = null;
+					updateData.coverWidth = null;
+					updateData.coverHeight = null;
+				}
 			}
 			if (form.has('themeColor')) {
 				updateData.themeColor = themeColor ? themeColor.slice(0, 6) : null;

@@ -16,6 +16,15 @@ const BROWSER_COLORS: Record<string, string> = {
 	DB: '#6366f1',
 	SW: '#ec4899',
 	API: '#ef4444',
+	AnalyticsAPI: '#f97316',
+	UserSyncAPI: '#dc2626',
+	BookmarkService: '#0ea5e9',
+	Bookmarks: '#0284c7',
+	LikeService: '#e11d48',
+	ListeningTracker: '#7c3aed',
+	ProgressSync: '#059669',
+	R2Storage: '#d97706',
+	'DB:Seed': '#4f46e5',
 	App: '#14b8a6',
 	Default: '#64748b'
 };

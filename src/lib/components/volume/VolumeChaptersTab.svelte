@@ -168,11 +168,16 @@
 						: 0}
 
 				<li class="relative">
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						role="button"
 						tabindex="0"
 						onclick={(e) => handleChapterRowClick(e, chapter, index)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								handlePlayChapter(chapter, index);
+							}
+						}}
 						class="group relative flex cursor-pointer items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
 							? 'bg-primary/5'
 							: 'hover:bg-muted/30'}"

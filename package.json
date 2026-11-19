@@ -20,7 +20,7 @@
 		"test:e2e": "playwright install && playwright test",
 		"test:docker": "docker compose -f compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright && docker compose -f compose.test.yml down -v",
 		"test:docker:down": "docker compose -f compose.test.yml down -v",
-		"test": "npm run test:e2e",
+		"test": "pnpm test:e2e",
 		"dev:all": "docker compose up --wait -d && pnpm dev",
 		"docker:up": "docker compose up -d",
 		"docker:down": "docker compose down",
@@ -92,6 +92,7 @@
 		"mode-watcher": "^1.1.0",
 		"postgres": "^3.4.9",
 		"sharp": "^0.35.5",
-		"svelte": "^5.57.2"
+		"svelte": "^5.57.2",
+		"workbox-expiration": "7.4.1"
 	}
 }

@@ -62,7 +62,7 @@ pnpm test:docker         # docker compose -f compose.test.yml up --build ...
 pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
 pnpm db:seed             # node --import tsx src/lib/server/db/seed.ts
 pnpm db:generate         # drizzle-kit generate (после изменения schema.ts)
-pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0007)
+pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0008)
 pnpm db:studio           # drizzle-kit studio
 pnpm auth:schema         # better-auth generate -> auth.schema.ts (осторожно, перезапишет)
 ```
@@ -107,12 +107,11 @@ pnpm auth:schema         # better-auth generate -> auth.schema.ts (осторо�
    `SyncItem` хранит `ownerUserId`; flush отправляет только элементы текущего
    владельца. Новые actions обязаны иметь flush/retry, owner и тест. При logout
    очередь и локальные данные очищаются.
-4. **Не считай, что `syncService.syncBooks()` работает.** Он нигде не вызывается;
-   каталог в Dexie появляется только при заходе в книгу.
+4. **Каталог — `/books`, SSR из БД.** `syncBooks()` удалён; контент книги по-прежнему гидрируется в Dexie при входе в книгу.
 5. **SSR книг/томов содержит данные.** `/books/[bookId]` и volume имеют серверные
    `+page.server.ts` (404/OG); не ломай их. Остальные страницы всё ещё могут быть
    клиентскими.
-6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0007;
+6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0008;
    `0005` — намеренный no-op, `0006` — catch-up из `schema.ts`). Не используй `db:push`
    как основной путь: он может удалять колонки. После изменения `schema.ts`:
    `db:generate` → проверь SQL → `db:migrate`. Не редактируй применённые миграции задним
@@ -172,8 +171,8 @@ src/
     +layout.svelte, +page.svelte
     about/ admin/ auth/ bookmarks/ books/ community/ downloads/ history/
     profile/ settings/ support/ api/
-drizzle/                  # SQL-миграции 0000–0007 (актуальны; 0005 — no-op)
-e2e/                      # 7 Playwright-файлов
+drizzle/                  # SQL-миграции 0000–0008 (актуальны; 0005 — no-op)
+e2e/                      # 8 Playwright-файлов
 static/                   # аудио/картинки/видео/QR/PWA-иконки
 ```
 

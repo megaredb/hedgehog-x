@@ -33,8 +33,8 @@
 | Typecheck         | ✅ `svelte-check`: 0 ошибок                                                                  |
 | Lint/format       | ✅ prettier + eslint чисто                                                                   |
 | Unit-тесты        | ✅ 185/185 (`pnpm test:unit`)                                                                |
-| E2E               | ✅ 41/41 при `--workers=1`; тесты внешних OAuth-редиректов всё ещё зависят от сети           |
-| Миграции БД       | ✅ `db:migrate` 0000–0007; БД пересобрана, схема совпадает с `schema.ts`; `generate` no-op   |
+| E2E               | ✅ 42/42 при `--workers=1`; тесты внешних OAuth-редиректов всё ещё зависят от сети           |
+| Миграции БД       | ✅ `db:migrate` 0000–0008; БД пересобрана, схема совпадает с `schema.ts`; `generate` no-op   |
 | Offline-данные    | ✅ P0-01/P0-03/P0-05: owner-aware sync, logout-clear, consent на guest-импорт, offline flush |
 | Production deploy | ✅ production Dockerfile + app-сервис, миграции при старте, `/health`, graceful shutdown     |
 | P1                | ✅ 17/17: SSR/404/OG, history, R2, auth redirects, analytics, indexes, CI, e2e mocks         |

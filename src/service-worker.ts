@@ -3,6 +3,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { ExpirationPlugin } from 'workbox-expiration';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { createLogger } from './lib/logger';
 
@@ -60,7 +61,8 @@ registerRoute(
 		cacheName: 'audio-cache',
 		plugins: [
 			new CacheableResponsePlugin({ statuses: [200] }),
-			new RangeRequestsPlugin() // Critical for media seeking on iOS/Safari
+			new RangeRequestsPlugin(), // Critical for media seeking on iOS/Safari
+			new ExpirationPlugin({ maxEntries: 40, maxAgeSeconds: 30 * 24 * 60 * 60 })
 		]
 	})
 );

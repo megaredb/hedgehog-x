@@ -7,24 +7,40 @@ import {
 	timestamp,
 	varchar,
 	index,
-	uniqueIndex
+	uniqueIndex,
+	check
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { user } from './auth.schema';
 
-export const books = pgTable('books', {
-	id: varchar('id', { length: 128 }).primaryKey(),
-	title: varchar('title', { length: 255 }).notNull(),
-	description: text('description'),
-	coverUrl: varchar('cover_url', { length: 1024 }),
-	blurhash: varchar('blurhash', { length: 100 }),
-	themeColor: varchar('theme_color', { length: 6 }),
-	status: varchar('status', { length: 50 }).default('ongoing'),
-	createdAt: timestamp('created_at').defaultNow(),
-	updatedAt: timestamp('updated_at')
-		.defaultNow()
-		.$onUpdate(() => new Date())
-});
+export const books = pgTable(
+	'books',
+	{
+		id: varchar('id', { length: 128 }).primaryKey(),
+		title: varchar('title', { length: 255 }).notNull(),
+		description: text('description'),
+		coverUrl: varchar('cover_url', { length: 1024 }),
+		coverWidth: integer('cover_width'),
+		coverHeight: integer('cover_height'),
+		blurhash: varchar('blurhash', { length: 100 }),
+		themeColor: varchar('theme_color', { length: 6 }),
+		status: varchar('status', { length: 50 }).default('ongoing'),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at')
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [
+		check(
+			'books_status_check',
+			sql`${t.status} is null or ${t.status} in ('ongoing','completed','hiatus','dropped')`
+		),
+		check(
+			'books_theme_color_check',
+			sql`${t.themeColor} is null or ${t.themeColor} ~ '^[0-9a-fA-F]{6}$'`
+		)
+	]
+);
 
 export const volumes = pgTable(
 	'volumes',
@@ -37,6 +53,8 @@ export const volumes = pgTable(
 		title: varchar('title', { length: 255 }).notNull(),
 		description: text('description'),
 		coverUrl: varchar('cover_url', { length: 1024 }),
+		coverWidth: integer('cover_width'),
+		coverHeight: integer('cover_height'),
 		blurhash: varchar('blurhash', { length: 100 }),
 		status: varchar('status', { length: 50 }).default('ongoing'),
 		createdAt: timestamp('created_at').defaultNow(),
@@ -46,7 +64,11 @@ export const volumes = pgTable(
 	},
 	(t) => [
 		index('volumes_book_id_idx').on(t.bookId),
-		uniqueIndex('volumes_book_number_unique').on(t.bookId, t.volumeNumber)
+		uniqueIndex('volumes_book_number_unique').on(t.bookId, t.volumeNumber),
+		check(
+			'volumes_status_check',
+			sql`${t.status} is null or ${t.status} in ('ongoing','completed','hiatus','dropped')`
+		)
 	]
 );
 

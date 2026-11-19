@@ -51,6 +51,8 @@
 			<video
 				bind:this={videoElements[i]}
 				src={book.bgVideo}
+				poster={book.bgImage}
+				preload="none"
 				loop
 				muted
 				playsinline

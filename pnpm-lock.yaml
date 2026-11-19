@@ -44,6 +44,9 @@ importers:
       svelte:
         specifier: ^5.57.2
         version: 5.57.2(@typescript-eslint/types@8.71.2)
+      workbox-expiration:
+        specifier: 7.4.1
+        version: 7.4.1
     devDependencies:
       '@better-auth/core':
         specifier: 1.6.33

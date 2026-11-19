@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				totalSeconds: 0,
 				totalSessions: 0,
 				uniqueListeners: 0,
-				formattedTotalTime: '0 мин'
+				formattedTotalTime: formatListeningDuration(0).formatted
 			},
 			dailyBreakdown: [],
 			topBooks: [],
