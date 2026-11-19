@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { books, volumes, illustrations } from '$lib/server/db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { eq, desc, asc, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
 import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
@@ -43,19 +43,57 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.leftJoin(volumes, eq(illustrations.volumeId, volumes.id))
 		.leftJoin(books, eq(volumes.bookId, books.id));
 
-	const allIllustrations = selectedVolumeId
-		? await allIllustrationsQuery
-				.where(eq(illustrations.volumeId, selectedVolumeId))
-				.orderBy(asc(illustrations.sortOrder))
-		: await allIllustrationsQuery.orderBy(desc(illustrations.updatedAt));
+	const pageSize = 50;
+	const requestedPage = Number.parseInt(url.searchParams.get('page') ?? '1', 10);
+	const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+	const where = selectedVolumeId ? eq(illustrations.volumeId, selectedVolumeId) : undefined;
+
+	const [countRow] = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(illustrations)
+		.where(where);
+	const total = Number(countRow?.count ?? 0);
+	const totalPages = Math.max(1, Math.ceil(total / pageSize));
+	const safePage = Math.min(page, totalPages);
+
+	const allIllustrations = await allIllustrationsQuery
+		.where(where)
+		.orderBy(selectedVolumeId ? asc(illustrations.sortOrder) : desc(illustrations.updatedAt))
+		.limit(pageSize)
+		.offset((safePage - 1) * pageSize);
 
 	const editId = url.searchParams.get('edit');
-	const editIllustration = editId ? allIllustrations.find((i) => i.id === editId) : null;
+	const editIllustration = editId
+		? ((
+				await db
+					.select({
+						id: illustrations.id,
+						volumeId: illustrations.volumeId,
+						imageUrl: illustrations.imageUrl,
+						blurhash: illustrations.blurhash,
+						caption: illustrations.caption,
+						sortOrder: illustrations.sortOrder,
+						volumeTitle: volumes.title,
+						volumeNumber: volumes.volumeNumber,
+						bookId: volumes.bookId,
+						bookTitle: books.title
+					})
+					.from(illustrations)
+					.leftJoin(volumes, eq(illustrations.volumeId, volumes.id))
+					.leftJoin(books, eq(volumes.bookId, books.id))
+					.where(eq(illustrations.id, editId))
+					.limit(1)
+			)[0] ?? null)
+		: null;
 
 	return {
 		volumes: allVolumes,
 		illustrations: allIllustrations,
 		selectedVolumeId,
+		page: safePage,
+		pageSize,
+		total,
+		totalPages,
 		editIllustration
 	};
 };

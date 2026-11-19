@@ -257,9 +257,11 @@
 							</div>
 
 							<!-- Only Play button in the mini-bar to prevent overflow -->
-							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<!-- svelte-ignore a11y_click_events_have_key_events -->
-							<div class="shrink-0" onclick={(e: MouseEvent) => e.stopPropagation()}>
+							<div
+								class="shrink-0"
+								role="presentation"
+								onclick={(e: MouseEvent) => e.stopPropagation()}
+							>
 								<AudioPlayer.Play />
 							</div>
 						</div>

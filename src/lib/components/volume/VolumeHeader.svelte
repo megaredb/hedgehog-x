@@ -151,11 +151,16 @@
 			{#if isLoading}
 				<Skeleton class="aspect-2/3 w-36 rounded-2xl shadow-md sm:w-48" />
 			{:else if volume?.coverUrl}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
 					role="button"
 					tabindex="0"
 					onclick={() => (isLightboxOpen = true)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							isLightboxOpen = true;
+						}
+					}}
 					class="relative cursor-pointer overflow-hidden rounded-2xl shadow-lg transition-transform duration-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {isPlayingThisVolume
 						? 'scale-105 shadow-xl'
 						: 'group-hover:scale-102'}"

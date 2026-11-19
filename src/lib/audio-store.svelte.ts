@@ -3,9 +3,12 @@ import { resolveMediaUrl } from '$lib/utils/mirror.js';
 
 export type RepeatMode = 'none' | 'one' | 'all';
 
-export const SEEK_STEP_STORAGE_KEY = 'hedgehog:seek_step';
-export const AUTO_ADVANCE_STORAGE_KEY = 'hedgehog:auto_advance';
-export const PLAYBACK_RATE_STORAGE_KEY = 'hedgehog:playback_rate';
+import {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY
+} from '$lib/constants/settings';
+export { SEEK_STEP_STORAGE_KEY, AUTO_ADVANCE_STORAGE_KEY, PLAYBACK_RATE_STORAGE_KEY };
 
 // ─── Helper functions ────────────────────────────────────────────────────────
 

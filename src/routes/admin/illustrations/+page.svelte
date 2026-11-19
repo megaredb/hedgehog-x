@@ -9,6 +9,7 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import {
@@ -19,7 +20,7 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
-	import { Image as ImageIcon, Plus, Trash2, Edit, ExternalLink } from '@lucide/svelte';
+	import { Image as ImageIcon, Plus, Edit, ExternalLink } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
@@ -79,7 +80,7 @@
 				<CardHeader class="pb-3">
 					<CardTitle class="flex items-center gap-2 text-base">
 						<ImageIcon class="h-4 w-4 text-primary" />
-						Список иллюстраций ({data.illustrations.length})
+						Список иллюстраций ({data.total})
 					</CardTitle>
 					<CardDescription class="text-xs">
 						{data.selectedVolumeId
@@ -143,7 +144,7 @@
 													<ExternalLink class="h-3.5 w-3.5" />
 												</Button>
 												<Button
-													href="/admin/illustrations?edit={ill.id}{data.selectedVolumeId
+													href="/admin/illustrations?edit={ill.id}&page={data.page}{data.selectedVolumeId
 														? `&volumeId=${data.selectedVolumeId}`
 														: ''}"
 													variant="ghost"
@@ -153,31 +154,44 @@
 												>
 													<Edit class="h-3.5 w-3.5" />
 												</Button>
-												<form
-													use:enhance
-													method="POST"
-													action="?/delete"
-													onsubmit={(e) => {
-														if (!confirm(`Удалить иллюстрацию?`)) e.preventDefault();
-													}}
-												>
-													<input type="hidden" name="id" value={ill.id} />
-													<Button
-														type="submit"
-														variant="ghost"
-														size="icon"
-														class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-														title="Удалить"
-													>
-														<Trash2 class="h-3.5 w-3.5" />
-													</Button>
-												</form>
+												<ConfirmDeleteForm
+													id={ill.id}
+													title="Удалить иллюстрацию?"
+													description="Это действие нельзя отменить."
+												/>
 											</div>
 										</TableCell>
 									</TableRow>
 								{/each}
 							</TableBody>
 						</Table>
+						{#if data.totalPages > 1}
+							<div class="flex items-center justify-between gap-2 border-t px-3 py-3">
+								<Button
+									href="/admin/illustrations?page={data.page - 1}{data.selectedVolumeId
+										? `&volumeId=${data.selectedVolumeId}`
+										: ''}"
+									variant="outline"
+									size="sm"
+									disabled={data.page <= 1}
+								>
+									Назад
+								</Button>
+								<span class="text-xs text-muted-foreground"
+									>Страница {data.page} из {data.totalPages}</span
+								>
+								<Button
+									href="/admin/illustrations?page={data.page + 1}{data.selectedVolumeId
+										? `&volumeId=${data.selectedVolumeId}`
+										: ''}"
+									variant="outline"
+									size="sm"
+									disabled={data.page >= data.totalPages}
+								>
+									Вперёд
+								</Button>
+							</div>
+						{/if}
 					{/if}
 				</CardContent>
 			</Card>

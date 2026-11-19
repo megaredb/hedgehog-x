@@ -12,7 +12,7 @@
 | `.ts`                              | 118                                                   |
 | Всего строк `src/**/*.{ts,svelte}` | ~25 147                                               |
 | Маршрутов-страниц                  | 19 путей (19 директорий)                              |
-| API-эндпоинтов своих               | 10 обработчиков (8 путей) + `/api/auth/*` better-auth |
+| API-эндпоинтов своих               | 11 обработчиков (9 путей) + `/api/auth/*` better-auth |
 | Таблиц БД                          | 14 (10 доменных + 4 auth)                             |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)             |
 | Unit-тестов                        | 187 в 21 файлах                                       |
@@ -88,8 +88,6 @@
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `src/routes/books/[bookId]/+layout.ts`          | В браузере запускает `syncService.syncBookDetails(bookId)` и `syncUserData()` без `await`; возвращает `{bookId}`. |
 | `src/routes/books/[bookId]/[volumeId]/+page.ts` | Возвращает `{bookId, volumeId}`; данных нет.                                                                      |
-| `src/routes/books/+page.ts`                     | Редирект на `/`.                                                                                                  |
-| `src/routes/+page.ts`                           | Пустой load.                                                                                                      |
 | `src/routes/admin/+layout.server.ts`            | `locals.user ? user/isAdmin/isDev : redirect('/auth?from=/admin')`.                                               |
 | `src/routes/admin/*/+page.server.ts`            | `requireAdmin` + выборки + form actions.                                                                          |
 
@@ -102,6 +100,7 @@
 | `GET /api/books`                | `api/books/+server.ts`            | нет                       | —                                                                                | Все книги, `ORDER BY created_at DESC`; без кэша/пагинации                                                                                   |
 | `GET /api/books/[bookId]`       | `api/books/[bookId]/+server.ts`   | нет                       | `If-None-Match` (опц.)                                                           | Книга + volumes + chapters + illustrations + `likesCount`; weak ETag SHA1; 304/200/404; `Cache-Control: public, max-age=0, must-revalidate` |
 | `GET /api/media/[...key]`       | `api/media/[...key]/+server.ts`   | нет                       | Range (для аудио)                                                                | Потоковая отдача объекта из R2; `206` + `Content-Range`; локальный media-proxy                                                              |
+| `GET /api/metrics`              | `api/metrics/+server.ts`          | admin / `METRICS_TOKEN`   | Bearer-токен (опц.)                                                              | Prometheus text: `hedgehog_up`, uptime, Node version; 403 без доступа                                                                       |
 | `POST /api/analytics/listen`    | `api/analytics/listen/+server.ts` | гость/пользователь        | `{chapterId,bookId?,volumeId?,listenedSeconds,startedAt}` или `{sessions:[...]}` | Валидация 1..300 сек; INSERT `listening_sessions`; UPSERT `daily_listening_stats`; 400 при любой невалидной сессии                          |
 | `GET /api/user/sync`            | `api/user/sync/+server.ts`        | обязательна (гость → 401) | —                                                                                | `{userId,userName,isNewUser,chapterLikes,volumeLikes,listeningProgress,bookmarks}`; timestamps в ms                                         |
 | `GET /health`                   | `health/+server.ts`               | нет                       | —                                                                                | `{status:'ok',database:'ok'}` или 503; используется Docker healthcheck                                                                      |

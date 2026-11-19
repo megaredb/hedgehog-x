@@ -64,7 +64,7 @@ pnpm db:seed             # node --import tsx src/lib/server/db/seed.ts
 pnpm db:generate         # drizzle-kit generate (после изменения schema.ts)
 pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0008)
 pnpm db:studio           # drizzle-kit studio
-pnpm auth:schema         # better-auth generate -> auth.schema.ts (осторожно, перезапишет)
+pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 ```
 
 ### Как проверять правки (минимум)

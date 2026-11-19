@@ -7,9 +7,12 @@ import {
 	type MirrorPreference
 } from '$lib/utils/mirror';
 
-export const SEEK_STEP_STORAGE_KEY = 'hedgehog:seek_step';
-export const AUTO_ADVANCE_STORAGE_KEY = 'hedgehog:auto_advance';
-export const PLAYBACK_RATE_STORAGE_KEY = 'hedgehog:playback_rate';
+import {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY
+} from '$lib/constants/settings';
+export { SEEK_STEP_STORAGE_KEY, AUTO_ADVANCE_STORAGE_KEY, PLAYBACK_RATE_STORAGE_KEY };
 
 export const SEEK_STEPS = [5, 10, 15, 30] as const;
 export type SeekStep = (typeof SEEK_STEPS)[number];

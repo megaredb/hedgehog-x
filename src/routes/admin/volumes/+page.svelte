@@ -9,6 +9,7 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -22,7 +23,7 @@
 		TableRow
 	} from '$lib/components/ui/table';
 	import { PaginationBar } from '$lib/components/ui/pagination';
-	import { Layers, Plus, Trash2, Edit, ExternalLink, Image as ImageIcon } from '@lucide/svelte';
+	import { Layers, Plus, Edit, ExternalLink, Image as ImageIcon } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
@@ -154,30 +155,11 @@
 												>
 													<ExternalLink class="h-3.5 w-3.5" />
 												</Button>
-												<form
-													use:enhance
-													method="POST"
-													action="?/delete"
-													onsubmit={(e) => {
-														if (
-															!confirm(
-																`Удалить том «${vol.title}»? Все связанные главы также будут удалены.`
-															)
-														)
-															e.preventDefault();
-													}}
-												>
-													<input type="hidden" name="id" value={vol.id} />
-													<Button
-														type="submit"
-														variant="ghost"
-														size="icon"
-														class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-														title="Удалить"
-													>
-														<Trash2 class="h-3.5 w-3.5" />
-													</Button>
-												</form>
+												<ConfirmDeleteForm
+													id={vol.id}
+													title="Удалить том «{vol.title}»?"
+													description="Все связанные главы также будут удалены."
+												/>
 											</div>
 										</TableCell>
 									</TableRow>
