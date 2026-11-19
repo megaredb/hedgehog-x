@@ -19,6 +19,7 @@ export const strings = {
 		empty: 'Нет данных',
 		search: 'Поиск...',
 		notFound: 'Ничего не найдено',
+		allBooks: 'Все книги',
 		guest: 'Гость',
 		signIn: 'Войти в аккаунт',
 		signOut: 'Выйти'

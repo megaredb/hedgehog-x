@@ -3,6 +3,7 @@
 	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { showcaseBooks } from '$lib/data/mockShowcase';
+	import { strings } from '$lib/constants/strings';
 
 	import ShowcaseBackground from '$lib/components/showcase/ShowcaseBackground.svelte';
 	import ShowcaseItem from '$lib/components/showcase/ShowcaseItem.svelte';
@@ -136,7 +137,7 @@
 		href={resolve('/books')}
 		class="pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
 	>
-		Все книги
+		{strings.common.allBooks}
 	</a>
 
 	<!-- Scroll down indicator -->

@@ -8,6 +8,7 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { strings } from '$lib/constants/strings';
 	import {
 		BookOpen,
 		Layers,
@@ -168,7 +169,7 @@
 				>
 			</div>
 			<Button href="/admin/books" variant="ghost" size="sm" class="gap-1 text-xs">
-				Все книги
+				{strings.common.allBooks}
 				<ArrowRight class="h-3.5 w-3.5" />
 			</Button>
 		</CardHeader>
