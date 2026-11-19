@@ -21,20 +21,26 @@ Severity:
 
 ## 1. Executive summary
 
-| Severity | Кол-во        | Главное                                                                                     |
-| -------- | ------------- | ------------------------------------------------------------------------------------------- |
-| P0       | 5 (5 fixed)   | Все P0 закрыты: P0-01/P0-02/P0-03/P0-04/P0-05                                               |
-| P1       | 17 (17 fixed) | Все P1 закрыты: history, e2e, SSR/404/OG, redirect, token storage, R2, admin, analytics, CI |
-| P2       | 83            | плеер, каталог-мок, админ-ограничения, кэши, индексы, валидация, UX                         |
-| P3       | 28            | мёртвый код, дубли, доступность, брендинг, документация, мелочи                             |
+| Severity | Кол-во         | Главное                                                                                     |
+| -------- | -------------- | ------------------------------------------------------------------------------------------- |
+| P0       | 5 (5 fixed)    | Все P0 закрыты: P0-01/P0-02/P0-03/P0-04/P0-05                                               |
+| P1       | 17 (17 fixed)  | Все P1 закрыты: history, e2e, SSR/404/OG, redirect, token storage, R2, admin, analytics, CI |
+| P2       | 83 (83 closed) | плеер, каталог, админ-ограничения, кэши, индексы, валидация, UX                             |
+| P3       | 28 (28 closed) | мёртвый код, дубли, доступность, брендинг, документация, мелочи                             |
 
-Все P0 (P0-01–P0-05) и P1 (P1-01–P1-17) закрыты. Следующие приоритеты — P2:
-каталог вместо mockShowcase, валидация/лимиты API, плеер (Space/repeat/sleep),
-кэши/SW/CSP, админ-ограничения, UX.
+Все P0, P1, P2 и P3 закрыты по коду и проверкам. Осознанные ограничения:
+P1-17 не делает true streaming в R2 (файл буферизуется в пределах лимита),
+P2-80 (`main`) не трогали по требованию заказчика, а page-level UI-тексты
+не полностью переведены на словарь.
 
 **P1, реализовано 2026-11-19:** safe redirect; история очищает сервер; e2e
 OAuth-моки; SSR/404/OG; token не кэшируется; R2 cleanup + prod fail-fast + upload
 limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 0007; CI.
+
+**P2/P3, реализовано 2026-11-19:** SSR-каталог и поиск; sync API с лимитами,
+валидацией и транзакциями; плеер (Space/repeat/sleep/seek/OPFS); CSP, SW-кэши и
+PWA; пагинация и confirm-модалки админки; роли пользователей; a11y-фокус и
+keyboard; metrics endpoint; 192 unit и 42 e2e; чистка мёртвого кода и словаря.
 
 ## 2. Проверочная база
 
@@ -42,15 +48,15 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 | ------------------ | --------------------------------------------------------- | --------------------------------------------------------- |
 | Production build   | vite build                                                | exit 0                                                    |
 | Production image   | docker build -t hedgehog-x:prod .                         | ✅ build 0; runtime-only deps                             |
-| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 7 миграций, seed 2 книги, non-root, health 200         |
+| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 9 миграций, seed 2 книги, non-root, health 200         |
 | Graceful shutdown  | docker stop -t 20                                         | ✅ exit 0 (DB pool закрывается)                           |
 | Compose config     | docker compose -f compose.yaml -f compose.prod.yml config | ✅ app + Traefik labels; ошибок нет                       |
 | Dual domain        | Host headers `hedgehog-inc.one` / `ru.hedgehog-inc.one`   | ✅ 200; Telegram redirect_uri на каждом хосте             |
 | SSR/404/OG         | curl /books/* + volume                                    | ✅ title/H1/OG из БД; unknown = 404                       |
 | History clear      | POST /api/user/progress/clear                             | ✅ 401 guest; auth deletes server+queue                   |
 | Analytics batch    | valid+invalid POST                                        | ✅ 200 accepted=1 rejected=1                              |
-| P1 migration       | drizzle 0007 + schema parity                              | ✅ 8 migrations; unique/indexes; generate no-op           |
-| CI                 | .github/workflows/ci.yml                                  | ✅ lint/check/unit/build/migrate/e2e                      |
+| P1 migration       | drizzle 0008 + schema parity                              | ✅ 9 migrations; unique/indexes; generate no-op           |
+| CI                 | .github/workflows/ci.yml                                  | ✅ lint/check/unit/build/migrate/generate-drift/e2e       |
 | Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                          |
 | Prettier           | prettier --check .                                        | OK                                                        |
 | ESLint             | eslint .                                                  | OK                                                        |
@@ -387,7 +393,7 @@ likes/progress; нет UNIQUE(book_id, volume_number) и UNIQUE(volume_id, chapt
 **Где:** корень (нет .github/), package.json.
 **Факт:** проверки не автоматизированы; нет pre-commit; нет пайплайна. Ошибка типов
 и будущие миграционные регрессии могут остаться незамеченными.
-**Фикс:** CI: install, lint, check, unit, build, migrate на temp Postgres, e2e с моками; добавлен ручной `workflow_dispatch`.
+**Фикс:** CI: install, lint, check, unit, build, migrate на temp Postgres, `db:generate` + `git diff --exit-code drizzle` (drift), e2e с моками; добавлен ручной `workflow_dispatch`.
 
 ### P1-15. Несогласованный доступ к админке — ИСПРАВЛЕНО
 
@@ -410,7 +416,7 @@ UPDATE role='admin' админка недоступна.
 **Факт:** request.formData() читает файл целиком в память; нет max size/type
 (кроме accept в браузере); audio сохраняется без проверки; sharp обрабатывает
 произвольный buffer. Admin-only снижает риск, но огромный файл → OOM/500.
-**Фикс:** лимит размера, content-type/magic bytes, `BODY_SIZE_LIMIT`, rate limit 30 admin-POST/мин. Полноценный streaming в R2 не внедрён: форма SvelteKit всё ещё буферизует файл в пределах лимита.
+**Фикс:** лимит размера, content-type/magic bytes, `BODY_SIZE_LIMIT`, rate limit 30 admin-POST/мин. Полноценный streaming в R2 не внедрён: форма SvelteKit всё ещё буферизует файл в пределах лимита. Это единственное известное ограничение P1-17.
 
 ## 5. P2 — средние
 
