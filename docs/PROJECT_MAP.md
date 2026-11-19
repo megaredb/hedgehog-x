@@ -15,7 +15,7 @@
 | API-эндпоинтов своих               | 11 обработчиков (9 путей) + `/api/auth/*` better-auth |
 | Таблиц БД                          | 14 (10 доменных + 4 auth)                             |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)             |
-| Unit-тестов                        | 173 в 22 файлах                                       |
+| Unit-тестов                        | 189 в 22 файлах                                       |
 | E2E-тестов                         | 42 в 8 файлах                                         |
 
 ```
@@ -30,7 +30,7 @@
 ├── vite.config.ts             # SvelteKit + adapter-node + PWA + Tailwind
 ├── tsconfig.json              # extends .svelte-kit/tsconfig.json
 ├── drizzle.config.ts          # schema: src/lib/server/db/schema.ts
-├── playwright.config.ts       # preview :4173, testMatch **/*.e2e.ts
+├── playwright.config.ts       # preview :4189, testMatch **/*.e2e.ts
 ├── eslint.config.js
 ├── prettier.config.js
 ├── components.json            # shadcn-svelte: style vega, alias $lib
@@ -361,7 +361,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `BETTER_AUTH_COOKIE_DOMAIN`                                            | production                    | auth/compose.prod                        | `.hedgehog-inc.one`, общая сессия                                |
 | `PROTOCOL_HEADER` / `HOST_HEADER`                                      | production                    | adapter-node                             | `x-forwarded-proto` / `x-forwarded-host`                         |
 | `COMPOSE_FILE`                                                         | dev                           | Docker                                   | `compose.yaml:compose.dev.yml`                                   |
-| `PORT`, `HOST`, `NODE_ENV`                                             | runtime                       | adapter/playwright                       | 4173 в тестах                                                    |
+| `PORT`, `HOST`, `NODE_ENV`                                             | runtime                       | adapter/playwright                       | 4189 в тестах                                                    |
 | `LOG_LEVEL`                                                            | нет                           | logger (localStorage)                    | не env, но уровень                                               |
 
 `.env.example` содержит все ключи; локальный `.env` (в main checkout) содержит
@@ -381,7 +381,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `test:e2e`                        | `playwright install && playwright test`       | сеть; env обязателен                |
 | `test:docker`                     | compose test up/down                          | db:migrate+seed+build+e2e           |
 | `test`                            | `npm run test:e2e`                            | npm внутри pnpm-проекта             |
-| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 173 pass                            |
+| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 189 pass                            |
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |
@@ -397,12 +397,12 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `drizzle.config.ts`               | postgresql, strict, schema                                                                                                                                                                                     |
 | `eslint.config.js`                | js+ts+svelte+prettier; ignores .gitignore                                                                                                                                                                      |
 | `prettier.config.js`              | tabs, single quotes, no trailing comma, width 100, svelte+tailwind plugins                                                                                                                                     |
-| `playwright.config.ts`            | webServer preview :4173; testMatch `**/*.e2e.{ts,js}`; chromium                                                                                                                                                |
+| `playwright.config.ts`            | webServer preview :4189; testMatch `**/*.e2e.{ts,js}`; chromium                                                                                                                                                |
 | `components.json`                 | shadcn style vega, aliases                                                                                                                                                                                     |
 | `pnpm-workspace.yaml`             | allowBuilds: prisma, oxide, better-sqlite3, esbuild, sharp                                                                                                                                                     |
 | `.npmrc`                          | engine-strict=true (но `engines` нет)                                                                                                                                                                          |
 | `compose*.yml`, `Dockerfile.test` | инфраструктура (см. OPERATIONS)                                                                                                                                                                                |
-| `dynamic/dev.yaml`                | Traefik routers `hedgehog-inc.localhost` → :5173, preview → :5174                                                                                                                                              |
+| `dynamic/dev.yaml`                | Traefik routers `hedgehog-inc.localhost` → :5189, preview → :5174                                                                                                                                              |
 
 ## 9. Статика
 

@@ -546,7 +546,7 @@ static/uploads после сборки.
 
 ## 13. Тестирование и проверка
 
-- Unit — node:test + tsx; 173 тестов; включают policy P0-01, но не покрывают
+- Unit — node:test + tsx; 189 тестов; включают policy P0-01, но не покрывают
   downloadManager/audioStore/API.
 - E2E — Playwright; 8 файлов; 42 теста; включая `sync-data-safety` (9),
   `bookmark-sync` (offline → online flush) и `session-isolation` (5).

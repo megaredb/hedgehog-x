@@ -25,8 +25,8 @@
 ```dotenv
 DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"
 BETTER_AUTH_SECRET="<32+ символа высокой энтропии>"
-BETTER_AUTH_ALLOWED_HOSTS="localhost,localhost:5173"
-BETTER_AUTH_FALLBACK_URL="http://localhost:5173"
+BETTER_AUTH_ALLOWED_HOSTS="localhost,localhost:5189"
+BETTER_AUTH_FALLBACK_URL="http://localhost:5189"
 ```
 
 - `BETTER_AUTH_SECRET` обязателен, минимум 32 символа; без него приложение
@@ -80,13 +80,13 @@ pnpm install
 docker compose up -d      # Postgres + Traefik + Umami + dbgate
 pnpm db:migrate           # первый запуск: 0000–0008
 pnpm db:seed              # первый запуск: демо-контент
-pnpm dev                  # Vite на 5173
+pnpm dev                  # Vite на 5189
 ```
 
 - `compose.yaml` + `compose.dev.yml` поднимают Postgres (127.0.0.1:5432),
   Traefik (80/443), dbgate (3000), umami (3001), db-init.
-- `pnpm dev` — Vite на 5173; Traefik проксирует
-  `https://hedgehog-inc.localhost` → host:5173.
+- `pnpm dev` — Vite на 5189; Traefik проксирует
+  `https://hedgehog-inc.localhost` → host:5189.
 - Если БД уже инициализирована, достаточно `pnpm dev:all` (compose up + dev).
 
 ### Вариант B: только БД
@@ -183,7 +183,7 @@ UPDATE "user" SET role = 'admin' WHERE email = '<email>';
 pnpm build
 node build/index.js            # с env: DATABASE_URL, BETTER_AUTH_SECRET, PORT
 # или
-pnpm preview                   # Vite preview на 4173
+pnpm preview                   # Vite preview на 4189
 ```
 
 - `build/index.js` — adapter-node entry; статика в `build/client`.
@@ -241,7 +241,7 @@ curl http://127.0.0.1:3000/health
 pnpm test:unit
 ```
 
-- 22 файлов, 173 тестов; в снимке — все зелёные.
+- 22 файлов, 189 тестов; в снимке — все зелёные.
 - `r2.test.ts` пишет файлы в `static/uploads/test*` (или в R2, если env настроен)
   и пытается удалить; побочный эффект.
 - `listeningTracker.test.ts` использует Dexie без браузера; часть проверок
@@ -263,15 +263,15 @@ pnpm format
 ```bash
 # ВАЖНО: webServer (vite preview) падает без секрета
 export BETTER_AUTH_SECRET='test-secret-at-least-32-characters-long-key'
-export BETTER_AUTH_ALLOWED_HOSTS='localhost,localhost:4173'
-export BETTER_AUTH_FALLBACK_URL='http://localhost:4173'
+export BETTER_AUTH_ALLOWED_HOSTS='localhost,localhost:4189'
+export BETTER_AUTH_FALLBACK_URL='http://localhost:4189'
 
 pnpm exec playwright install      # если браузеров нет
 pnpm test:e2e                    # или: pnpm exec playwright test
 pnpm exec playwright test --workers=1   # стабильнее
 ```
 
-- Конфиг сам поднимает `npm run preview -- --host 0.0.0.0 --port 4173`
+- Конфиг сам поднимает `npm run preview -- --host 0.0.0.0 --port 4189`
   (`reuseExistingServer` вне CI), поэтому перед запуском не нужно вручную
   поднимать preview.
 - Без `BETTER_AUTH_SECRET` webServer падает: `BetterAuthError: default secret`.
@@ -331,7 +331,7 @@ node ./node_modules/vite/bin/vite.js build
 
 ### 7.2. Traefik dev
 
-- `dynamic/dev.yaml`: `hedgehog-inc.localhost` → host:5173,
+- `dynamic/dev.yaml`: `hedgehog-inc.localhost` → host:5189,
   `preview.hedgehog-inc.localhost` → host:5174; TLS из `/certs`.
 - В `compose.dev.yml` монтируется `./certs:/certs:ro` и `./dynamic:/dynamic:ro`.
 - Создайте сертификаты mkcert; иначе Traefik не загрузит конфиг.
@@ -411,7 +411,7 @@ node ./node_modules/vite/bin/vite.js build
 | Build               | `node vite build`                             | ✅ exit 0                                                           |
 | Typecheck           | `svelte-check`                                | ✅ 0 errors                                                         |
 | Lint                | prettier + eslint                             | ✅                                                                  |
-| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 173 pass                                                         |
+| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 189 pass                                                         |
 | E2E (3 файла)       | `playwright test auth profile navigation`     | ✅ 23/23 (в текущем прогоне)                                        |
 | E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 42/42 (сеть для OAuth-редиректов всё ещё нужна)                  |
 | Sync safety e2e     | `e2e/sync-data-safety.e2e.ts`                 | ✅ 9/9 (P0-01 + guest consent)                                      |
