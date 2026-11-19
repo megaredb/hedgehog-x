@@ -4,7 +4,10 @@ import sharp from 'sharp';
 import { decode } from 'blurhash';
 import { uploadImage, uploadAudio, deleteFromStorage } from './r2';
 
-describe('R2 & Image Processing Storage Service', () => {
+const r2Configured = Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_BUCKET_NAME);
+
+// Unit tests must not upload to a real bucket or leave files in static/uploads.
+describe('R2 & Image Processing Storage Service', { skip: r2Configured }, () => {
 	it('converts an image buffer to webp and computes a valid blurhash', async () => {
 		// Create a 100x100 test PNG image
 		const sampleBuffer = await sharp({
