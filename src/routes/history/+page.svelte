@@ -147,6 +147,7 @@
 
 <svelte:head>
 	<title>{strings.history.title} | Hedgehog X</title>
+	<meta name="description" content="История прослушивания аудиокниг и прогресс по главам." />
 </svelte:head>
 
 <div class="layout-content mx-auto max-w-5xl py-6 md:py-10">
@@ -206,7 +207,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each paginatedHistory as item (item.chapterId)}
+			{#each paginatedHistory as item, i (item.chapterId)}
 				{@const duration = item.chapter?.durationSeconds || 1}
 				{@const progressPct = Math.min(100, Math.round((item.progressSeconds / duration) * 100))}
 				{@const isFinished = item.isCompleted || progressPct >= 95}
@@ -220,6 +221,9 @@
 							<img
 								src={item.volume?.coverUrl || item.book?.coverUrl}
 								alt={item.volume?.title || item.chapter?.title || 'Cover'}
+								width={56}
+								height={96}
+								loading={i < 2 ? 'eager' : 'lazy'}
 								class="h-20 w-14 shrink-0 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
 							/>
 						{:else}

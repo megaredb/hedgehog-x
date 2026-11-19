@@ -13,6 +13,8 @@
 	let { discussion, class: className = '' }: Props = $props();
 
 	let isOnline = $state(typeof navigator !== 'undefined' ? navigator.onLine : true);
+	// Load the third-party Telegram widget only after explicit consent/action.
+	let showComments = $state(false);
 
 	const parsedDiscussion = $derived(extractTelegramDiscussion(discussion));
 	const isDark = $derived(mode.current === 'dark');
@@ -102,6 +104,18 @@
 			>
 				<span>Перейти в Telegram-канал</span>
 				<ExternalLink class="h-3.5 w-3.5" />
+			</Button>
+		</div>
+	{:else if !showComments}
+		<div
+			class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-muted/20 p-8 text-center"
+		>
+			<MessageSquare class="mb-3 h-8 w-8 text-muted-foreground" />
+			<p class="max-w-sm text-xs text-muted-foreground">
+				Комментарии загружаются из Telegram. Нажмите, чтобы загрузить виджет.
+			</p>
+			<Button variant="outline" size="sm" class="mt-4" onclick={() => (showComments = true)}>
+				Показать комментарии
 			</Button>
 		</div>
 	{:else}

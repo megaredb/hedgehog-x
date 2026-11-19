@@ -72,6 +72,7 @@
 
 <svelte:head>
 	<title>Менеджер загрузок | Hedgehog.inc</title>
+	<meta name="description" content="Скачанные главы аудиокниг для офлайн-прослушивания." />
 </svelte:head>
 
 <div class="mx-auto max-w-4xl p-6">

@@ -28,9 +28,16 @@
 		}
 	);
 	const book = $derived(bookQuery.data ?? serverData.book);
+	// SSR already has the complete sorted list; prefer it to avoid a hydration shift
+	// when Dexie is still catching up with the server catalog.
 	const volumes = $derived(
-		volumesQuery.data.length > 0 ? volumesQuery.data : (serverData.volumes ?? [])
+		(serverData.volumes?.length ?? 0) > 0
+			? serverData.volumes!
+			: [...volumesQuery.data].sort((a, b) => a.volumeNumber - b.volumeNumber)
 	);
+	const INITIAL_VOLUMES = 12;
+	let visibleCount = $state(INITIAL_VOLUMES);
+	const visibleVolumes = $derived(volumes.slice(0, visibleCount));
 
 	const ogTitle = $derived(formatBookOgTitle(book?.title));
 </script>
@@ -41,6 +48,14 @@
 	image={book?.coverUrl}
 	type="book"
 />
+
+<svelte:head>
+	{#each volumes.slice(0, 4) as volume (volume.id)}
+		{#if volume.coverUrl}
+			<link rel="preload" as="image" href={volume.coverUrl} fetchpriority="high" />
+		{/if}
+	{/each}
+</svelte:head>
 
 <main class="layout-content py-4 md:py-8">
 	<div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -86,12 +101,12 @@
 				? 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5'
 				: 'flex flex-col gap-4'}
 		>
-			{#each volumes as volume (volume.id)}
+			{#each visibleVolumes as volume, i (volume.id)}
 				<a
 					href={resolve(`/books/${data.bookId}/${volume.id}`)}
 					class="group flex {viewMode === 'grid'
-						? 'flex-col'
-						: 'flex-row'} overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-md md:rounded-2xl"
+						? 'min-h-[18rem] flex-col'
+						: 'flex-row'} overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm md:rounded-2xl"
 				>
 					<div
 						class="{viewMode === 'grid'
@@ -102,8 +117,11 @@
 							<img
 								src={volume.coverUrl}
 								alt={`Обложка ${volume.title}`}
-								class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-								loading="lazy"
+								width={300}
+								height={400}
+								class="absolute inset-0 h-full w-full object-cover"
+								loading={i < 4 ? 'eager' : 'lazy'}
+								fetchpriority={i < 4 ? 'high' : 'auto'}
 							/>
 						{:else}
 							<div class="absolute inset-0 flex items-center justify-center bg-secondary/50">
@@ -137,5 +155,16 @@
 				</a>
 			{/each}
 		</div>
+		{#if visibleCount < volumes.length}
+			<div class="mt-8 flex justify-center">
+				<button
+					type="button"
+					class="rounded-lg border border-border bg-card px-5 py-2.5 text-sm font-medium shadow-sm transition-colors hover:bg-muted"
+					onclick={() => (visibleCount += INITIAL_VOLUMES)}
+				>
+					Показать ещё ({volumes.length - visibleCount})
+				</button>
+			</div>
+		{/if}
 	{/if}
 </main>

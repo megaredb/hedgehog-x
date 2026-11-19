@@ -122,6 +122,7 @@
 
 <svelte:head>
 	<title>{strings.bookmarks.title} | Hedgehog X</title>
+	<meta name="description" content="Сохранённые фрагменты и заметки к прослушанным аудиокнигам." />
 </svelte:head>
 
 <div class="layout-content mx-auto max-w-5xl py-6 md:py-10">
@@ -169,7 +170,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each paginatedBookmarks as item (item.id)}
+			{#each paginatedBookmarks as item, i (item.id)}
 				<Card.Root
 					class="group overflow-hidden border-border/60 bg-card/60 transition-all duration-200 hover:border-border hover:shadow-md"
 				>
@@ -180,6 +181,9 @@
 								<img
 									src={item.volume?.coverUrl || item.book?.coverUrl}
 									alt={item.volume?.title || item.chapter?.title || 'Cover'}
+									width={56}
+									height={80}
+									loading={i < 2 ? 'eager' : 'lazy'}
 									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
 								/>
 							{:else}

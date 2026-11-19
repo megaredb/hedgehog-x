@@ -33,6 +33,7 @@ RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/drizzle ./drizzle
+COPY server.js ./server.js
 COPY scripts ./scripts
 RUN chmod +x /app/scripts/docker-entrypoint.sh \
  && chown -R node:node /app
@@ -45,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 	CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
-CMD ["node", "build/index.js"]
+CMD ["node", "server.js"]

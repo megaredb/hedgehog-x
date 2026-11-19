@@ -199,6 +199,7 @@
 
 <svelte:head>
 	<title>{strings.settings.title} — {strings.common.appName}</title>
+	<meta name="description" content="Настройки воспроизведения, зеркал и офлайн-кэша." />
 </svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-8 p-4 sm:p-6 lg:p-8">
@@ -390,7 +391,11 @@
 							{storageInfo.formattedUsage} из {storageInfo.formattedQuota} ({storageInfo.percentage}%)
 						</span>
 					</div>
-					<Progress value={storageInfo.percentage} class="h-2" />
+					<Progress
+						value={storageInfo.percentage}
+						aria-label="Использовано дискового пространства"
+						class="h-2"
+					/>
 				</div>
 
 				<Separator />

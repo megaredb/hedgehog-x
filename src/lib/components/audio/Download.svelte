@@ -69,6 +69,7 @@
 				class={buttonClass}
 				{...tooltipProps}
 				{...rest}
+				aria-label={tooltipText}
 				onclick={(e) => {
 					toggleDownload(e);
 					// Compose with any existing handlers from tooltip or rest props

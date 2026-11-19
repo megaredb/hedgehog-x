@@ -49,7 +49,7 @@ test.describe('P0-03: bookmark offline queue', () => {
 
 		await openVolume(page);
 		await page
-			.getByRole('button', { name: /Воспроизвести: (Глава 1|Пролог)/ })
+			.getByRole('button', { name: /Воспроизвести: (?:\d+\. )?(Глава 1|Пролог)/ })
 			.first()
 			.click();
 		await page.waitForTimeout(1200);

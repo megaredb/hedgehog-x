@@ -40,6 +40,7 @@
 ├── compose.test.yml           # test-db + playwright
 ├── Dockerfile                 # multi-stage production image
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
+├── server.js                  # compression + immutable cache headers + adapter-node handler
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
 ├── drizzle/                   # 9 SQL-миграций 0000–0008 + meta (актуальны)
 ├── e2e/                       # 9 файлов Playwright
@@ -463,7 +464,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 - `.svelte-kit/` — generated types/manifest (не коммитится).
 - `build/` — adapter-node output: `build/index.js`, `build/client`, `build/server`.
 - `build/client/service-worker.js` — собранный SW.
-- Preview/run: `node build/index.js` с `PORT`, `ORIGIN`, env.
+- Preview/run: `node server.js` (compression + cache headers) с `PORT`, `ORIGIN`, env.
 - PWA manifest генерируется vite-plugin-pwa.
 
 ## 12. Внешние сервисы

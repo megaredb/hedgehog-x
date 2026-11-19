@@ -23,7 +23,8 @@
 	}
 
 	let currentIndex = $state(initialIndex);
-	let isVideoPlaying = $state(true);
+	// Video backgrounds are opt-in: autoplay pulls multi-megabyte media and delays LCP.
+	let isVideoPlaying = $state(false);
 	let scrollContainer: HTMLDivElement | null = $state(null);
 	let isProgrammaticScroll = $state(false);
 	let scrollTimeoutId: number | undefined;
@@ -101,6 +102,10 @@
 
 <svelte:head>
 	<title>Hedgehog X - Главная</title>
+	<meta
+		name="description"
+		content="Аудиокниги HEDGEHOG.INC: «Повелитель», «Реинкарнация безработного» и другие книги."
+	/>
 </svelte:head>
 
 <!-- Showcase container -->

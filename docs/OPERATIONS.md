@@ -181,12 +181,12 @@ UPDATE "user" SET role = 'admin' WHERE email = '<email>';
 
 ```bash
 pnpm build
-node build/index.js            # с env: DATABASE_URL, BETTER_AUTH_SECRET, PORT
+node server.js                  # compression + cache headers; env: DATABASE_URL, BETTER_AUTH_SECRET, PORT
 # или
 pnpm preview                   # Vite preview на 4192
 ```
 
-- `build/index.js` — adapter-node entry; статика в `build/client`.
+- `build/index.js` — adapter-node handler; production запускается через `server.js`.
 - `pnpm build` **не проверяет типы**; для типов запускайте отдельно `pnpm check`
   (сейчас 0 ошибок).
 - Для production задайте `BETTER_AUTH_ALLOWED_HOSTS`, `PORT`, `HOST=0.0.0.0`;
@@ -209,7 +209,7 @@ docker compose -f compose.yaml -f compose.prod.yml up -d --build
 - OAuth redirect URI нужно зарегистрировать для **обоих** доменов.
 - `app` собирается из `Dockerfile`; runtime-стадия ставит только production deps.
 - При старте entrypoint выполняет `scripts/migrate.mjs` (Drizzle migrator), затем
-  `node build/index.js`; повторный запуск идемпотентен. `SKIP_MIGRATIONS=true` отключает.
+  `node server.js`; повторный запуск идемпотентен. `SKIP_MIGRATIONS=true` отключает.
 - `GET /health` проверяет PostgreSQL; Docker healthcheck и `depends_on` БД.
 - `GET /api/metrics` — Prometheus-метрики (admin или `METRICS_TOKEN`).
 - `LOG_FORMAT=json` включает структурированные JSON-логи для Loki/CloudWatch/Vector.

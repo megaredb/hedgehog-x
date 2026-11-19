@@ -88,6 +88,7 @@
 		"better-auth": "~1.6.33",
 		"better-auth-telegram": "^2.0.1",
 		"blurhash": "^2.0.5",
+		"compression": "1.8.1",
 		"dexie": "^4.4.6",
 		"drizzle-orm": "^0.45.4",
 		"mode-watcher": "^1.1.0",

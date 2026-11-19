@@ -101,6 +101,12 @@
 	}
 </script>
 
+<svelte:head>
+	{#if volume?.coverUrl}
+		<link rel="preload" as="image" href={volume.coverUrl} fetchpriority="high" />
+	{/if}
+</svelte:head>
+
 <div
 	class="relative mb-8 overflow-hidden rounded-3xl border bg-card p-6 shadow-sm transition-all duration-500 {isPlayingThisVolume
 		? 'border-primary/40 shadow-md ring-1 ring-primary/20'
@@ -169,6 +175,9 @@
 					<img
 						src={volume.coverUrl}
 						alt={volume.title}
+						width={320}
+						height={480}
+						fetchpriority="high"
 						class="aspect-2/3 w-36 object-cover sm:w-48"
 					/>
 					<!-- Hover overlay with zoom icon -->
@@ -206,7 +215,7 @@
 					{#if volume?.status === 'completed'}
 						<Badge
 							variant="secondary"
-							class="border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-600"
+							class="border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-300"
 						>
 							Завершен
 						</Badge>
@@ -295,7 +304,7 @@
 							? 'border-rose-500/30 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 dark:text-rose-400'
 							: 'text-muted-foreground hover:text-foreground'}"
 						onclick={handleToggleLike}
-						aria-label={isLiked ? 'Убрать лайк' : 'Поставить лайк'}
+						aria-label={(isLiked ? 'Убрать лайк' : 'Поставить лайк') + ` ${likesCount}`}
 						title={isLiked ? 'Убрать лайк' : 'Поставить лайк'}
 					>
 						<Heart

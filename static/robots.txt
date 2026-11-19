@@ -1,11 +1,5 @@
 User-agent: *
 Disallow: /admin
-Disallow: /auth
 Disallow: /api
-Disallow: /bookmarks
-Disallow: /history
-Disallow: /profile
-Disallow: /settings
-Disallow: /downloads
 
 Sitemap: https://hedgehog-inc.one/sitemap.xml

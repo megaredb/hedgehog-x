@@ -203,8 +203,8 @@
 									? 'scale-105 bg-primary text-primary-foreground shadow-sm'
 									: 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground'}"
 								aria-label={isPlaying
-									? `Пауза: ${chapter.title}`
-									: `Воспроизвести: ${chapter.title}`}
+									? `Пауза: ${chapter.chapterNumber}. ${chapter.title}`
+									: `Воспроизвести: ${chapter.chapterNumber}. ${chapter.title}`}
 							>
 								{#if isPlaying}
 									<Pause class="h-4 w-4 fill-current" />
@@ -218,13 +218,13 @@
 
 							<!-- Chapter title and progress status -->
 							<div class="min-w-0 flex-1 pr-2">
-								<h3
+								<h2
 									class="truncate text-sm font-medium transition-colors {isCurrent
 										? 'font-bold text-primary'
 										: 'text-foreground'}"
 								>
 									{chapter.title}
-								</h3>
+								</h2>
 
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									{#if isCurrent}
@@ -274,9 +274,9 @@
 									: 'text-muted-foreground hover:text-foreground'}"
 								onclick={(e) => handleToggleChapterLike(e, chapter)}
 								title={likedChapterIds.has(chapter.id) ? 'Убрать лайк' : 'Поставить лайк'}
-								aria-label={likedChapterIds.has(chapter.id)
+								aria-label={(likedChapterIds.has(chapter.id)
 									? `Убрать лайк с ${chapter.title}`
-									: `Лайкнуть ${chapter.title}`}
+									: `Лайкнуть ${chapter.title}`) + ` ${chapter.likesCount || 0}`}
 							>
 								<Heart
 									class="h-3.5 w-3.5 transition-transform active:scale-125 {likedChapterIds.has(

@@ -22,6 +22,9 @@
 <svelte:head>
 	<title>Каталог | HEDGEHOG.INC</title>
 	<meta name="description" content="Все аудиокниги HEDGEHOG.INC: описания, тома и главы." />
+	{#if data.books[0]?.coverUrl}
+		<link rel="preload" as="image" href={data.books[0].coverUrl} fetchpriority="high" />
+	{/if}
 </svelte:head>
 
 <main class="layout-content mx-auto max-w-6xl px-4 py-8">
@@ -54,18 +57,21 @@
 		</div>
 	{:else}
 		<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-			{#each filtered as book (book.id)}
+			{#each filtered as book, i (book.id)}
 				<a
 					href={resolve(`/books/${encodeURIComponent(book.id)}` as '/')}
-					class="group overflow-hidden rounded-2xl border border-border/60 bg-card/50 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+					class="group overflow-hidden rounded-2xl border border-border/60 bg-card/50"
 				>
 					<div class="relative aspect-[16/9] overflow-hidden bg-muted">
 						{#if book.coverUrl}
 							<img
 								src={book.coverUrl}
 								alt={book.title}
-								class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-								loading="lazy"
+								width={640}
+								height={360}
+								class="absolute inset-0 h-full w-full object-cover"
+								loading={i < 2 ? 'eager' : 'lazy'}
+								fetchpriority={i === 0 ? 'high' : 'auto'}
 							/>
 						{:else}
 							<div class="flex h-full items-center justify-center text-muted-foreground">

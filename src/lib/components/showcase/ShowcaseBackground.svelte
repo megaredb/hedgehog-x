@@ -30,11 +30,15 @@
 	});
 </script>
 
+<svelte:head>
+	<link rel="preload" as="image" href={books[0]?.bgImage} fetchpriority="high" />
+</svelte:head>
+
 <div class="absolute inset-0 -z-20 overflow-hidden bg-background">
 	{#each books as book, i (book.id)}
 		<!-- Background & video container with crossfade transition -->
 		<div
-			class="absolute inset-0 transition-opacity duration-700 ease-in-out"
+			class="absolute inset-0"
 			class:opacity-100={currentIndex === i}
 			class:opacity-0={currentIndex !== i}
 		>
@@ -42,9 +46,10 @@
 			<img
 				src={book.bgImage}
 				alt={book.title}
-				class="absolute inset-0 h-full w-full object-cover transition-transform duration-[10s] ease-out"
-				class:scale-105={currentIndex === i}
-				class:scale-100={currentIndex !== i}
+				loading={i === 0 ? 'eager' : 'lazy'}
+				fetchpriority={i === 0 ? 'high' : 'auto'}
+				decoding="async"
+				class="absolute inset-0 h-full w-full object-cover"
 			/>
 
 			<!-- Background video -->
