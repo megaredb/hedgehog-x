@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+	S3Client,
+	PutObjectCommand,
+	DeleteObjectCommand,
+	GetObjectCommand
+} from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { encode } from 'blurhash';
 import { randomUUID } from 'node:crypto';
@@ -53,7 +58,20 @@ export interface UploadAudioResult {
 	key: string;
 }
 
-function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
+/** Fetches an object for the local media proxy (including byte ranges for audio seeking). */
+export async function getMediaObject(key: string, range?: string) {
+	const r2 = getS3Client();
+	if (!r2) return null;
+	return r2.client.send(
+		new GetObjectCommand({
+			Bucket: r2.bucket,
+			Key: key,
+			...(range ? { Range: range } : {})
+		})
+	);
+}
+
+export function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
 	const accountId = env.R2_ACCOUNT_ID;
 	const accessKeyId = env.R2_ACCESS_KEY_ID;
 	const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
@@ -242,6 +260,8 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 		}
 	} else if (keyOrUrl.startsWith('/uploads/')) {
 		key = keyOrUrl.replace(/^\/uploads\//, '');
+	} else if (keyOrUrl.startsWith('/api/media/')) {
+		key = keyOrUrl.replace(/^\/api\/media\//, '');
 	}
 
 	if (r2) {

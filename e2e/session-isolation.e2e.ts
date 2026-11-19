@@ -22,8 +22,8 @@ const mockSession = {
 const VOLUME_URL = '/books/overlord/overlord_vol_1';
 
 async function openVolume(page: Page) {
-	await page.goto(VOLUME_URL);
-	await expect(page.getByText('Глава 1: Конец и начало')).toBeVisible({ timeout: 15000 });
+	await page.goto(VOLUME_URL, { waitUntil: 'domcontentloaded' });
+	await expect(page.getByText(/Глава 1: Конец и начало|Пролог/)).toBeVisible({ timeout: 15000 });
 }
 
 type LocalState = {

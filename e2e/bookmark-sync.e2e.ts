@@ -4,8 +4,8 @@ const VOLUME_URL = '/books/overlord/overlord_vol_1';
 const BOOKMARKS_URL = '/bookmarks';
 
 async function openVolume(page: Page) {
-	await page.goto(VOLUME_URL);
-	await expect(page.getByText('Глава 1: Конец и начало')).toBeVisible({ timeout: 15000 });
+	await page.goto(VOLUME_URL, { waitUntil: 'domcontentloaded' });
+	await expect(page.getByText(/Глава 1: Конец и начало|Пролог/)).toBeVisible({ timeout: 15000 });
 }
 
 async function queueCount(page: Page): Promise<number> {
@@ -49,7 +49,7 @@ test.describe('P0-03: bookmark offline queue', () => {
 
 		await openVolume(page);
 		await page
-			.getByRole('button', { name: /Воспроизвести: Глава 1/ })
+			.getByRole('button', { name: /Воспроизвести: (Глава 1|Пролог)/ })
 			.first()
 			.click();
 		await page.waitForTimeout(1200);

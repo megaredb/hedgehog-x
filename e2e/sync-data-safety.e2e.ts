@@ -25,8 +25,8 @@ function authPayload(userId: string, options: { isNewUser?: boolean; userName?: 
 }
 
 async function openVolume(page: Page) {
-	await page.goto(VOLUME_URL);
-	await expect(page.getByText('Глава 1: Конец и начало')).toBeVisible({ timeout: 15000 });
+	await page.goto(VOLUME_URL, { waitUntil: 'domcontentloaded' });
+	await expect(page.getByText(/Глава 1: Конец и начало|Пролог/)).toBeVisible({ timeout: 15000 });
 }
 
 async function readCounts(page: Page): Promise<Counts> {

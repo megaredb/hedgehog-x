@@ -60,6 +60,11 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5173"
 `R2_PUBLIC_URL`. Без них uploadImage/uploadAudio пишут в `static/uploads/`
 (работает в dev; в production-сборке runtime-файлы не раздаются — нужен R2).
 
+Для локальной разработки с закрытым бакетом задайте
+`R2_PUBLIC_URL="/api/media"`: [media proxy](../../src/routes/api/media/%5B...key%5D/+server.ts)
+стримит объекты из R2 и поддерживает HTTP Range (перемотка аудио). В production
+используйте публичный CDN-домен, а не `/api/media`.
+
 ### 2.4. Umami (опционально)
 
 `PUBLIC_UMAMI_WEBSITE_ID`, `PUBLIC_UMAMI_HOST` для клиента; `UMAMI_HOST`,
