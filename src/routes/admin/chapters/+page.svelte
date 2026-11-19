@@ -1,5 +1,6 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import {
 		Card,
 		CardHeader,
@@ -169,6 +170,7 @@
 													<Edit class="h-3.5 w-3.5" />
 												</Button>
 												<form
+													use:enhance
 													method="POST"
 													action="?/delete"
 													onsubmit={(e) => {
@@ -226,6 +228,7 @@
 					</CardHeader>
 					<CardContent>
 						<form
+							use:enhance
 							method="POST"
 							action={current ? '?/update' : '?/create'}
 							enctype="multipart/form-data"

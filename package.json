@@ -30,7 +30,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
-		"auth:schema": "better-auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes",
+		"auth:schema": "node scripts/auth-schema.mjs",
 		"test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
 		"admin:grant": "node scripts/grant-admin.mjs"
 	},

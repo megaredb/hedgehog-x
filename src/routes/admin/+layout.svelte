@@ -19,7 +19,8 @@
 		LayoutDashboard,
 		ArrowLeft,
 		ShieldCheck,
-		ChartColumn
+		ChartColumn,
+		Users
 	} from '@lucide/svelte';
 
 	let { data, children } = $props();
@@ -30,7 +31,8 @@
 		{ href: '/admin/books', label: 'Книги', icon: BookOpen },
 		{ href: '/admin/volumes', label: 'Тома', icon: Layers },
 		{ href: '/admin/chapters', label: 'Главы', icon: Disc3 },
-		{ href: '/admin/illustrations', label: 'Иллюстрации', icon: ImageIcon }
+		{ href: '/admin/illustrations', label: 'Иллюстрации', icon: ImageIcon },
+		{ href: '/admin/users', label: 'Пользователи', icon: Users }
 	];
 </script>
 

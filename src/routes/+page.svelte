@@ -132,6 +132,13 @@
 		</button>
 	{/if}
 
+	<a
+		href={resolve('/books')}
+		class="pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
+	>
+		Все книги
+	</a>
+
 	<!-- Scroll down indicator -->
 	{#if currentIndex < showcaseBooks.length - 1}
 		<button
