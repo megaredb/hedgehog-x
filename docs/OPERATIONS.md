@@ -211,6 +211,8 @@ docker compose -f compose.yaml -f compose.prod.yml up -d --build
 - При старте entrypoint выполняет `scripts/migrate.mjs` (Drizzle migrator), затем
   `node build/index.js`; повторный запуск идемпотентен. `SKIP_MIGRATIONS=true` отключает.
 - `GET /health` проверяет PostgreSQL; Docker healthcheck и `depends_on` БД.
+- `GET /api/metrics` — Prometheus-метрики (admin или `METRICS_TOKEN`).
+- `LOG_FORMAT=json` включает структурированные JSON-логи для Loki/CloudWatch/Vector.
 - Приложение работает под `node` (не root), `STOPSIGNAL SIGTERM`, adapter-node
   завершает HTTP-сервер, после чего `postgres-js` закрывает пул.
 - Traefik роутит `https://${APP_HOST}` и `https://${APP_HOST_RU}` на `app:3000`;
@@ -241,7 +243,7 @@ curl http://127.0.0.1:3000/health
 pnpm test:unit
 ```
 
-- 23 файлов, 192 тестов; в снимке — все зелёные.
+- 25 файлов, 196 тестов; в снимке — все зелёные.
 - `r2.test.ts` пишет файлы в `static/uploads/test*` (или в R2, если env настроен)
   и пытается удалить; побочный эффект.
 - `listeningTracker.test.ts` использует Dexie без браузера; часть проверок
@@ -271,13 +273,13 @@ pnpm test:e2e                    # или: pnpm exec playwright test
 pnpm exec playwright test --workers=1   # стабильнее
 ```
 
-- Конфиг сам поднимает `npm run preview -- --host 0.0.0.0 --port 4192`
+- Конфиг сам поднимает `pnpm preview -- --host 0.0.0.0 --port 4192`
   (`reuseExistingServer` вне CI), поэтому перед запуском не нужно вручную
   поднимать preview.
 - Без `BETTER_AUTH_SECRET` webServer падает: `BetterAuthError: default secret`.
 - Тесты Telegram/Discord редиректов мокают провайдерские домены
   (`oauth.telegram.org`, `discord.com`), поэтому e2e не ходят в сеть.
-  В текущем прогоне: **42/42** при `--workers=1`;
+  В текущем прогоне: **46/46** при `--workers=1`;
   `e2e/sync-data-safety.e2e.ts` покрывает P0-01 (9 сценариев, включая consent),
   `e2e/bookmark-sync.e2e.ts` — P0-03 (offline → online flush),
   `e2e/session-isolation.e2e.ts` — P0-05 (logout/owner).
@@ -411,9 +413,9 @@ node ./node_modules/vite/bin/vite.js build
 | Build               | `node vite build`                             | ✅ exit 0                                                           |
 | Typecheck           | `svelte-check`                                | ✅ 0 errors                                                         |
 | Lint                | prettier + eslint                             | ✅                                                                  |
-| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 192 pass                                                         |
+| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 196 pass                                                         |
 | E2E (3 файла)       | `playwright test auth profile navigation`     | ✅ 23/23 (в текущем прогоне)                                        |
-| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 42/42 (сеть для OAuth-редиректов всё ещё нужна)                  |
+| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 46/46 (сеть для OAuth-редиректов всё ещё нужна)                  |
 | Sync safety e2e     | `e2e/sync-data-safety.e2e.ts`                 | ✅ 9/9 (P0-01 + guest consent)                                      |
 | Bookmark queue e2e  | `e2e/bookmark-sync.e2e.ts`                    | ✅ 1/1 (P0-03)                                                      |
 | Session isolation   | `e2e/session-isolation.e2e.ts`                | ✅ 5/5 (P0-05)                                                      |

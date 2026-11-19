@@ -56,7 +56,7 @@ describe('Database Seed Service', () => {
 				values: (vals: unknown) => {
 					allInserted.push(vals);
 					return {
-						onConflictDoNothing: async () => ({})
+						onConflictDoNothing: () => ({ returning: async () => [] })
 					};
 				}
 			})

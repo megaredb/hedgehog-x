@@ -174,7 +174,7 @@ export async function uploadImage(
 	}
 
 	// Fallback for local development if R2 credentials are not set
-	const localDir = path.resolve('static/uploads', folder);
+	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
 	await fs.mkdir(localDir, { recursive: true });
 	const localFilePath = path.resolve(localDir, `${prefix}${path.basename(key)}`);
 	await fs.writeFile(localFilePath, webpBuffer);
@@ -232,7 +232,7 @@ export async function uploadAudio(
 	}
 
 	// Fallback for local development
-	const localDir = path.resolve('static/uploads', folder);
+	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
 	await fs.mkdir(localDir, { recursive: true });
 	const localFilePath = path.resolve(localDir, path.basename(key));
 	await fs.writeFile(localFilePath, buffer);
@@ -286,7 +286,7 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 
 	// Local file fallback
 	try {
-		const localFilePath = path.resolve('static/uploads', key);
+		const localFilePath = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', key);
 		await fs.unlink(localFilePath);
 		return true;
 	} catch {

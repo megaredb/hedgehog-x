@@ -270,9 +270,11 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 	seedPromise = (async () => {
 		try {
 			log.info('Checking default books initialization (mushoku_tensei, overlord)...');
+			let inserted = 0;
+			let skipped = 0;
 
 			for (const book of DEFAULT_BOOKS) {
-				await database
+				const bookRows = await database
 					.insert(books)
 					.values({
 						id: book.id,
@@ -283,10 +285,16 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 						themeColor: book.themeColor,
 						status: book.status
 					})
-					.onConflictDoNothing({ target: books.id });
+					.onConflictDoNothing({ target: books.id })
+					.returning({ id: books.id });
+				if (bookRows.length) inserted++;
+				else {
+					skipped++;
+					log.debug(`Skipped existing book ${book.id}`);
+				}
 
 				for (const volume of book.volumes) {
-					await database
+					const volumeRows = await database
 						.insert(volumes)
 						.values({
 							id: volume.id,
@@ -298,10 +306,13 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 							blurhash: volume.blurhash,
 							status: volume.status
 						})
-						.onConflictDoNothing({ target: volumes.id });
+						.onConflictDoNothing({ target: volumes.id })
+						.returning({ id: volumes.id });
+					if (volumeRows.length) inserted++;
+					else skipped++;
 
 					for (const chapter of volume.chapters) {
-						await database
+						const chapterRows = await database
 							.insert(chapters)
 							.values({
 								id: chapter.id,
@@ -312,11 +323,14 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								durationSeconds: chapter.durationSeconds,
 								telegramPostUrl: chapter.telegramPostUrl
 							})
-							.onConflictDoNothing({ target: chapters.id });
+							.onConflictDoNothing({ target: chapters.id })
+							.returning({ id: chapters.id });
+						if (chapterRows.length) inserted++;
+						else skipped++;
 					}
 
 					for (const illustration of volume.illustrations) {
-						await database
+						const illustrationRows = await database
 							.insert(illustrations)
 							.values({
 								id: illustration.id,
@@ -326,12 +340,15 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								caption: illustration.caption,
 								sortOrder: illustration.sortOrder
 							})
-							.onConflictDoNothing({ target: illustrations.id });
+							.onConflictDoNothing({ target: illustrations.id })
+							.returning({ id: illustrations.id });
+						if (illustrationRows.length) inserted++;
+						else skipped++;
 					}
 				}
 			}
 
-			log.info('Default books initialization finished successfully.');
+			log.info(`Default books initialization finished (inserted=${inserted}, skipped=${skipped}).`);
 		} catch (error) {
 			log.error('Failed to initialize default books:', error);
 			seedPromise = null;

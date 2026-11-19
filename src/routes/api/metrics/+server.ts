@@ -1,4 +1,5 @@
 import type { RequestHandler } from './$types';
+import { renderPrometheus } from '$lib/server/metrics';
 
 const startedAt = Date.now();
 
@@ -14,18 +15,14 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 	if (!authorized) return new Response('Forbidden', { status: 403 });
 
 	const uptime = (Date.now() - startedAt) / 1000;
-	const body = [
-		'# HELP hedgehog_up Whether the process is up.',
-		'# TYPE hedgehog_up gauge',
-		'hedgehog_up 1',
+	const body = renderPrometheus([
 		'# HELP hedgehog_uptime_seconds Process uptime in seconds.',
 		'# TYPE hedgehog_uptime_seconds gauge',
 		`hedgehog_uptime_seconds ${uptime.toFixed(3)}`,
 		'# HELP hedgehog_nodejs_info Node.js version.',
 		'# TYPE hedgehog_nodejs_info gauge',
-		`hedgehog_nodejs_info{version="${process.version}"} 1`,
-		''
-	].join('\n');
+		`hedgehog_nodejs_info{version="${process.version}"} 1`
+	]);
 
 	return new Response(body, {
 		headers: {

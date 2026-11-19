@@ -1,7 +1,15 @@
 import { htmlAudio, type Track } from '$lib/html-audio.js';
 import { resolveMediaUrl } from '$lib/utils/mirror.js';
+import { calculateNextIndex, calculatePreviousIndex, type RepeatMode } from '$lib/audio-queue.js';
 
-export type RepeatMode = 'none' | 'one' | 'all';
+export type { RepeatMode } from '$lib/audio-queue.js';
+export { calculateNextIndex, calculatePreviousIndex } from '$lib/audio-queue.js';
+import {
+	parseSeekStep,
+	parsePlaybackRate,
+	parseAutoAdvance,
+	isValidPlaybackRate
+} from '$lib/settings/values';
 
 import {
 	SEEK_STEP_STORAGE_KEY,
@@ -14,43 +22,6 @@ export { SEEK_STEP_STORAGE_KEY, AUTO_ADVANCE_STORAGE_KEY, PLAYBACK_RATE_STORAGE_
 
 export function canUseDOM(): boolean {
 	return typeof window !== 'undefined' && !!window.document?.createElement;
-}
-
-type QueueNavigationParams = {
-	queue: Track[];
-	currentQueueIndex: number;
-	shuffleEnabled: boolean;
-	repeatMode: RepeatMode;
-};
-
-function getRandomShuffleIndex(queueLength: number, currentIndex: number): number {
-	if (queueLength === 1) return 0;
-	let idx: number;
-	do {
-		idx = Math.floor(Math.random() * queueLength);
-	} while (idx === currentIndex);
-	return idx;
-}
-
-function calculateQueueIndex(params: QueueNavigationParams & { direction: 1 | -1 }): number {
-	const { queue, currentQueueIndex, shuffleEnabled, repeatMode, direction } = params;
-	if (queue.length === 0) return -1;
-	if (shuffleEnabled) {
-		if (queue.length === 1) return repeatMode === 'none' ? -1 : 0;
-		return getRandomShuffleIndex(queue.length, currentQueueIndex);
-	}
-	const next = currentQueueIndex + direction;
-	if (next >= queue.length) return repeatMode === 'all' ? 0 : -1;
-	if (next < 0) return repeatMode === 'all' ? queue.length - 1 : -1;
-	return next;
-}
-
-export function calculateNextIndex(params: QueueNavigationParams): number {
-	return calculateQueueIndex({ ...params, direction: 1 });
-}
-
-export function calculatePreviousIndex(params: QueueNavigationParams): number {
-	return calculateQueueIndex({ ...params, direction: -1 });
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -121,7 +92,7 @@ class AudioStore {
 			}
 			if (d.volume !== undefined) this.volume = d.volume;
 			if (d.isMuted !== undefined) this.isMuted = d.isMuted;
-			if (d.playbackRate !== undefined) this.playbackRate = d.playbackRate;
+			if (isValidPlaybackRate(d.playbackRate)) this.playbackRate = d.playbackRate;
 			if (d.repeatMode !== undefined) this.repeatMode = d.repeatMode;
 			if (d.shuffleEnabled !== undefined) this.shuffleEnabled = d.shuffleEnabled;
 			if (d.currentTime !== undefined) this.currentTime = d.currentTime;
@@ -131,32 +102,12 @@ class AudioStore {
 		}
 
 		try {
-			const storedSeek = localStorage.getItem(SEEK_STEP_STORAGE_KEY);
-			if (storedSeek) {
-				const val = parseInt(storedSeek, 10);
-				if ([5, 10, 15, 30].includes(val)) this.seekStep = val;
-			}
-		} catch {
-			/* ignore */
-		}
-
-		try {
-			const storedAuto = localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY);
-			if (storedAuto !== null) {
-				this.autoAdvance = storedAuto === 'true';
-			}
-		} catch {
-			/* ignore */
-		}
-
-		try {
-			const storedRate = localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY);
-			if (storedRate) {
-				const val = parseFloat(storedRate);
-				if (!isNaN(val) && val >= 0.25 && val <= 2) {
-					this.playbackRate = val;
-				}
-			}
+			const step = parseSeekStep(localStorage.getItem(SEEK_STEP_STORAGE_KEY));
+			if (step !== null) this.seekStep = step;
+			const auto = parseAutoAdvance(localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY));
+			if (auto !== null) this.autoAdvance = auto;
+			const rate = parsePlaybackRate(localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY));
+			if (rate !== null) this.playbackRate = rate;
 		} catch {
 			/* ignore */
 		}

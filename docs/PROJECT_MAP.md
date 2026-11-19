@@ -15,7 +15,7 @@
 | API-эндпоинтов своих               | 11 обработчиков (9 путей) + `/api/auth/*` better-auth |
 | Таблиц БД                          | 14 (10 доменных + 4 auth)                             |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)             |
-| Unit-тестов                        | 192 в 23 файлах                                       |
+| Unit-тестов                        | 196 в 23 файлах                                       |
 | E2E-тестов                         | 42 в 8 файлах                                         |
 
 ```
@@ -42,7 +42,7 @@
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
 ├── drizzle/                   # 9 SQL-миграций 0000–0008 + meta (актуальны)
-├── e2e/                       # 8 файлов Playwright
+├── e2e/                       # 9 файлов Playwright
 ├── dynamic/dev.yaml           # Traefik file-provider для dev
 ├── docker/init-umami-db.sh
 ├── static/                    # assets (аудио, картинки, видео, QR, PWA)
@@ -100,7 +100,7 @@
 | `GET /api/books`                | `api/books/+server.ts`            | нет                       | —                                                                                | Все книги, `ORDER BY created_at DESC`; без кэша/пагинации                                                                                   |
 | `GET /api/books/[bookId]`       | `api/books/[bookId]/+server.ts`   | нет                       | `If-None-Match` (опц.)                                                           | Книга + volumes + chapters + illustrations + `likesCount`; weak ETag SHA1; 304/200/404; `Cache-Control: public, max-age=0, must-revalidate` |
 | `GET /api/media/[...key]`       | `api/media/[...key]/+server.ts`   | нет                       | Range (для аудио)                                                                | Потоковая отдача объекта из R2; `206` + `Content-Range`; локальный media-proxy                                                              |
-| `GET /api/metrics`              | `api/metrics/+server.ts`          | admin / `METRICS_TOKEN`   | Bearer-токен (опц.)                                                              | Prometheus text: `hedgehog_up`, uptime, Node version; 403 без доступа                                                                       |
+| `GET /api/metrics`              | `api/metrics/+server.ts`          | admin / `METRICS_TOKEN`   | Bearer-токен (опц.)                                                              | Prometheus text: up, uptime, Node version, HTTP/sync/error counters; 403 без доступа                                                        |
 | `POST /api/analytics/listen`    | `api/analytics/listen/+server.ts` | гость/пользователь        | `{chapterId,bookId?,volumeId?,listenedSeconds,startedAt}` или `{sessions:[...]}` | Валидация 1..300 сек; INSERT `listening_sessions`; UPSERT `daily_listening_stats`; 400 при любой невалидной сессии                          |
 | `GET /api/user/sync`            | `api/user/sync/+server.ts`        | обязательна (гость → 401) | —                                                                                | `{userId,userName,isNewUser,chapterLikes,volumeLikes,listeningProgress,bookmarks}`; timestamps в ms                                         |
 | `GET /health`                   | `health/+server.ts`               | нет                       | —                                                                                | `{status:'ok',database:'ok'}` или 503; используется Docker healthcheck                                                                      |
@@ -381,7 +381,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `test:e2e`                        | `playwright install && playwright test`       | сеть; env обязателен                |
 | `test:docker`                     | compose test up/down                          | db:migrate+seed+build+e2e           |
 | `test`                            | `npm run test:e2e`                            | npm внутри pnpm-проекта             |
-| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 192 pass                            |
+| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 196 pass                            |
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |

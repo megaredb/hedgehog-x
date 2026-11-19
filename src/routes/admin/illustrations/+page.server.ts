@@ -2,6 +2,7 @@ import { db } from '$lib/server/db';
 import { books, volumes, illustrations } from '$lib/server/db/schema';
 import { eq, desc, asc, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
+import { clampPage, pageCount } from '$lib/utils/pagination';
 import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
@@ -53,8 +54,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.from(illustrations)
 		.where(where);
 	const total = Number(countRow?.count ?? 0);
-	const totalPages = Math.max(1, Math.ceil(total / pageSize));
-	const safePage = Math.min(page, totalPages);
+	const totalPages = pageCount(total, pageSize);
+	const safePage = clampPage(page, total, pageSize);
 
 	const allIllustrations = await allIllustrationsQuery
 		.where(where)

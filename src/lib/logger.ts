@@ -95,6 +95,22 @@ export function createLogger(tag: string): Logger {
 
 		const consoleFn = (console[level] ?? console.log).bind(console);
 
+		if (!isBrowser() && process.env.LOG_FORMAT === 'json') {
+			const serializedArgs = args.map((arg) =>
+				arg instanceof Error ? { name: arg.name, message: arg.message, stack: arg.stack } : arg
+			);
+			consoleFn(
+				JSON.stringify({
+					timestamp: new Date().toISOString(),
+					level,
+					tag,
+					message,
+					args: serializedArgs
+				})
+			);
+			return;
+		}
+
 		if (isBrowser()) {
 			const badgeStyle = `background: ${color}; color: white; border-radius: 3px; padding: 1px 5px; font-weight: bold; font-size: 10px;`;
 			const textStyle = 'color: inherit; font-weight: normal;';

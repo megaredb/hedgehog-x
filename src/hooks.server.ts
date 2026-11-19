@@ -3,6 +3,16 @@ import { building } from '$app/environment';
 import { auth } from '$lib/server/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { ensureDefaultBooks } from '$lib/server/db/seed';
+import { recordHttpRequest, recordSyncRequest, recordServerError } from '$lib/server/metrics';
+import { createLogger } from '$lib/logger';
+
+const log = createLogger('App');
+
+export const handleError = ({ error, event }: { error: unknown; event: RequestEvent }) => {
+	recordServerError();
+	log.error(`Unhandled error on ${event.url.pathname}`, error);
+	return { message: 'Внутренняя ошибка сервера' };
+};
 
 if (!building) {
 	ensureDefaultBooks().catch((err) => {
@@ -98,4 +108,12 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handle: Handle = handleBetterAuth;
+const baseHandle: Handle = handleBetterAuth;
+
+export const handle: Handle = async ({ event, resolve }) => {
+	const startedAt = performance.now();
+	const response = await baseHandle({ event, resolve });
+	recordHttpRequest(response.status, performance.now() - startedAt);
+	if (event.url.pathname === '/api/user/sync') recordSyncRequest(response.status);
+	return response;
+};
