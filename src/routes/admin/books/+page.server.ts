@@ -140,14 +140,16 @@ export const actions: Actions = {
 				status
 			};
 
-			if (coverUrl !== null) {
+			// Explicit empty values clear the cover/theme; fields not present mean "not supplied".
+			if (coverFile instanceof File && coverFile.size > 0) {
 				updateData.coverUrl = coverUrl;
+				if (blurhash !== null) updateData.blurhash = blurhash;
+			} else if (form.has('coverUrl')) {
+				updateData.coverUrl = coverUrl || null;
+				if (!coverUrl) updateData.blurhash = null;
 			}
-			if (blurhash !== null) {
-				updateData.blurhash = blurhash;
-			}
-			if (themeColor !== null) {
-				updateData.themeColor = themeColor.slice(0, 6);
+			if (form.has('themeColor')) {
+				updateData.themeColor = themeColor ? themeColor.slice(0, 6) : null;
 			}
 
 			await db.update(books).set(updateData).where(eq(books.id, id));

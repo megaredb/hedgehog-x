@@ -1,3 +1,7 @@
+<script module lang="ts">
+	let spaceHandlerInstalled = false;
+</script>
+
 <script lang="ts">
 	import { Loader2, Pause, Play } from '@lucide/svelte';
 	import { onMount } from 'svelte';
@@ -14,25 +18,21 @@
 		[key: string]: unknown;
 	}
 
-	let {
-		class: className = '',
-		size = 'icon',
-		variant = 'ghost',
-		onclick,
-		...rest
-	}: Props = $props();
+	let { class: className = '', size = 'icon', variant = 'ghost', ...rest }: Props = $props();
 
 	const showSpinner = $derived(audioStore.isLoading || audioStore.isBuffering);
 	const isDisabled = $derived(showSpinner || !audioStore.currentTrack);
 	const tooltipLabel = $derived(audioStore.isPlaying ? 'Пауза' : 'Играть');
 
 	function handleClick(e: MouseEvent) {
-		onclick?.(e);
+		void e;
 		audioStore.togglePlay();
 	}
 
-	// Spacebar shortcut
+	// Spacebar shortcut: only one Play instance may install the global handler.
 	onMount(() => {
+		if (spaceHandlerInstalled) return;
+		spaceHandlerInstalled = true;
 		function onKeyDown(e: KeyboardEvent) {
 			if (e.code === 'Space' && e.target === document.body) {
 				e.preventDefault();
@@ -40,7 +40,10 @@
 			}
 		}
 		document.addEventListener('keydown', onKeyDown);
-		return () => document.removeEventListener('keydown', onKeyDown);
+		return () => {
+			document.removeEventListener('keydown', onKeyDown);
+			spaceHandlerInstalled = false;
+		};
 	});
 </script>
 

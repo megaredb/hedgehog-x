@@ -32,19 +32,27 @@ describe('Analytics Math, Formatting, and Validation', () => {
 	});
 
 	describe('buildDailyStatId', () => {
-		it('builds composite id when all fields are present', () => {
+		it('builds a bounded deterministic id when all fields are present', () => {
 			const id = buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123');
-			assert.equal(id, '2026-11-08_mushoku_tensei_ch_1_user_123');
+			assert.match(id, /^2026-11-08_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}$/);
+			assert.ok(id.length <= 34);
+			assert.equal(id, buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123'));
+		});
+
+		it('does not collide on underscore-separated identifiers', () => {
+			const a = buildDailyStatId('2026-11-08', 'a_b', 'c', 'u');
+			const b = buildDailyStatId('2026-11-08', 'a', 'b_c', 'u');
+			assert.notEqual(a, b);
 		});
 
 		it('substitutes fallback tokens when bookId, chapterId, or userId are nullish', () => {
 			const id = buildDailyStatId('2026-11-08', null, 'ch_1', undefined);
-			assert.equal(id, '2026-11-08_nobook_ch_1_anon');
+			assert.match(id, /^2026-11-08_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}$/);
 		});
 
 		it('handles null date safely by generating fallback key', () => {
 			const id = buildDailyStatId('', null, null, null);
-			assert.match(id, /^\d{4}-\d{2}-\d{2}_nobook_nochapter_anon$/);
+			assert.match(id, /^\d{4}-\d{2}-\d{2}_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}$/);
 		});
 	});
 

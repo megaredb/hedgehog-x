@@ -104,7 +104,14 @@ class ProgressSyncService {
 			});
 
 			if (!res.ok) {
-				await this.enqueue(updates, recordedOwner);
+				// 401 keeps the data for a later login; 5xx/429 are retryable.
+				// Other 4xx are permanent (bad chapter/payload) and must not poison
+				// the queue forever.
+				if (res.status === 401 || res.status >= 500 || res.status === 429) {
+					await this.enqueue(updates, recordedOwner);
+				} else {
+					log.warn(`Dropping invalid progress update after HTTP ${res.status}.`);
+				}
 			} else {
 				log.debug(`Synced progress for ${updates.length} chapters.`);
 			}
@@ -133,7 +140,9 @@ class ProgressSyncService {
 					body: JSON.stringify({ progressUpdates: updates })
 				});
 
-				if (res.ok && item.id) {
+				if (item.id && (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 401))) {
+					// 4xx is a permanent validation error; retrying it would block
+					// every later progress update. Keep 401/5xx for retry.
 					await db.syncQueue.delete(item.id);
 				}
 			}

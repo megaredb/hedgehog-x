@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import type { Track } from '$lib/html-audio.js';
 	import {
 		db,
 		type OfflineProgress,
@@ -53,6 +55,17 @@
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
+	let now = $state(Date.now());
+
+	onMount(() => {
+		const interval = setInterval(() => (now = Date.now()), 60_000);
+		return () => clearInterval(interval);
+	});
+
+	const totalPages = $derived(Math.max(1, Math.ceil(historyQuery.data.length / pageSize)));
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+	});
 
 	const paginatedHistory = $derived(
 		historyQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -70,7 +83,7 @@
 
 	function formatRelativeTime(timestamp: number): string {
 		if (!timestamp) return '';
-		const diffMs = Date.now() - timestamp;
+		const diffMs = now - timestamp;
 		const diffMin = Math.floor(diffMs / 60000);
 		if (diffMin < 1) return 'Только что';
 		if (diffMin < 60) return `${diffMin} мин. назад`;
@@ -93,7 +106,7 @@
 			.equals(volumeId)
 			.sortBy('chapterNumber');
 
-		const tracks = allChapters.map((ch) => ({
+		const tracks: Track[] = allChapters.map((ch) => ({
 			id: ch.id,
 			title: ch.title,
 			url: ch.audioUrl,
@@ -107,13 +120,9 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
-			audioStore.setQueueAndPlay(tracks, startIndex);
 			const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
-			if (targetSeek > 0) {
-				setTimeout(() => {
-					audioStore.seek(targetSeek, false);
-				}, 100);
-			}
+			tracks[startIndex] = { ...tracks[startIndex], startTime: targetSeek };
+			audioStore.setQueueAndPlay(tracks, startIndex);
 		}
 	}
 

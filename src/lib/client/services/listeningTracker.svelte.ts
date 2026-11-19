@@ -7,6 +7,7 @@ import {
 	type ListenHeartbeatPayload
 } from '$lib/client/analytics';
 import { createLogger } from '$lib/logger';
+import { formatLocalDateKey } from '$lib/analytics/stats';
 
 const log = createLogger('ListeningTracker');
 
@@ -90,7 +91,8 @@ export class ListeningTrackerService {
 				bookId: this.currentSession.bookId,
 				volumeId: this.currentSession.volumeId,
 				listenedSeconds: Math.min(secondsToEmit, MAX_SINGLE_SESSION_SECONDS),
-				startedAt: new SvelteDate(this.currentSession.startedAt).toISOString()
+				startedAt: new SvelteDate(this.currentSession.startedAt).toISOString(),
+				dateKey: formatLocalDateKey(this.currentSession.startedAt)
 			};
 
 			this.currentSession.startedAt = now;
@@ -118,7 +120,8 @@ export class ListeningTrackerService {
 				bookId,
 				volumeId,
 				listenedSeconds: Math.min(seconds, MAX_SINGLE_SESSION_SECONDS),
-				startedAt
+				startedAt,
+				dateKey: formatLocalDateKey(startedAt)
 			};
 			void this.dispatchSession(payload);
 		}

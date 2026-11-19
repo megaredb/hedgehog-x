@@ -297,6 +297,7 @@
 
 						<!-- Secondary controls -->
 						<div class="flex items-center justify-evenly gap-2 pt-2">
+							<AudioPlayer.Volume class="flex" />
 							<Button
 								variant="ghost"
 								size="icon"

@@ -13,18 +13,9 @@
 		[key: string]: unknown;
 	}
 
-	let {
-		class: className = '',
-		size = 'icon',
-		variant = 'ghost',
-		onclick,
-		...rest
-	}: Props = $props();
+	let { class: className = '', size = 'icon', variant = 'ghost', ...rest }: Props = $props();
 
-	const isDisabled = $derived(
-		!audioStore.currentTrack ||
-			(audioStore.currentQueueIndex === 0 && audioStore.repeatMode !== 'all')
-	);
+	const isDisabled = $derived(!audioStore.currentTrack);
 </script>
 
 <Tooltip.Root>
@@ -41,7 +32,6 @@
 				{...props}
 				onclick={(e) => {
 					(props as { onclick?: (e: MouseEvent) => void }).onclick?.(e);
-					onclick?.(e);
 					audioStore.previous();
 				}}
 			>

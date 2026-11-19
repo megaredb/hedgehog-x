@@ -56,7 +56,7 @@ pnpm preview             # preview собранного приложения
 pnpm check               # svelte-check + sync — проходит
 pnpm lint                # prettier --check . && eslint . — проходит
 pnpm format              # prettier --write .
-pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 184 тестов, зелёные
+pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 185 тестов, зелёные
 pnpm test:e2e            # playwright install && playwright test — требует env, см. ниже
 pnpm test:docker         # docker compose -f compose.test.yml up --build ...
 pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
@@ -90,8 +90,8 @@ pnpm auth:schema         # better-auth generate -> auth.schema.ts (осторо�
   в `+layout.ts` фоново вызывает `syncBookDetails` и `syncUserData`.
 - Личные данные (прогресс, лайки, закладки) — тоже Dexie; синхронизация через
   `/api/user/sync`.
-- Главная `/` — **не** каталог из БД, а витрина на `src/lib/data/mockShowcase.ts`.
-- `/books` — редирект на `/`; отдельного списка всех книг нет.
+- Главная `/` — витрина на `src/lib/data/mockShowcase.ts`; полный каталог — `/books`.
+- `/books` — SSR-каталог книг с поиском; доступен из навигации.
 - Аналитика прослушивания — отдельный поток `/api/analytics/listen` (не в user sync).
 - Админка `/admin/**` — единственные SSR-страницы с данными из БД; доступ по `locals.user.role === 'admin'`.
 
@@ -133,16 +133,13 @@ pnpm auth:schema         # better-auth generate -> auth.schema.ts (осторо�
   причина P0-01 (сейчас там 401). Гостевые данные должны переживать навигацию и
   загружаться при входе; это закреплено e2e `sync-data-safety`.
 - `/admin` редиректит на `/auth?from=/admin`; `/auth` также понимает legacy `redirect`.
-- `/books/unknown` и `/books/id/unknown` теперь отдают **404** (P1-04).
+- `/books` — каталог; `/books/unknown` и `/books/id/unknown` отдают **404** (P1-04).
 - Без `BETTER_AUTH_SECRET` приложение падает на старте (better-auth default secret).
 - `pnpm test:e2e` требует env; внешние OAuth-редиректы замоканы (P1-03), но
   `--workers=1` всё ещё рекомендуется.
-- `Space` в плеере может переключить play дважды: каждый смонтированный `AudioPlayer.Play`
-  вешает свой `keydown`-листенер.
-- `repeatMode='one'` + «в конце главы» sleep timer: repeat побеждает, таймер не срабатывает.
-- Переход по закладке/истории делает `seek` через 100 мс; если метаданные не успели —
-  seek теряется (используй `Track.startTime`).
-- Прерванная загрузка оставляет частичный файл в OPFS; плеер потом может играть обрезанное аудио.
+- Space-хоткей теперь один на приложение; sleep-timer срабатывает раньше repeat.
+- Переход по закладке/истории использует `Track.startTime`; seek больше не теряется.
+- Прерванная загрузка удаляет частичный OPFS-файл и проверяет размер.
 - `pnpm build` не проверяет типы: запускай отдельно `pnpm check` (сейчас зелёный).
 
 ## 7. Структура (сокращённо)

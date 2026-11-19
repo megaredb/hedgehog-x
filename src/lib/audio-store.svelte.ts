@@ -187,7 +187,10 @@ class AudioStore {
 	play(): void {
 		if (this.isLoading) return;
 		this.isPlaying = true;
-		htmlAudio.play().catch(() => {});
+		void htmlAudio.play().catch((error) => {
+			this.isPlaying = false;
+			this.setError(error instanceof Error ? error.message : 'Playback failed');
+		});
 	}
 
 	pause(): void {
@@ -267,6 +270,10 @@ class AudioStore {
 		});
 		const track = this.queue[idx];
 		if (idx === -1 || !track) {
+			if (this.currentQueueIndex === 0) {
+				this.seek(0, false);
+				return;
+			}
 			this.isLoading = false;
 			this.isPlaying = false;
 			this.isBuffering = false;
@@ -344,8 +351,20 @@ class AudioStore {
 	removeFromQueue(trackId: string): void {
 		const idx = this.queue.findIndex((s) => s.id === trackId);
 		if (idx === -1) return;
+		const removingCurrent = idx === this.currentQueueIndex;
 		this.queue = this.queue.filter((s) => s.id !== trackId);
-		if (idx < this.currentQueueIndex) this.currentQueueIndex--;
+		if (this.queue.length === 0) {
+			this.currentTrack = null;
+			this.currentQueueIndex = -1;
+			this.pause();
+			return;
+		}
+		if (removingCurrent) {
+			const nextIndex = Math.min(idx, this.queue.length - 1);
+			void this.loadAndPlayTrack(this.queue[nextIndex], nextIndex);
+		} else if (idx < this.currentQueueIndex) {
+			this.currentQueueIndex--;
+		}
 	}
 
 	clearQueue(): void {
@@ -358,6 +377,13 @@ class AudioStore {
 		if (!item) return;
 		q.splice(toIndex, 0, item);
 		this.queue = q;
+		if (fromIndex === this.currentQueueIndex) {
+			this.currentQueueIndex = toIndex;
+		} else if (fromIndex < this.currentQueueIndex && toIndex >= this.currentQueueIndex) {
+			this.currentQueueIndex--;
+		} else if (fromIndex > this.currentQueueIndex && toIndex <= this.currentQueueIndex) {
+			this.currentQueueIndex++;
+		}
 	}
 
 	addTracksToEndOfQueue(tracks: Track[]): void {
@@ -523,8 +549,10 @@ class AudioStore {
 
 		if (isLiveStream && this.playbackRate !== 1) this.playbackRate = 1;
 
-		// Signal provider: set isPlaying=true to trigger load+play effect
-		this.isLoading = false;
+		// Signal provider: set isPlaying=true to trigger load+play effect.
+		// Keep isLoading until the provider reports canplay/error, otherwise
+		// the spinner flashes for one frame and the play guard is bypassed.
+		this.isLoading = true;
 		this.isBuffering = false;
 		this.isPlaying = true;
 	}

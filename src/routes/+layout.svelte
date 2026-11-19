@@ -4,7 +4,7 @@
 	import AppNavigation from '$lib/components/header/AppNavigation.svelte';
 	import AppBreadcrumbs from '$lib/components/layout/AppBreadcrumbs.svelte';
 	import GlobalPlayer from '$lib/components/audio/GlobalPlayer.svelte';
-	import { ModeWatcher } from 'mode-watcher';
+	import { ModeWatcher, mode } from 'mode-watcher';
 	import { onNavigate, afterNavigate } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
@@ -27,6 +27,7 @@
 	const umamiHost =
 		env.PUBLIC_UMAMI_HOST || import.meta.env.PUBLIC_UMAMI_HOST || 'https://cloud.umami.is';
 
+	const themeColor = $derived(mode.current === 'dark' ? '#09090b' : '#ffffff');
 	let displayVolume = $derived(`${Math.round(audioStore.volume * 100)}%`);
 	let displayRate = $derived(`${Math.round(audioStore.playbackRate * 100)}%`);
 
@@ -107,6 +108,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<meta name="theme-color" content={themeColor} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html pwaInfo ? pwaInfo.webManifest.linkTag : ''}
 	{#if umamiWebsiteId}

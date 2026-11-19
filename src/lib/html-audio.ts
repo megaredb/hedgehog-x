@@ -67,10 +67,8 @@ class HtmlAudio {
 		if (!audio) return;
 
 		audio.addEventListener('error', () => {
-			if (this.retryAttempts < this.maxRetries) {
-				this.retryAttempts++;
-				setTimeout(() => this.reloadAudio(), 1000);
-			}
+			// AudioProvider owns retries; retrying here as well caused two
+			// concurrent reloads for one failure.
 			this.eventTarget.dispatchEvent(new CustomEvent('audioError'));
 		});
 

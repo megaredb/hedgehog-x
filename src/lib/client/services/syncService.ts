@@ -283,7 +283,11 @@ export const syncService = {
 	 */
 	async syncBookDetails(bookId: string, fetchFn: typeof fetch = fetch) {
 		try {
-			const res = await fetchFn(`/api/books/${bookId}`);
+			const etagKey = 'book-etag:' + bookId;
+			const etag = typeof localStorage !== 'undefined' ? localStorage.getItem(etagKey) : null;
+			const res = await fetchFn(`/api/books/${bookId}`, {
+				headers: etag ? { 'If-None-Match': etag } : undefined
+			});
 
 			if (res.status === 304) {
 				log.debug(`Book data for ${bookId} is up to date (304 Not Modified).`);
@@ -292,6 +296,8 @@ export const syncService = {
 
 			if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
 
+			const nextEtag = res.headers.get('etag');
+			if (nextEtag && typeof localStorage !== 'undefined') localStorage.setItem(etagKey, nextEtag);
 			const bookData: ServerBookWithRelations = await res.json();
 
 			const offlineBook = mapServerBookToOfflineBook(bookData);

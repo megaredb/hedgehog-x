@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import type { Track } from '$lib/html-audio.js';
 	import {
 		db,
 		type OfflineBookmark,
@@ -83,7 +84,7 @@
 			.equals(volumeId)
 			.sortBy('chapterNumber');
 
-		const tracks = allChapters.map((ch) => ({
+		const tracks: Track[] = allChapters.map((ch) => ({
 			id: ch.id,
 			title: ch.title,
 			url: ch.audioUrl,
@@ -97,10 +98,8 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
+			tracks[startIndex] = { ...tracks[startIndex], startTime: item.timestampSeconds };
 			audioStore.setQueueAndPlay(tracks, startIndex);
-			setTimeout(() => {
-				audioStore.seek(item.timestampSeconds, false);
-			}, 100);
 		}
 	}
 

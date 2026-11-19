@@ -117,7 +117,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			createdAt: new Date()
 		});
 
-		const dateKey = formatDateKey(session.startedAt);
+		const dateKey = session.dateKey || formatDateKey(session.startedAt);
 		const statId = buildDailyStatId(dateKey, resolvedBookId, session.chapterId, userId);
 
 		await db

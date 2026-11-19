@@ -77,13 +77,19 @@ describe('ListeningTrackerService Unit Tests', () => {
 
 		assert.equal(fetchCalls.length, 1);
 		assert.equal(fetchCalls[0].url, '/api/analytics/listen');
-		assert.deepEqual(fetchCalls[0].body, {
-			chapterId: 'ch_1',
-			bookId: 'book_1',
-			volumeId: 'vol_1',
-			listenedSeconds: 15,
-			startedAt: (fetchCalls[0].body as { startedAt: string }).startedAt
-		});
+		const body = fetchCalls[0].body as { dateKey?: string; startedAt?: string };
+		assert.match(body.dateKey ?? '', /^\d{4}-\d{2}-\d{2}$/);
+		assert.deepEqual(
+			{ ...(fetchCalls[0].body as Record<string, unknown>), dateKey: undefined },
+			{
+				chapterId: 'ch_1',
+				bookId: 'book_1',
+				volumeId: 'vol_1',
+				listenedSeconds: 15,
+				startedAt: body.startedAt,
+				dateKey: undefined
+			}
+		);
 	});
 
 	it('discards trivial durations (< 2 seconds) on flush', async () => {

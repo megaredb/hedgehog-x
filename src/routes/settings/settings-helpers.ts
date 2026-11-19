@@ -296,6 +296,14 @@ export async function performManualSync(fetchFn: typeof fetch = fetch): Promise<
 			} catch {
 				// Ignore bookmarkSync error; queue stays for the next retry
 			}
+
+			try {
+				const { listeningTracker } = await import('$lib/client/services/listeningTracker.svelte');
+				listeningTracker.flush();
+				await listeningTracker.flushOfflineQueue();
+			} catch {
+				// Listening stats will retry later; do not fail the whole manual sync.
+			}
 		}
 
 		return {

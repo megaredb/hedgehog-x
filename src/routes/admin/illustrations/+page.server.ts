@@ -47,7 +47,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		? await allIllustrationsQuery
 				.where(eq(illustrations.volumeId, selectedVolumeId))
 				.orderBy(asc(illustrations.sortOrder))
-		: await allIllustrationsQuery.orderBy(desc(illustrations.updatedAt)).limit(100);
+		: await allIllustrationsQuery.orderBy(desc(illustrations.updatedAt));
 
 	const editId = url.searchParams.get('edit');
 	const editIllustration = editId ? allIllustrations.find((i) => i.id === editId) : null;

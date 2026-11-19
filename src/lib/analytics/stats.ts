@@ -8,6 +8,7 @@ export interface RawListenSession {
 	volumeId?: string | null;
 	listenedSeconds: number;
 	startedAt?: string | Date | null;
+	dateKey?: string | null;
 }
 
 export interface ValidatedListenSession {
@@ -16,6 +17,7 @@ export interface ValidatedListenSession {
 	volumeId?: string | null;
 	listenedSeconds: number;
 	startedAt: Date;
+	dateKey: string;
 }
 
 /**
@@ -29,8 +31,26 @@ export function formatDateKey(dateInput: Date | string | number = new Date()): s
 	return d.toISOString().slice(0, 10);
 }
 
+/** Local calendar date, used by the UI to avoid the UTC midnight shift. */
+export function formatLocalDateKey(dateInput: Date | string | number = new Date()): string {
+	const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+	if (isNaN(d.getTime())) return formatDateKey();
+	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Short stable hash for composite IDs (FNV-1a, base36). */
+function hashPart(value: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < value.length; i++) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 0).toString(36).padStart(7, '0');
+}
+
 /**
  * Builds a deterministic primary key for daily_listening_stats.
+ * The key is bounded to 8 + 7*3 + 2 = 31 chars and cannot collide on '_'.
  */
 export function buildDailyStatId(
 	date: string,
@@ -39,10 +59,7 @@ export function buildDailyStatId(
 	userId: string | null | undefined
 ): string {
 	const safeDate = date || formatDateKey();
-	const safeBook = bookId || 'nobook';
-	const safeChapter = chapterId || 'nochapter';
-	const safeUser = userId || 'anon';
-	return `${safeDate}_${safeBook}_${safeChapter}_${safeUser}`;
+	return `${safeDate}_${hashPart(bookId || 'nobook')}_${hashPart(chapterId || 'nochapter')}_${hashPart(userId || 'anon')}`;
 }
 
 /**
@@ -83,6 +100,11 @@ export function validateListenSession(input: unknown): {
 		startedAt = parsed;
 	}
 
+	const dateKey =
+		typeof data.dateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.dateKey)
+			? data.dateKey
+			: formatDateKey(startedAt);
+
 	const now = Date.now();
 	const startedMs = startedAt.getTime();
 	const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
@@ -97,7 +119,8 @@ export function validateListenSession(input: unknown): {
 			bookId: typeof data.bookId === 'string' ? data.bookId.trim() : null,
 			volumeId: typeof data.volumeId === 'string' ? data.volumeId.trim() : null,
 			listenedSeconds: seconds,
-			startedAt
+			startedAt,
+			dateKey
 		}
 	};
 }

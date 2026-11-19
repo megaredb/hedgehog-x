@@ -15,7 +15,7 @@
 | API-эндпоинтов своих               | 11 обработчиков (9 путей) + `/api/auth/*` better-auth |
 | Таблиц БД                          | 14 (10 доменных + 4 auth)                             |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)             |
-| Unit-тестов                        | 184 в 19 файлах                                       |
+| Unit-тестов                        | 185 в 19 файлах                                       |
 | E2E-тестов                         | 41 в 7 файлах                                         |
 
 ```
@@ -383,7 +383,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `test:e2e`                        | `playwright install && playwright test`       | сеть; env обязателен                |
 | `test:docker`                     | compose test up/down                          | db:migrate+seed+build+e2e           |
 | `test`                            | `npm run test:e2e`                            | npm внутри pnpm-проекта             |
-| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 184 pass                            |
+| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 185 pass                            |
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |

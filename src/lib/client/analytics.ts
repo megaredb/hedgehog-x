@@ -34,6 +34,7 @@ export interface ListenHeartbeatPayload {
 	volumeId?: string;
 	listenedSeconds: number;
 	startedAt?: string;
+	dateKey?: string;
 }
 
 export interface ListenHeartbeatBatchPayload {

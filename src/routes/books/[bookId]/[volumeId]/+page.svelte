@@ -101,11 +101,6 @@
 		}
 
 		audioStore.setQueueAndPlay(tracks, targetIndex);
-		if (seekTime > 0) {
-			setTimeout(() => {
-				audioStore.seek(seekTime, false);
-			}, 150);
-		}
 	});
 
 	// Next volume in this book series

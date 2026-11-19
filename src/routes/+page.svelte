@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { showcaseBooks } from '$lib/data/mockShowcase';
 
@@ -86,7 +86,7 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('book', bookId);
 		// Shallow URL update without full page reload
-		replaceState(resolve((url.pathname + url.search) as '/'), page.state);
+		pushState(resolve((url.pathname + url.search) as '/'), page.state);
 	}
 
 	function handleSectionVisible(index: number) {

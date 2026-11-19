@@ -32,7 +32,7 @@
 | Production build  | ✅ `vite build` проходит                                                                     |
 | Typecheck         | ✅ `svelte-check`: 0 ошибок                                                                  |
 | Lint/format       | ✅ prettier + eslint чисто                                                                   |
-| Unit-тесты        | ✅ 184/184 (`pnpm test:unit`)                                                                |
+| Unit-тесты        | ✅ 185/185 (`pnpm test:unit`)                                                                |
 | E2E               | ✅ 41/41 при `--workers=1`; тесты внешних OAuth-редиректов всё ещё зависят от сети           |
 | Миграции БД       | ✅ `db:migrate` 0000–0007; БД пересобрана, схема совпадает с `schema.ts`; `generate` no-op   |
 | Offline-данные    | ✅ P0-01/P0-03/P0-05: owner-aware sync, logout-clear, consent на guest-импорт, offline flush |

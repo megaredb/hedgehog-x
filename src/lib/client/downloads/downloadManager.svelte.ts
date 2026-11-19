@@ -160,9 +160,13 @@ async function performDownload(chapter: OfflineChapter) {
 				await writable.write(value);
 			}
 			await writable.close();
+			if (totalBytes > 0 && receivedBytes !== totalBytes) {
+				throw new Error(`Incomplete download: ${receivedBytes}/${totalBytes} bytes`);
+			}
 		} catch (e) {
-			await writable.abort();
-			reader.cancel();
+			await writable.abort().catch(() => {});
+			await opfsRoot.removeEntry(chapter.id).catch(() => {});
+			await reader.cancel().catch(() => {});
 			throw e;
 		}
 

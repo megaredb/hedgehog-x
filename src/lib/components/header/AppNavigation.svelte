@@ -28,7 +28,7 @@
 	// Check whether the route is currently active
 	const isActive = (path: string) => {
 		if (path === '/') {
-			return page.url.pathname === '/' || page.url.pathname.startsWith('/books/');
+			return page.url.pathname === '/books' || page.url.pathname.startsWith('/books/');
 		}
 		return page.url.pathname === path;
 	};
@@ -37,7 +37,7 @@
 		{
 			title: strings.nav.library,
 			links: [
-				{ href: resolve('/'), icon: BookOpen, label: strings.nav.catalog },
+				{ href: resolve('/books'), icon: BookOpen, label: strings.nav.catalog },
 				{ href: resolve('/bookmarks'), icon: Bookmark, label: strings.nav.bookmarks },
 				{ href: resolve('/history'), icon: HistoryIcon, label: strings.nav.history },
 				{ href: resolve('/downloads'), icon: Download, label: strings.nav.downloads }
