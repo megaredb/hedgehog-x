@@ -3,6 +3,7 @@ import { liveQuery } from 'dexie';
 import { SvelteMap } from 'svelte/reactivity';
 import { createLogger } from '$lib/logger';
 import { resolveMediaUrl, getFallbackMediaUrl } from '$lib/utils/mirror';
+import { parseContentLength, hasEnoughDownloadSpace, buildCorsUrl } from './downloadUtils';
 
 const log = createLogger('Downloads');
 
@@ -89,9 +90,7 @@ async function performDownload(chapter: OfflineChapter) {
 
 		const fetchWithCors = async (urlStr: string) => {
 			const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
-			const fetchUrl = new URL(urlStr, baseUrl);
-			fetchUrl.searchParams.set('_cors', '1');
-			return fetch(fetchUrl.toString(), { signal: controller.signal });
+			return fetch(buildCorsUrl(urlStr, baseUrl), { signal: controller.signal });
 		};
 
 		let response: Response;
@@ -116,14 +115,13 @@ async function performDownload(chapter: OfflineChapter) {
 			}
 		}
 
-		const contentLength = response.headers.get('content-length');
-		const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+		const totalBytes = parseContentLength(response.headers.get('content-length'));
 
 		if (navigator.storage && navigator.storage.estimate && totalBytes > 0) {
 			const estimate = await navigator.storage.estimate();
 			if (estimate.quota && estimate.usage) {
 				const availableBytes = estimate.quota - estimate.usage;
-				if (availableBytes < totalBytes + 50 * 1024 * 1024) {
+				if (!hasEnoughDownloadSpace(availableBytes, totalBytes)) {
 					throw new Error('Not enough storage space on device.');
 				}
 			}

@@ -45,7 +45,7 @@ pnpm db:seed                  # опционально; сервер выпол�
 pnpm dev
 ```
 
-Откройте http://localhost:5189. Для HTTPS-доменов *.hedgehog-inc.localhost
+Откройте http://localhost:5192. Для HTTPS-доменов *.hedgehog-inc.localhost
 нужны сертификаты mkcert и Traefik (см. [docs/OPERATIONS.md](docs/OPERATIONS.md)).
 
 **Обязательно:** BETTER_AUTH_SECRET (32+ символа). Без него приложение падает
@@ -102,7 +102,7 @@ docs/                архитектура, карта, аудит, опера�
 
 Снимок 2026-11-18 (dev/5f67c5d):
 
-- pnpm build — проходит; pnpm lint — чисто; pnpm test:unit — 189/189.
+- pnpm build — проходит; pnpm lint — чисто; pnpm test:unit — 192/192.
 - pnpm check — **зелёный** (0 ошибок).
 - E2E — 42/42 при `--workers=1` (тесты внешних OAuth-редиректов всё ещё зависят от сети), интеграционный — 3/3.
 - db:migrate — **работает**; БД пересобрана из миграций, схема совпадает с schema.ts.

@@ -54,7 +54,7 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 | Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                          |
 | Prettier           | prettier --check .                                        | OK                                                        |
 | ESLint             | eslint .                                                  | OK                                                        |
-| Unit               | node --import tsx --test "src/**/*.test.ts"               | 189 tests, 0 fail                                         |
+| Unit               | node --import tsx --test "src/**/*.test.ts"               | 192 tests, 0 fail                                         |
 | E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                              |
 | E2E full, 1 worker | playwright test --workers=1                               | ✅ 42/42 (сеть для OAuth-редиректов всё ещё нужна)        |
 | Sync safety e2e    | e2e/sync-data-safety.e2e.ts                               | ✅ 9/9 (guest, offline, owner, switch, consent)           |
@@ -661,7 +661,7 @@ same-owner empty replace, pending queue, A→B switch, guest adoption. Исто�
 
 ### 12.3. SSR fallback
 
-curl -s http://localhost:4189/books/overlord | grep -E '<title>|<h1'
+curl -s http://localhost:4192/books/overlord | grep -E '<title>|<h1'
 Результат: title «Книга | Тома», h1 «Загрузка...».
 
 ### 12.4. Typecheck
