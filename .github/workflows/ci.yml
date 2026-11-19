@@ -50,6 +50,8 @@ jobs:
       - run: pnpm check
       - run: pnpm test:unit
       - run: pnpm db:migrate
+      - run: pnpm db:generate
+      - run: git diff --exit-code -- drizzle
       - run: pnpm db:seed
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
