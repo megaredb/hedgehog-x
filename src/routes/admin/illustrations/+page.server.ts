@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { books, volumes, illustrations } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadImage } from '$lib/server/storage/r2';
+import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -130,6 +130,12 @@ export const actions: Actions = {
 			return fail(400, { error: 'ID и том обязательны' });
 		}
 
+		const [old] = await db
+			.select({ imageUrl: illustrations.imageUrl })
+			.from(illustrations)
+			.where(eq(illustrations.id, id))
+			.limit(1);
+
 		const imageFile = form.get('imageFile');
 		if (imageFile && imageFile instanceof File && imageFile.size > 0) {
 			try {
@@ -168,6 +174,9 @@ export const actions: Actions = {
 			}
 
 			await db.update(illustrations).set(updateData).where(eq(illustrations.id, id));
+			if (imageFile && old?.imageUrl && old.imageUrl !== imageUrl) {
+				await deleteFromStorage(old.imageUrl);
+			}
 			return { success: true };
 		} catch (e) {
 			return fail(500, {
@@ -186,7 +195,13 @@ export const actions: Actions = {
 		}
 
 		try {
+			const [old] = await db
+				.select({ imageUrl: illustrations.imageUrl })
+				.from(illustrations)
+				.where(eq(illustrations.id, id))
+				.limit(1);
 			await db.delete(illustrations).where(eq(illustrations.id, id));
+			if (old?.imageUrl) await deleteFromStorage(old.imageUrl);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

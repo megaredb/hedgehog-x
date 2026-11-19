@@ -3,6 +3,67 @@
 # (or set COMPOSE_FILE=compose.yaml:compose.prod.yml in .env)
 
 services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hedgehog-x:prod
+    restart: unless-stopped
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      SHUTDOWN_TIMEOUT: 30
+      # SvelteKit default is 512K; covers admin image/audio forms.
+      BODY_SIZE_LIMIT: 550M
+      DATABASE_URL: postgres://${POSTGRES_USER:-root}:${POSTGRES_PASSWORD:-mysecretpassword}@db:5432/${POSTGRES_DB:-local}
+      # Two public hosts share one app. Let adapter-node derive the origin from
+      # Traefik's forwarded headers instead of pinning a single ORIGIN.
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+      BETTER_AUTH_ALLOWED_HOSTS: ${APP_HOST:?APP_HOST is required},${APP_HOST_RU:?APP_HOST_RU is required},${BETTER_AUTH_ALLOWED_HOSTS:-localhost}
+      BETTER_AUTH_FALLBACK_URL: https://${APP_HOST:?APP_HOST is required}
+      BETTER_AUTH_COOKIE_DOMAIN: ${BETTER_AUTH_COOKIE_DOMAIN:-.hedgehog-inc.one}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_OIDC_CLIENT_ID: ${TELEGRAM_OIDC_CLIENT_ID:-}
+      TELEGRAM_OIDC_CLIENT_SECRET: ${TELEGRAM_OIDC_CLIENT_SECRET:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      PUBLIC_UMAMI_HOST: ${PUBLIC_UMAMI_HOST:-}
+      PUBLIC_UMAMI_WEBSITE_ID: ${PUBLIC_UMAMI_WEBSITE_ID:-}
+    expose:
+      - '3000'
+    stop_grace_period: 35s
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.app.rule=Host(`${APP_HOST:?APP_HOST is required}`) || Host(`${APP_HOST_RU:?APP_HOST_RU is required}`)'
+      - 'traefik.http.routers.app.entrypoints=websecure'
+      - 'traefik.http.routers.app.tls=true'
+      - 'traefik.http.routers.app.tls.certresolver=le'
+      - 'traefik.http.services.app.loadbalancer.server.port=3000'
+      # Edge limiter for anonymous analytics; works across app replicas.
+      - 'traefik.http.middlewares.analytics-ratelimit.ratelimit.average=1'
+      - 'traefik.http.middlewares.analytics-ratelimit.ratelimit.burst=30'
+      - 'traefik.http.routers.app-analytics.rule=(Host(`${APP_HOST:?APP_HOST is required}`) || Host(`${APP_HOST_RU:?APP_HOST_RU is required}`)) && Path(`/api/analytics/listen`)'
+      - 'traefik.http.routers.app-analytics.entrypoints=websecure'
+      - 'traefik.http.routers.app-analytics.tls=true'
+      - 'traefik.http.routers.app-analytics.tls.certresolver=le'
+      - 'traefik.http.routers.app-analytics.priority=100'
+      - 'traefik.http.routers.app-analytics.middlewares=analytics-ratelimit@docker'
+      - 'traefik.http.routers.app-analytics.service=app'
+
   traefik:
     ports:
       - '80:80'

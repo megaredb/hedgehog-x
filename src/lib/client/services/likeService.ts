@@ -1,4 +1,5 @@
 import { db, type SyncItem } from '$lib/client/db';
+import { isMutationOwnedBy } from '$lib/client/db/syncState';
 import { createLogger } from '$lib/logger';
 
 const log = createLogger('LikeService');
@@ -17,6 +18,17 @@ export interface LikeSyncResult {
 export function createLikeService(database = db) {
 	let isSyncing = false;
 
+	async function resolveOwner(): Promise<string | null> {
+		const meta = (
+			database as unknown as {
+				meta?: { get(key: string): Promise<{ userId?: string | null } | undefined> };
+			}
+		).meta;
+		if (!meta) return null;
+		const record = await meta.get('syncOwner');
+		return record?.userId ?? null;
+	}
+
 	return {
 		/**
 		 * Optimistically toggles like status for a volume in local Dexie storage,
@@ -30,6 +42,7 @@ export function createLikeService(database = db) {
 			const existing = await database.volumeLikes.get(volumeId);
 			const isCurrentlyLiked = !!existing;
 			const targetLiked = !isCurrentlyLiked;
+			const ownerUserId = await resolveOwner();
 
 			const vol = await database.volumes.get(volumeId);
 			const baseCount = vol?.likesCount ?? currentCount ?? (isCurrentlyLiked ? 1 : 0);
@@ -46,7 +59,8 @@ export function createLikeService(database = db) {
 				await database.syncQueue.add({
 					action: 'LIKE_VOLUME',
 					payload: { id: volumeId, volumeId },
-					timestamp: Date.now()
+					timestamp: Date.now(),
+					ownerUserId
 				} as SyncItem);
 			} else {
 				await database.volumeLikes.delete(volumeId);
@@ -56,7 +70,8 @@ export function createLikeService(database = db) {
 				await database.syncQueue.add({
 					action: 'UNLIKE_VOLUME',
 					payload: { id: volumeId, volumeId },
-					timestamp: Date.now()
+					timestamp: Date.now(),
+					ownerUserId
 				} as SyncItem);
 			}
 
@@ -81,6 +96,7 @@ export function createLikeService(database = db) {
 			const existing = await database.chapterLikes.get(chapterId);
 			const isCurrentlyLiked = !!existing;
 			const targetLiked = !isCurrentlyLiked;
+			const ownerUserId = await resolveOwner();
 
 			const ch = await database.chapters.get(chapterId);
 			const baseCount = ch?.likesCount ?? currentCount ?? (isCurrentlyLiked ? 1 : 0);
@@ -97,7 +113,8 @@ export function createLikeService(database = db) {
 				await database.syncQueue.add({
 					action: 'LIKE_CHAPTER',
 					payload: { id: chapterId, chapterId },
-					timestamp: Date.now()
+					timestamp: Date.now(),
+					ownerUserId
 				} as SyncItem);
 			} else {
 				await database.chapterLikes.delete(chapterId);
@@ -107,7 +124,8 @@ export function createLikeService(database = db) {
 				await database.syncQueue.add({
 					action: 'UNLIKE_CHAPTER',
 					payload: { id: chapterId, chapterId },
-					timestamp: Date.now()
+					timestamp: Date.now(),
+					ownerUserId
 				} as SyncItem);
 			}
 
@@ -134,10 +152,13 @@ export function createLikeService(database = db) {
 					'LIKE_CHAPTER',
 					'UNLIKE_CHAPTER'
 				] as const;
-				const items = await database.syncQueue
-					.where('action')
-					.anyOf([...likeActions])
-					.toArray();
+				const ownerUserId = await resolveOwner();
+				const items = (
+					await database.syncQueue
+						.where('action')
+						.anyOf([...likeActions])
+						.toArray()
+				).filter((item) => isMutationOwnedBy(item, ownerUserId));
 
 				if (items.length === 0) return { synced: 0 };
 

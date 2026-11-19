@@ -7,13 +7,21 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ locals }) => {
 	const user = locals.user;
 	if (!user) {
-		return json({
-			chapterLikes: [],
-			volumeLikes: [],
-			listeningProgress: [],
-			bookmarks: []
-		});
+		// A guest must never receive a 200/empty payload: the client uses this
+		// response to decide whether local Dexie data may be replaced.
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
+
+	const sessionCreatedAt = locals.session?.createdAt
+		? new Date(locals.session.createdAt).getTime()
+		: 0;
+	const userCreatedAt = user.createdAt ? new Date(user.createdAt).getTime() : 0;
+	// First-ever login creates the user and the session in the same OAuth flow.
+	// This lets the client auto-adopt guest data only for a genuinely new account.
+	const isNewUser =
+		sessionCreatedAt > 0 &&
+		userCreatedAt > 0 &&
+		Math.abs(sessionCreatedAt - userCreatedAt) < 60_000;
 
 	const [userChapterLikes, userVolumeLikes, userProgress, userBookmarks] = await Promise.all([
 		db.select().from(chapterLikes).where(eq(chapterLikes.userId, user.id)),
@@ -22,29 +30,36 @@ export const GET: RequestHandler = async ({ locals }) => {
 		db.select().from(bookmarks).where(eq(bookmarks.userId, user.id))
 	]);
 
-	return json({
-		chapterLikes: userChapterLikes.map((l) => ({
-			chapterId: l.chapterId,
-			createdAt: l.createdAt?.getTime() || 0
-		})),
-		volumeLikes: userVolumeLikes.map((l) => ({
-			volumeId: l.volumeId,
-			createdAt: l.createdAt?.getTime() || 0
-		})),
-		listeningProgress: userProgress.map((p) => ({
-			chapterId: p.chapterId,
-			progressSeconds: p.progressSeconds,
-			isCompleted: p.isCompleted || false,
-			updatedAt: p.updatedAt?.getTime() || 0
-		})),
-		bookmarks: userBookmarks.map((b) => ({
-			id: b.id,
-			chapterId: b.chapterId,
-			timestampSeconds: b.timestampSeconds,
-			note: b.note || '',
-			createdAt: b.createdAt?.getTime() || 0
-		}))
-	});
+	return json(
+		{
+			authenticated: true,
+			userId: user.id,
+			userName: user.name,
+			isNewUser,
+			chapterLikes: userChapterLikes.map((l) => ({
+				chapterId: l.chapterId,
+				createdAt: l.createdAt?.getTime() || 0
+			})),
+			volumeLikes: userVolumeLikes.map((l) => ({
+				volumeId: l.volumeId,
+				createdAt: l.createdAt?.getTime() || 0
+			})),
+			listeningProgress: userProgress.map((p) => ({
+				chapterId: p.chapterId,
+				progressSeconds: p.progressSeconds,
+				isCompleted: p.isCompleted || false,
+				updatedAt: p.updatedAt?.getTime() || 0
+			})),
+			bookmarks: userBookmarks.map((b) => ({
+				id: b.id,
+				chapterId: b.chapterId,
+				timestampSeconds: b.timestampSeconds,
+				note: b.note || '',
+				createdAt: b.createdAt?.getTime() || 0
+			}))
+		},
+		{ headers: { 'Cache-Control': 'private, no-store' } }
+	);
 };
 
 export const POST: RequestHandler = async ({ request, locals }) => {

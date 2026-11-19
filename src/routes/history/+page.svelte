@@ -9,6 +9,7 @@
 		type OfflineBook
 	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { progressSync } from '$lib/client/services/progressSync.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -116,9 +117,22 @@
 		}
 	}
 
+	let isClearingHistory = $state(false);
+	let clearHistoryError = $state<string | null>(null);
+
 	async function confirmClearHistory() {
-		await db.progress.clear();
-		isClearModalOpen = false;
+		isClearingHistory = true;
+		clearHistoryError = null;
+		try {
+			const cleared = await progressSync.clearAllProgress();
+			if (cleared) {
+				isClearModalOpen = false;
+			} else {
+				clearHistoryError = 'Не удалось очистить историю. Проверьте соединение и попробуйте снова.';
+			}
+		} finally {
+			isClearingHistory = false;
+		}
 	}
 </script>
 
@@ -294,12 +308,15 @@
 				{strings.history.clearConfirmDescription}
 			</Dialog.Description>
 		</Dialog.Header>
+		{#if clearHistoryError}
+			<p class="text-sm text-destructive">{clearHistoryError}</p>
+		{/if}
 		<Dialog.Footer class="flex gap-2 sm:justify-end">
 			<Button variant="outline" onclick={() => (isClearModalOpen = false)}>
 				{strings.common.cancel}
 			</Button>
-			<Button variant="destructive" onclick={confirmClearHistory}>
-				{strings.history.clearHistory}
+			<Button variant="destructive" disabled={isClearingHistory} onclick={confirmClearHistory}>
+				{isClearingHistory ? 'Очистка…' : strings.history.clearHistory}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

@@ -26,38 +26,52 @@ export const books = pgTable('books', {
 		.$onUpdate(() => new Date())
 });
 
-export const volumes = pgTable('volumes', {
-	id: varchar('id', { length: 128 }).primaryKey(),
-	bookId: varchar('book_id', { length: 128 })
-		.references(() => books.id, { onDelete: 'cascade', onUpdate: 'cascade' })
-		.notNull(),
-	volumeNumber: integer('volume_number').notNull(),
-	title: varchar('title', { length: 255 }).notNull(),
-	description: text('description'),
-	coverUrl: varchar('cover_url', { length: 1024 }),
-	blurhash: varchar('blurhash', { length: 100 }),
-	status: varchar('status', { length: 50 }).default('ongoing'),
-	createdAt: timestamp('created_at').defaultNow(),
-	updatedAt: timestamp('updated_at')
-		.defaultNow()
-		.$onUpdate(() => new Date())
-});
+export const volumes = pgTable(
+	'volumes',
+	{
+		id: varchar('id', { length: 128 }).primaryKey(),
+		bookId: varchar('book_id', { length: 128 })
+			.references(() => books.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		volumeNumber: integer('volume_number').notNull(),
+		title: varchar('title', { length: 255 }).notNull(),
+		description: text('description'),
+		coverUrl: varchar('cover_url', { length: 1024 }),
+		blurhash: varchar('blurhash', { length: 100 }),
+		status: varchar('status', { length: 50 }).default('ongoing'),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at')
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [
+		index('volumes_book_id_idx').on(t.bookId),
+		uniqueIndex('volumes_book_number_unique').on(t.bookId, t.volumeNumber)
+	]
+);
 
-export const chapters = pgTable('chapters', {
-	id: varchar('id', { length: 128 }).primaryKey(),
-	volumeId: varchar('volume_id', { length: 128 })
-		.references(() => volumes.id, { onDelete: 'cascade', onUpdate: 'cascade' })
-		.notNull(),
-	chapterNumber: integer('chapter_number').notNull(),
-	title: varchar('title', { length: 255 }).notNull(),
-	audioUrl: varchar('audio_url', { length: 1024 }).notNull(),
-	durationSeconds: integer('duration_seconds').notNull(),
-	telegramPostUrl: varchar('telegram_post_url', { length: 1024 }),
-	createdAt: timestamp('created_at').defaultNow(),
-	updatedAt: timestamp('updated_at')
-		.defaultNow()
-		.$onUpdate(() => new Date())
-});
+export const chapters = pgTable(
+	'chapters',
+	{
+		id: varchar('id', { length: 128 }).primaryKey(),
+		volumeId: varchar('volume_id', { length: 128 })
+			.references(() => volumes.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		chapterNumber: integer('chapter_number').notNull(),
+		title: varchar('title', { length: 255 }).notNull(),
+		audioUrl: varchar('audio_url', { length: 1024 }).notNull(),
+		durationSeconds: integer('duration_seconds').notNull(),
+		telegramPostUrl: varchar('telegram_post_url', { length: 1024 }),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at')
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [
+		index('chapters_volume_id_idx').on(t.volumeId),
+		uniqueIndex('chapters_volume_number_unique').on(t.volumeId, t.chapterNumber)
+	]
+);
 
 export const listeningProgress = pgTable(
 	'listening_progress',
@@ -72,7 +86,10 @@ export const listeningProgress = pgTable(
 		isCompleted: boolean('is_completed').default(false),
 		updatedAt: timestamp('updated_at').defaultNow()
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.chapterId] })]
+	(t) => [
+		primaryKey({ columns: [t.userId, t.chapterId] }),
+		index('progress_chapter_idx').on(t.chapterId)
+	]
 );
 
 export const volumeLikes = pgTable(
@@ -86,7 +103,10 @@ export const volumeLikes = pgTable(
 			.notNull(),
 		createdAt: timestamp('created_at').defaultNow()
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.volumeId] })]
+	(t) => [
+		primaryKey({ columns: [t.userId, t.volumeId] }),
+		index('volume_likes_volume_idx').on(t.volumeId)
+	]
 );
 
 export const chapterLikes = pgTable(
@@ -100,36 +120,47 @@ export const chapterLikes = pgTable(
 			.notNull(),
 		createdAt: timestamp('created_at').defaultNow()
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.chapterId] })]
+	(t) => [
+		primaryKey({ columns: [t.userId, t.chapterId] }),
+		index('chapter_likes_chapter_idx').on(t.chapterId)
+	]
 );
 
-export const bookmarks = pgTable('bookmarks', {
-	id: varchar('id', { length: 36 }).primaryKey(),
-	userId: text('user_id')
-		.references(() => user.id, { onDelete: 'cascade' })
-		.notNull(),
-	chapterId: varchar('chapter_id', { length: 128 })
-		.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
-		.notNull(),
-	timestampSeconds: integer('timestamp_seconds').notNull(),
-	note: varchar('note', { length: 500 }),
-	createdAt: timestamp('created_at').defaultNow()
-});
+export const bookmarks = pgTable(
+	'bookmarks',
+	{
+		id: varchar('id', { length: 36 }).primaryKey(),
+		userId: text('user_id')
+			.references(() => user.id, { onDelete: 'cascade' })
+			.notNull(),
+		chapterId: varchar('chapter_id', { length: 128 })
+			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		timestampSeconds: integer('timestamp_seconds').notNull(),
+		note: varchar('note', { length: 500 }),
+		createdAt: timestamp('created_at').defaultNow()
+	},
+	(t) => [index('bookmarks_user_idx').on(t.userId), index('bookmarks_chapter_idx').on(t.chapterId)]
+);
 
-export const illustrations = pgTable('illustrations', {
-	id: varchar('id', { length: 128 }).primaryKey(),
-	volumeId: varchar('volume_id', { length: 128 })
-		.references(() => volumes.id, { onDelete: 'cascade', onUpdate: 'cascade' })
-		.notNull(),
-	imageUrl: varchar('image_url', { length: 1024 }).notNull(),
-	blurhash: varchar('blurhash', { length: 100 }),
-	caption: varchar('caption', { length: 255 }),
-	sortOrder: integer('sort_order').notNull().default(0),
-	createdAt: timestamp('created_at').defaultNow(),
-	updatedAt: timestamp('updated_at')
-		.defaultNow()
-		.$onUpdate(() => new Date())
-});
+export const illustrations = pgTable(
+	'illustrations',
+	{
+		id: varchar('id', { length: 128 }).primaryKey(),
+		volumeId: varchar('volume_id', { length: 128 })
+			.references(() => volumes.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		imageUrl: varchar('image_url', { length: 1024 }).notNull(),
+		blurhash: varchar('blurhash', { length: 100 }),
+		caption: varchar('caption', { length: 255 }),
+		sortOrder: integer('sort_order').notNull().default(0),
+		createdAt: timestamp('created_at').defaultNow(),
+		updatedAt: timestamp('updated_at')
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [index('illustrations_volume_id_idx').on(t.volumeId)]
+);
 
 export const booksRelations = relations(books, ({ many }) => ({
 	volumes: many(volumes)

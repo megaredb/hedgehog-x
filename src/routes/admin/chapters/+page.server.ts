@@ -1,8 +1,9 @@
 import { db } from '$lib/server/db';
+import { isUniqueViolation } from '$lib/server/db/errors';
 import { books, volumes, chapters } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadAudio } from '$lib/server/storage/r2';
+import { deleteFromStorage, uploadAudio } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -124,6 +125,9 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (isUniqueViolation(e)) {
+				return fail(400, { error: 'Глава с таким номером уже существует в этом томе' });
+			}
 			return fail(500, {
 				error: `Ошибка базы данных: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -148,6 +152,12 @@ export const actions: Actions = {
 		if (isNaN(durationSeconds) || durationSeconds < 0) {
 			durationSeconds = 0;
 		}
+
+		const [old] = await db
+			.select({ audioUrl: chapters.audioUrl })
+			.from(chapters)
+			.where(eq(chapters.id, id))
+			.limit(1);
 
 		const audioFile = form.get('audioFile');
 		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
@@ -187,8 +197,14 @@ export const actions: Actions = {
 			}
 
 			await db.update(chapters).set(updateData).where(eq(chapters.id, id));
+			if (audioFile && old?.audioUrl && old.audioUrl !== audioUrl) {
+				await deleteFromStorage(old.audioUrl);
+			}
 			return { success: true };
 		} catch (e) {
+			if (isUniqueViolation(e)) {
+				return fail(400, { error: 'Глава с таким номером уже существует в этом томе' });
+			}
 			return fail(500, {
 				error: `Ошибка обновления главы: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -205,7 +221,13 @@ export const actions: Actions = {
 		}
 
 		try {
+			const [old] = await db
+				.select({ audioUrl: chapters.audioUrl })
+				.from(chapters)
+				.where(eq(chapters.id, id))
+				.limit(1);
 			await db.delete(chapters).where(eq(chapters.id, id));
+			if (old?.audioUrl) await deleteFromStorage(old.audioUrl);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

@@ -19,16 +19,32 @@ type TableEntity<TName extends TableNames> =
  * @param data Data or array of data to insert
  * @param purgeScope Optional purge rule to remove obsolete records
  */
+export interface HydrateOptions {
+	/**
+	 * Allows `purgeScope: 'all'` to delete every local row when the incoming
+	 * dataset is empty. Defaults to false: an empty/partial response must never
+	 * wipe local data by accident. Use it only after auth/ownership checks.
+	 */
+	allowEmptyPurge?: boolean;
+}
+
 export async function hydrate<TName extends TableNames>(
 	tableName: TName,
 	data: TableEntity<TName> | TableEntity<TName>[],
-	purgeScope?: 'all' | { index: string; values: any[] }
+	purgeScope?: 'all' | { index: string; values: any[] },
+	options: HydrateOptions = {}
 ) {
 	if (!data) return;
 
 	const items = Array.isArray(data) ? data : [data];
 	const table = db[tableName] as any;
 	const pk = table.schema.primKey.keyPath;
+
+	// Defense in depth. Empty server payloads are normal for a guest or a partial
+	// response; only an explicitly authorized replacement may purge everything.
+	if (purgeScope === 'all' && items.length === 0 && !options.allowEmptyPurge) {
+		return;
+	}
 
 	await db.transaction('rw', table, async () => {
 		if (purgeScope === 'all') {

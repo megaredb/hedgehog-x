@@ -269,15 +269,19 @@ export async function clearAppCache(
 export interface ManualSyncResult {
 	success: boolean;
 	syncedLikes: number;
+	syncedBookmarks: number;
 	error?: string;
 }
 
 /**
- * Performs manual synchronization of pending mutations in syncQueue (likes, progress).
+ * Performs manual synchronization of pending mutations in syncQueue
+ * (likes, progress, bookmarks).
  */
 export async function performManualSync(fetchFn: typeof fetch = fetch): Promise<ManualSyncResult> {
 	try {
 		const likeRes = await likeService.syncLikesQueue(fetchFn);
+		let syncedBookmarks = 0;
+
 		if (typeof window !== 'undefined') {
 			try {
 				const { progressSync } = await import('$lib/client/services/progressSync.svelte.js');
@@ -285,15 +289,25 @@ export async function performManualSync(fetchFn: typeof fetch = fetch): Promise<
 			} catch {
 				// Ignore progressSync error
 			}
+
+			try {
+				const { flushBookmarkQueue } = await import('$lib/client/services/bookmarkSync');
+				syncedBookmarks = await flushBookmarkQueue(fetchFn);
+			} catch {
+				// Ignore bookmarkSync error; queue stays for the next retry
+			}
 		}
+
 		return {
 			success: true,
-			syncedLikes: likeRes.synced
+			syncedLikes: likeRes.synced,
+			syncedBookmarks
 		};
 	} catch (err) {
 		return {
 			success: false,
 			syncedLikes: 0,
+			syncedBookmarks: 0,
 			error: err instanceof Error ? err.message : String(err)
 		};
 	}

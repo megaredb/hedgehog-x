@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
-	import { db, type OfflineVolume } from '$lib/client/db';
+	import { db, type OfflineBook, type OfflineChapter, type OfflineVolume } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import type { Track } from '$lib/html-audio.js';
 	import { parseShareParams } from '$lib/components/share/share.js';
@@ -47,9 +47,22 @@
 		() => [data.bookId]
 	);
 
-	const volume = $derived(volumeQuery.data);
-	const chapters = $derived(chaptersQuery.data);
-	const book = $derived(bookQuery.data);
+	const serverData = $derived(
+		data as typeof data & {
+			book?: OfflineBook;
+			volumes?: OfflineVolume[];
+			volume?: OfflineVolume;
+			chapters?: OfflineChapter[];
+		}
+	);
+	const volume = $derived(volumeQuery.data ?? serverData.volume);
+	const chapters = $derived(
+		chaptersQuery.data.length > 0 ? chaptersQuery.data : (serverData.chapters ?? [])
+	);
+	const book = $derived(bookQuery.data ?? serverData.book);
+	const allBookVolumes = $derived(
+		allBookVolumesQuery.data.length > 0 ? allBookVolumesQuery.data : (serverData.volumes ?? [])
+	);
 
 	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
 	let handledUrlParamsForVolumeId: string | null = null;
@@ -98,7 +111,7 @@
 	// Next volume in this book series
 	const nextVolume = $derived.by(() => {
 		if (!volume) return null;
-		return allBookVolumesQuery.data.find((v) => v.volumeNumber === volume.volumeNumber + 1) || null;
+		return allBookVolumes.find((v) => v.volumeNumber === volume.volumeNumber + 1) || null;
 	});
 
 	// Latest chapter of the volume that has a Telegram discussion post linked

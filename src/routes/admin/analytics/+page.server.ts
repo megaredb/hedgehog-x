@@ -16,7 +16,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
-		throw redirect(303, '/auth?redirect=/admin/analytics');
+		throw redirect(303, '/auth?from=/admin/analytics');
 	}
 
 	if (locals.user.role !== 'admin') {

@@ -8,6 +8,7 @@
 	import { authClient } from '$lib/client/authClient';
 	import { useSession } from '$lib/client/session.svelte';
 	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
+	import { safeInternalPath } from '$lib/utils/safeRedirect';
 
 	const session = useSession();
 
@@ -16,10 +17,13 @@
 	let errorModalOpen = $state(false);
 
 	const from = $derived.by(() => {
-		const raw = page.url.searchParams.get('from') ?? resolve('/');
-		// Prevent redirect loop if 'from' is auth page
-		if (raw === resolve('/auth')) return resolve('/');
-		return raw;
+		// Support legacy ?redirect= used by admin pages and the canonical ?from=.
+		const raw =
+			page.url.searchParams.get('from') ?? page.url.searchParams.get('redirect') ?? resolve('/');
+		const safe = safeInternalPath(raw, resolve('/'));
+		// Prevent redirect loop if 'from' is the auth page itself.
+		if (safe === resolve('/auth')) return resolve('/');
+		return safe;
 	});
 
 	// Handle OAuth error parameters in query string
@@ -78,8 +82,7 @@
 	}
 
 	async function signOut() {
-		await authClient.signOut();
-		await session.refetch();
+		await session.signOut();
 		await goto(resolve('/'));
 	}
 </script>

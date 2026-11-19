@@ -11,6 +11,34 @@ const env = dynamicPrivate.env;
 
 const log = createLogger('R2Storage');
 
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+
+function isProduction(): boolean {
+	return process.env.NODE_ENV === 'production';
+}
+
+function isSupportedImage(buffer: Buffer): boolean {
+	return (
+		(buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) ||
+		(buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) ||
+		(buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+			buffer.subarray(8, 12).toString('ascii') === 'WEBP') ||
+		buffer.subarray(0, 3).toString('ascii') === 'GIF'
+	);
+}
+
+function isSupportedAudio(buffer: Buffer): boolean {
+	const ascii = buffer.subarray(0, 12).toString('ascii');
+	return (
+		ascii.startsWith('ID3') ||
+		(buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) ||
+		ascii.startsWith('OggS') ||
+		ascii.startsWith('RIFF') ||
+		ascii.slice(4, 8) === 'ftyp'
+	);
+}
+
 export interface UploadImageResult {
 	url: string;
 	key: string;
@@ -56,6 +84,13 @@ export async function uploadImage(
 	buffer: Buffer,
 	options: { folder?: string; filenamePrefix?: string } = {}
 ): Promise<UploadImageResult> {
+	if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) {
+		throw new Error('Image must be between 1 byte and 15 MB');
+	}
+	if (!isSupportedImage(buffer)) {
+		throw new Error('Unsupported image format (PNG, JPEG, WebP, GIF only)');
+	}
+
 	const folder = options.folder ?? 'images';
 	const prefix = options.filenamePrefix ? `${options.filenamePrefix}-` : '';
 	const key = `${folder}/${prefix}${randomUUID()}.webp`;
@@ -116,6 +151,10 @@ export async function uploadImage(
 		};
 	}
 
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
+	}
+
 	// Fallback for local development if R2 credentials are not set
 	const localDir = path.resolve('static/uploads', folder);
 	await fs.mkdir(localDir, { recursive: true });
@@ -140,6 +179,13 @@ export async function uploadAudio(
 	buffer: Buffer,
 	options: { originalFilename?: string; contentType?: string; folder?: string } = {}
 ): Promise<UploadAudioResult> {
+	if (buffer.length === 0 || buffer.length > MAX_AUDIO_BYTES) {
+		throw new Error('Audio must be between 1 byte and 500 MB');
+	}
+	if (!isSupportedAudio(buffer)) {
+		throw new Error('Unsupported audio format');
+	}
+
 	const folder = options.folder ?? 'audio';
 	const ext = options.originalFilename ? path.extname(options.originalFilename) : '.mp3';
 	const safeExt = ext || '.mp3';
@@ -161,6 +207,10 @@ export async function uploadAudio(
 			url: `${r2.publicUrl}/${key}`,
 			key
 		};
+	}
+
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
 	}
 
 	// Fallback for local development
@@ -207,6 +257,11 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 			log.error(`Failed to delete from R2: ${e instanceof Error ? e.message : String(e)}`);
 			return false;
 		}
+	}
+
+	if (isProduction()) {
+		log.error('R2 is not configured; refusing local deletion in production');
+		return false;
 	}
 
 	// Local file fallback

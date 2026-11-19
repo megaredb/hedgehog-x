@@ -50,12 +50,13 @@ describe('Analytics Math, Formatting, and Validation', () => {
 
 	describe('validateListenSession', () => {
 		it('validates a complete valid session payload', () => {
+			const startedAt = new Date(Date.now() - 60_000).toISOString();
 			const input = {
 				chapterId: 'chapter_01',
 				bookId: 'book_01',
 				volumeId: 'vol_01',
 				listenedSeconds: 45,
-				startedAt: '2026-11-08T12:00:00Z'
+				startedAt
 			};
 			const res = validateListenSession(input);
 			assert.equal(res.valid, true);
@@ -64,10 +65,7 @@ describe('Analytics Math, Formatting, and Validation', () => {
 			assert.equal(res.session.bookId, 'book_01');
 			assert.equal(res.session.volumeId, 'vol_01');
 			assert.equal(res.session.listenedSeconds, 45);
-			assert.equal(
-				res.session.startedAt.toISOString(),
-				new Date('2026-11-08T12:00:00Z').toISOString()
-			);
+			assert.equal(res.session.startedAt.toISOString(), new Date(startedAt).toISOString());
 		});
 
 		it('accepts boundary listenedSeconds (1 and 300)', () => {

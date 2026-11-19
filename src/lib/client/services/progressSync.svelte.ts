@@ -1,14 +1,20 @@
 import { db } from '$lib/client/db';
+import { getCurrentOwnerId } from '$lib/client/db/syncState';
 import { createLogger } from '$lib/logger';
 
 const log = createLogger('ProgressSync');
 
+interface ProgressUpdate {
+	chapterId: string;
+	progressSeconds: number;
+	isCompleted: boolean;
+}
+
 class ProgressSyncService {
-	private pendingUpdates = new Map<
-		string,
-		{ chapterId: string; progressSeconds: number; isCompleted: boolean }
-	>();
+	private pendingUpdates = new Map<string, ProgressUpdate>();
 	private syncTimer: ReturnType<typeof setTimeout> | null = null;
+	private pendingOwner: string | null = null;
+	private pendingOwnerPromise: Promise<string | null> | null = null;
 	private readonly BATCH_INTERVAL_MS = 30000;
 
 	constructor() {
@@ -25,6 +31,8 @@ class ProgressSyncService {
 
 	/**
 	 * Records playback progress in memory to batch sync requests.
+	 * The owner is captured when the first update is recorded: a guest's
+	 * progress must not suddenly become account-owned after login.
 	 */
 	recordProgress(chapterId: string, progressSeconds: number, isCompleted = false) {
 		this.pendingUpdates.set(chapterId, {
@@ -33,6 +41,13 @@ class ProgressSyncService {
 			isCompleted
 		});
 
+		if (!this.pendingOwnerPromise) {
+			this.pendingOwnerPromise = getCurrentOwnerId().then((owner) => {
+				this.pendingOwner = owner;
+				return owner;
+			});
+		}
+
 		if (!this.syncTimer) {
 			this.syncTimer = setTimeout(() => {
 				this.flushImmediately();
@@ -40,8 +55,24 @@ class ProgressSyncService {
 		}
 	}
 
+	private async enqueue(updates: ProgressUpdate[], ownerUserId: string | null): Promise<void> {
+		try {
+			await db.syncQueue.add({
+				action: 'UPDATE_PROGRESS',
+				payload: updates,
+				timestamp: Date.now(),
+				ownerUserId
+			});
+			log.debug('Progress saved to offline syncQueue.');
+		} catch (err) {
+			log.warn('Failed to save progress to syncQueue:', err);
+		}
+	}
+
 	/**
 	 * Flushes pending progress immediately to the server or offline queue.
+	 * If the current owner differs from the owner at record time, the update is
+	 * queued under the original owner instead of being sent under a new session.
 	 */
 	async flushImmediately() {
 		if (this.syncTimer) {
@@ -52,19 +83,16 @@ class ProgressSyncService {
 		if (this.pendingUpdates.size === 0) return;
 
 		const updates = Array.from(this.pendingUpdates.values());
+		const recordedOwner = await (this.pendingOwnerPromise ?? Promise.resolve(null));
 		this.pendingUpdates.clear();
+		this.pendingOwnerPromise = null;
+		this.pendingOwner = null;
 
-		if (typeof navigator !== 'undefined' && !navigator.onLine) {
-			try {
-				await db.syncQueue.add({
-					action: 'UPDATE_PROGRESS',
-					payload: updates,
-					timestamp: Date.now()
-				});
-				log.debug('Progress saved to offline syncQueue.');
-			} catch (err) {
-				log.warn('Failed to save progress to syncQueue:', err);
-			}
+		const currentOwner = await getCurrentOwnerId();
+		const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
+
+		if (!isOnline || recordedOwner !== currentOwner) {
+			await this.enqueue(updates, recordedOwner);
 			return;
 		}
 
@@ -75,41 +103,30 @@ class ProgressSyncService {
 				body: JSON.stringify({ progressUpdates: updates })
 			});
 
-			if (!res.ok && res.status !== 401) {
-				await db.syncQueue.add({
-					action: 'UPDATE_PROGRESS',
-					payload: updates,
-					timestamp: Date.now()
-				});
-			} else if (res.ok) {
+			if (!res.ok) {
+				await this.enqueue(updates, recordedOwner);
+			} else {
 				log.debug(`Synced progress for ${updates.length} chapters.`);
 			}
 		} catch (err) {
 			log.warn('Failed to send progress to server, enqueuing offline:', err);
-			await db.syncQueue
-				.add({
-					action: 'UPDATE_PROGRESS',
-					payload: updates,
-					timestamp: Date.now()
-				})
-				.catch(() => {});
+			await this.enqueue(updates, recordedOwner);
 		}
 	}
 
 	/**
-	 * Flushes enqueued offline progress updates when connectivity returns.
+	 * Flushes enqueued offline progress updates for the current owner.
 	 */
 	async flushOfflineQueue() {
 		try {
-			const queuedItems = await db.syncQueue.where('action').equals('UPDATE_PROGRESS').toArray();
+			const ownerUserId = await getCurrentOwnerId();
+			const queuedItems = (
+				await db.syncQueue.where('action').equals('UPDATE_PROGRESS').toArray()
+			).filter((item) => (item.ownerUserId ?? null) === ownerUserId);
 			if (queuedItems.length === 0) return;
 
 			for (const item of queuedItems) {
-				const updates = item.payload as Array<{
-					chapterId: string;
-					progressSeconds: number;
-					isCompleted: boolean;
-				}>;
+				const updates = item.payload as ProgressUpdate[];
 				const res = await fetch('/api/user/sync', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -124,6 +141,44 @@ class ProgressSyncService {
 		} catch (err) {
 			log.warn('Failed to flush offline progress queue:', err);
 		}
+	}
+
+	/**
+	 * Deletes server progress and the local queue for the current owner.
+	 * Guest/expired sessions fall back to clearing only local progress.
+	 */
+	async clearAllProgress(): Promise<boolean> {
+		try {
+			const ownerUserId = await getCurrentOwnerId();
+			const res = await fetch('/api/user/progress/clear', { method: 'POST' });
+			if (!res.ok && res.status !== 401) return false;
+
+			await db.progress.clear();
+			const queued = (
+				await db.syncQueue.where('action').equals('UPDATE_PROGRESS').toArray()
+			).filter((item) => (item.ownerUserId ?? null) === ownerUserId);
+			const ids = queued.map((item) => item.id).filter((id): id is number => id !== undefined);
+			if (ids.length > 0) await db.syncQueue.bulkDelete(ids);
+			this.clearPending();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** Drops in-memory progress so logout cannot write it under the next session. */
+	clearPending() {
+		if (this.syncTimer) {
+			clearTimeout(this.syncTimer);
+			this.syncTimer = null;
+		}
+		this.pendingUpdates.clear();
+		this.pendingOwner = null;
+		this.pendingOwnerPromise = null;
+	}
+
+	get pendingOwnerUserId(): string | null {
+		return this.pendingOwner;
 	}
 }
 

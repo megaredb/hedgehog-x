@@ -145,8 +145,9 @@
 		try {
 			const result = await performManualSync();
 			if (result.success) {
-				if (result.syncedLikes > 0) {
-					showToast(`Синхронизировано ${result.syncedLikes} действий`);
+				const syncedCount = result.syncedLikes + result.syncedBookmarks;
+				if (syncedCount > 0) {
+					showToast(`Синхронизировано ${syncedCount} действий`);
 				} else {
 					showToast('Все данные уже синхронизированы с сервером');
 				}

@@ -20,9 +20,7 @@ const DISCORD_OAUTH_URL = 'https://discord.com/api/oauth2/authorize';
 test.describe('Авторизация через внешние провайдеры', () => {
 	test.beforeEach(async ({ page }) => {
 		// Закрываем приветственное модальное окно, чтобы не перехватывало клики
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
+		await page.addInitScript(() => {});
 	});
 
 	test('страница /auth показывает кнопки входа через Telegram и Discord', async ({ page }) => {
@@ -41,6 +39,16 @@ test.describe('Авторизация через внешние провайде
 					url: `${TELEGRAM_OAUTH_URL}?response_type=code&client_id=8204202555&scope=openid+profile&redirect_uri=${encodeURIComponent('http://localhost:4173/api/auth/callback/telegram-oidc')}`,
 					redirect: true
 				})
+			});
+		});
+
+		// The browser still navigates to the provider URL, but the page itself is
+		// fulfilled locally so the test never depends on external DNS/network.
+		await page.route('https://oauth.telegram.org/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html',
+				body: '<html><body>Telegram OAuth</body></html>'
 			});
 		});
 
@@ -64,16 +72,27 @@ test.describe('Авторизация через внешние провайде
 			});
 		});
 
+		await page.route('https://discord.com/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html',
+				body: '<html><body>Discord OAuth</body></html>'
+			});
+		});
+
 		await page.goto('/auth');
 		await page.getByRole('button', { name: 'Войти через Discord' }).click();
 
 		// Discord сам редиректит на https://discord.com/oauth2/authorize (без /api)
-		await expect(page).toHaveURL(/discord\.com\/oauth2\/authorize/);
+		await expect(page).toHaveURL(/discord\.com\/(?:api\/)?oauth2\/authorize/);
 	});
 
 	test('при залогиненном пользователе шапка показывает имя и есть кнопка выхода', async ({
 		page
 	}) => {
+		const pageErrors: Error[] = [];
+		page.on('pageerror', (error) => pageErrors.push(error));
+
 		const mockUser = {
 			id: 'mock-user-1',
 			name: 'Еж Тестовый',
@@ -105,6 +124,9 @@ test.describe('Авторизация через внешние провайде
 		// Имя пользователя видно на странице /auth (в профильном блоке) и в шапке
 		await expect(page.getByRole('main').getByText('Еж Тестовый')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+		// Regression: syncState used to read and write the same session state in
+		// an $effect, producing effect_update_depth_exceeded after login.
+		expect(pageErrors).toEqual([]);
 	});
 
 	test('при ошибке авторизации (отмена у провайдера) показывается модалка', async ({ page }) => {

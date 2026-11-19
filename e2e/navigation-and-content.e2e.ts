@@ -2,9 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Навигация и новые разделы сайта (PWA)', () => {
 	test.beforeEach(async ({ page }) => {
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
+		await page.addInitScript(() => {});
 	});
 
 	test('страница /community отображает социальные сети и преимущества', async ({ page }) => {

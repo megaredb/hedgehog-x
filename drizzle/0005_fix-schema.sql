@@ -1,5 +1,4 @@
-ALTER TABLE "account" DROP COLUMN "telegram_id";--> statement-breakpoint
-ALTER TABLE "account" DROP COLUMN "telegram_username";--> statement-breakpoint
-ALTER TABLE "user" DROP COLUMN "telegram_id";--> statement-breakpoint
-ALTER TABLE "user" DROP COLUMN "telegram_phone_number";--> statement-breakpoint
-ALTER TABLE "user" DROP COLUMN "telegram_username";
+-- 0005_fix-schema: no-op.
+-- The legacy telegram columns were already removed by 0004_add-provider-avatars.
+-- Repeating the DROP COLUMN statements made a clean `drizzle-kit migrate` fail.
+-- Keep the journal entry so existing migration history stays stable.

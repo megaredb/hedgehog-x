@@ -77,9 +77,17 @@ export function validateListenSession(input: unknown): {
 	let startedAt = new Date();
 	if (data.startedAt) {
 		const parsed = new Date(data.startedAt);
-		if (!isNaN(parsed.getTime())) {
-			startedAt = parsed;
+		if (isNaN(parsed.getTime())) {
+			return { valid: false, error: 'Invalid startedAt' };
 		}
+		startedAt = parsed;
+	}
+
+	const now = Date.now();
+	const startedMs = startedAt.getTime();
+	const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
+	if (startedMs < now - maxAgeMs || startedMs > now + 5 * 60 * 1000) {
+		return { valid: false, error: 'startedAt is outside the accepted time window' };
 	}
 
 	return {

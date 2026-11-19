@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { db } from '$lib/client/db';
+	import { db, type OfflineBook, type OfflineVolume } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { OpenGraphMeta } from '$lib/components/seo';
 	import { LayoutGrid, List as ListIcon } from '@lucide/svelte';
@@ -21,15 +21,24 @@
 		() => [data.bookId]
 	);
 
-	const ogTitle = $derived(
-		bookQuery.data?.title ? `${bookQuery.data.title} | Тома` : 'Книга | Тома'
+	const serverData = $derived(
+		data as typeof data & {
+			book?: OfflineBook;
+			volumes?: OfflineVolume[];
+		}
 	);
+	const book = $derived(bookQuery.data ?? serverData.book);
+	const volumes = $derived(
+		volumesQuery.data.length > 0 ? volumesQuery.data : (serverData.volumes ?? [])
+	);
+
+	const ogTitle = $derived(book?.title ? `${book.title} | Тома` : 'Книга | Тома');
 </script>
 
 <OpenGraphMeta
 	title={ogTitle}
-	description={bookQuery.data?.description || 'Список томов аудиокниги на Hedgehog X'}
-	image={bookQuery.data?.coverUrl}
+	description={book?.description || 'Список томов аудиокниги на Hedgehog X'}
+	image={book?.coverUrl}
 	type="book"
 />
 
@@ -37,7 +46,7 @@
 	<div class="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 		<div>
 			<h1 class="text-4xl font-extrabold tracking-tight">
-				{bookQuery.data?.title || 'Загрузка...'}
+				{book?.title || 'Загрузка...'}
 			</h1>
 			<p class="mt-2 text-muted-foreground">Список томов</p>
 		</div>
@@ -67,7 +76,7 @@
 		</div>
 	</div>
 
-	{#if volumesQuery.data.length === 0}
+	{#if volumes.length === 0}
 		<div class="rounded-2xl border-2 border-dashed border-border/50 bg-muted/30 p-8 text-center">
 			<p class="text-lg text-muted-foreground">Тома не найдены или загружаются...</p>
 		</div>
@@ -77,7 +86,7 @@
 				? 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5'
 				: 'flex flex-col gap-4'}
 		>
-			{#each volumesQuery.data as volume (volume.id)}
+			{#each volumes as volume (volume.id)}
 				<a
 					href={resolve(`/books/${data.bookId}/${volume.id}`)}
 					class="group flex {viewMode === 'grid'

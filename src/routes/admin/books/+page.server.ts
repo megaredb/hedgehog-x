@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { books } from '$lib/server/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadImage } from '$lib/server/storage/r2';
+import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -103,6 +103,12 @@ export const actions: Actions = {
 			return fail(400, { error: 'ID и Название обязательны' });
 		}
 
+		const [old] = await db
+			.select({ coverUrl: books.coverUrl })
+			.from(books)
+			.where(eq(books.id, id))
+			.limit(1);
+
 		const coverFile = form.get('coverFile');
 		if (coverFile && coverFile instanceof File && coverFile.size > 0) {
 			try {
@@ -145,6 +151,9 @@ export const actions: Actions = {
 			}
 
 			await db.update(books).set(updateData).where(eq(books.id, id));
+			if (coverFile && old?.coverUrl && old.coverUrl !== coverUrl) {
+				await deleteFromStorage(old.coverUrl);
+			}
 			return { success: true };
 		} catch (e) {
 			return fail(500, {
@@ -163,7 +172,13 @@ export const actions: Actions = {
 		}
 
 		try {
+			const [old] = await db
+				.select({ coverUrl: books.coverUrl })
+				.from(books)
+				.where(eq(books.id, id))
+				.limit(1);
 			await db.delete(books).where(eq(books.id, id));
+			if (old?.coverUrl) await deleteFromStorage(old.coverUrl);
 			return { success: true };
 		} catch (e) {
 			return fail(500, { error: `Ошибка удаления: ${e instanceof Error ? e.message : String(e)}` });
