@@ -10,6 +10,7 @@ import {
 	volumes
 } from '$lib/server/db/schema';
 import { createLogger } from '$lib/logger';
+import { boundedText as text, timestampSeconds as time } from '$lib/utils/validation';
 import type { RequestHandler } from './$types';
 
 const log = createLogger('UserSyncAPI');
@@ -32,18 +33,6 @@ function allowRequest(key: string): boolean {
 	if (bucket.count >= RATE_LIMIT) return false;
 	bucket.count++;
 	return true;
-}
-
-function text(value: unknown, max = 128): string | null {
-	if (typeof value !== 'string') return null;
-	const result = value.trim();
-	return result.length > 0 && result.length <= max ? result : null;
-}
-
-function time(value: unknown): number | null {
-	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 86_400)
-		return null;
-	return Math.floor(value);
 }
 
 export const GET: RequestHandler = async ({ locals }) => {

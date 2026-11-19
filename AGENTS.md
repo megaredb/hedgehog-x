@@ -56,7 +56,7 @@ pnpm preview             # preview собранного приложения
 pnpm check               # svelte-check + sync — проходит
 pnpm lint                # prettier --check . && eslint . — проходит
 pnpm format              # prettier --write .
-pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 187 тестов, зелёные
+pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 173 тестов, зелёные
 pnpm test:e2e            # playwright install && playwright test — требует env, см. ниже
 pnpm test:docker         # docker compose -f compose.test.yml up --build ...
 pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
