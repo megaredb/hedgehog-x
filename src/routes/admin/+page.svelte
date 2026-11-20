@@ -25,6 +25,7 @@
 		{
 			label: 'Книг в каталоге',
 			count: data.counts.books,
+			subtext: 'Всего в библиотеке',
 			icon: BookOpen,
 			href: '/admin/books',
 			color: 'text-blue-500'
@@ -32,6 +33,7 @@
 		{
 			label: 'Томов',
 			count: data.counts.volumes,
+			subtext: 'Во всех сериях',
 			icon: Layers,
 			href: '/admin/volumes',
 			color: 'text-amber-500'
@@ -39,6 +41,7 @@
 		{
 			label: 'Аудио глав',
 			count: data.counts.chapters,
+			subtext: 'Доступно для прослушивания',
 			icon: Disc3,
 			href: '/admin/chapters',
 			color: 'text-purple-500'
@@ -46,6 +49,7 @@
 		{
 			label: 'Иллюстраций',
 			count: data.counts.illustrations,
+			subtext: 'Загружено в хранилище',
 			icon: ImageIcon,
 			href: '/admin/illustrations',
 			color: 'text-emerald-500'
@@ -53,6 +57,7 @@
 		{
 			label: 'Слушателей',
 			count: data.counts.users,
+			subtext: 'Зарегистрировано',
 			icon: Users,
 			href: '/admin/users',
 			color: 'text-rose-500'
@@ -70,7 +75,7 @@
 	</div>
 
 	<!-- Stats Grid -->
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+	<div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
 		{#each stats as stat (stat.label)}
 			{@const Icon = stat.icon}
 			<Button
@@ -78,15 +83,16 @@
 				variant="ghost"
 				class="block h-auto w-full min-w-0 p-0 text-left hover:bg-transparent"
 			>
-				<Card class="w-full border-border/50 transition hover:border-primary/40">
-					<CardContent class="flex h-24 items-center justify-between gap-3 p-4 sm:p-5">
-						<div class="min-w-0">
+				<Card class="h-full border-border/50 transition hover:border-primary/40">
+					<CardContent class="p-4 sm:p-5">
+						<div class="flex items-center justify-between gap-2">
 							<p class="truncate text-xs font-medium text-muted-foreground">{stat.label}</p>
-							<p class="mt-1 text-2xl font-bold tracking-tight">{stat.count}</p>
+							<div class="shrink-0 rounded-xl bg-muted/60 p-2 {stat.color}">
+								<Icon class="h-4 w-4" />
+							</div>
 						</div>
-						<div class="shrink-0 rounded-xl bg-muted/60 p-2 {stat.color}">
-							<Icon class="h-5 w-5" />
-						</div>
+						<p class="mt-2 text-2xl font-bold tracking-tight">{stat.count}</p>
+						<p class="mt-1 truncate text-xs text-muted-foreground">{stat.subtext}</p>
 					</CardContent>
 				</Card>
 			</Button>

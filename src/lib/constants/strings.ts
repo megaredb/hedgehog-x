@@ -87,6 +87,7 @@ export const strings = {
 	},
 	volume: {
 		chaptersTab: 'Главы',
+		bookmarksTab: 'Закладки',
 		illustrationsTab: 'Иллюстрации',
 		commentsTab: 'Обсуждение',
 		volumeCompletedTitle: 'Том завершен',
