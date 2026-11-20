@@ -76,10 +76,10 @@
 			<Button
 				href={stat.href}
 				variant="ghost"
-				class="block h-full w-full min-w-0 p-0 text-left hover:bg-transparent"
+				class="block h-auto w-full min-w-0 p-0 text-left hover:bg-transparent"
 			>
-				<Card class="h-full w-full border-border/50 transition hover:border-primary/40">
-					<CardContent class="flex min-h-24 items-center justify-between gap-3 p-4 sm:p-5">
+				<Card class="w-full border-border/50 transition hover:border-primary/40">
+					<CardContent class="flex h-24 items-center justify-between gap-3 p-4 sm:p-5">
 						<div class="min-w-0">
 							<p class="truncate text-xs font-medium text-muted-foreground">{stat.label}</p>
 							<p class="mt-1 text-2xl font-bold tracking-tight">{stat.count}</p>

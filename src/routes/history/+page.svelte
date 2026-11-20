@@ -19,6 +19,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { strings } from '$lib/constants/strings';
 	import { History, Play, Trash2, BookOpen, CheckCircle2, Clock } from '@lucide/svelte';
+	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedHistoryItem extends OfflineProgress {
 		chapter?: OfflineChapter;
@@ -70,16 +71,6 @@
 	const paginatedHistory = $derived(
 		historyQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
-
-	function formatTime(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-		}
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 
 	function formatRelativeTime(timestamp: number): string {
 		if (!timestamp) return '';
@@ -296,8 +287,8 @@
 							<div class="w-full space-y-1 pt-0.5">
 								<Progress value={progressPct} class="h-1.5 w-full" />
 								<div class="text-xxs flex w-full justify-between text-muted-foreground">
-									<span>{formatTime(item.progressSeconds)}</span>
-									<span>{formatTime(duration)}</span>
+									<span>{formatDuration(item.progressSeconds)}</span>
+									<span>{formatDuration(duration)}</span>
 								</div>
 							</div>
 						</div>

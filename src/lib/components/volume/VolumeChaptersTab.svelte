@@ -105,7 +105,7 @@
 	function seekAtClientX(clientX: number, row: HTMLElement, chapter: OfflineChapter) {
 		const rect = row.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-		const targetSeconds = ratio * (chapter.durationSeconds || audioStore.duration || 0);
+		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
 		audioStore.seek(targetSeconds);
 	}
 
@@ -147,7 +147,7 @@
 		const clickX = e.clientX - rect.left;
 		const ratio = Math.max(0, Math.min(1, clickX / rect.width));
 
-		const targetSeconds = ratio * (chapter.durationSeconds || audioStore.duration || 0);
+		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
 		audioStore.seek(targetSeconds);
 	}
 
@@ -189,9 +189,12 @@
 				{@const currentTrackTime = isCurrent
 					? audioStore.currentTime
 					: (saved?.progressSeconds ?? 0)}
+				{@const effectiveDuration = isCurrent
+					? audioStore.duration || chapter.durationSeconds
+					: chapter.durationSeconds}
 				{@const progressPercent =
-					chapter.durationSeconds > 0
-						? Math.min(100, Math.max(0, (currentTrackTime / chapter.durationSeconds) * 100))
+					effectiveDuration > 0
+						? Math.min(100, Math.max(0, (currentTrackTime / effectiveDuration) * 100))
 						: 0}
 
 				<li class="relative">
@@ -260,9 +263,7 @@
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									{#if isCurrent}
 										<span class="font-mono font-semibold text-primary">
-											{formatDuration(audioStore.currentTime)} / {formatDuration(
-												chapter.durationSeconds
-											)}
+											{formatDuration(audioStore.currentTime)} / {formatDuration(effectiveDuration)}
 										</span>
 									{:else if saved?.isCompleted}
 										<span

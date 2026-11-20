@@ -17,6 +17,7 @@
 	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { strings } from '$lib/constants/strings';
 	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
+	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedBookmark extends OfflineBookmark {
 		chapter?: OfflineChapter;
@@ -60,16 +61,6 @@
 	const paginatedBookmarks = $derived(
 		bookmarksQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
-
-	function formatTime(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-		}
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 
 	function formatDate(timestamp: number): string {
 		if (!timestamp) return '';
@@ -200,7 +191,7 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatTime(item.timestampSeconds)}</span>
+										<span>{formatDuration(item.timestampSeconds)}</span>
 									</span>
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">

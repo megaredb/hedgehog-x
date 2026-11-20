@@ -11,6 +11,7 @@
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { strings } from '$lib/constants/strings';
 	import { cn } from '$lib/utils';
+	import { formatDuration } from '$lib/utils/time';
 	import { Bookmark as BookmarkIcon, RotateCcw, X } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 
@@ -19,12 +20,6 @@
 	let bookmarkNote = $state('');
 	let isSavingBookmark = $state(false);
 	let isBookmarkSaved = $state(false);
-
-	function formatTime(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 
 	function openBookmarkModal() {
 		if (!audioStore.currentTrack) return;
@@ -152,7 +147,7 @@
 			>
 				<RotateCcw class="h-3.5 w-3.5 text-primary" />
 				<span class="text-muted-foreground"
-					>{strings.player.undoSeekTo} {formatTime(audioStore.lastSeekFrom)}</span
+					>{strings.player.undoSeekTo} {formatDuration(audioStore.lastSeekFrom)}</span
 				>
 				<button
 					type="button"
@@ -339,7 +334,7 @@
 					</p>
 				</div>
 				<span class="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-					{formatTime(audioStore.currentTime)}
+					{formatDuration(audioStore.currentTime)}
 				</span>
 			</div>
 			<div class="space-y-1.5">
