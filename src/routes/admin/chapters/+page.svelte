@@ -9,6 +9,7 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { formatDuration } from '$lib/utils/time';
 	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -43,12 +44,6 @@
 	const paginatedChapters = $derived(
 		data.chapters.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
-
-	function formatDuration(sec: number): string {
-		const m = Math.floor(sec / 60);
-		const s = Math.floor(sec % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 </script>
 
 <div class="space-y-8">

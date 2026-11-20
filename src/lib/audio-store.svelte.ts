@@ -100,8 +100,6 @@ class AudioStore {
 			if (d.volume !== undefined) this.volume = d.volume;
 			if (d.isMuted !== undefined) this.isMuted = d.isMuted;
 			if (isValidPlaybackRate(d.playbackRate)) this.playbackRate = d.playbackRate;
-			if (d.repeatMode !== undefined) this.repeatMode = d.repeatMode;
-			if (d.shuffleEnabled !== undefined) this.shuffleEnabled = d.shuffleEnabled;
 			if (d.currentTime !== undefined) this.currentTime = d.currentTime;
 			if (d.currentQueueIndex !== undefined) this.currentQueueIndex = d.currentQueueIndex;
 		} catch {
@@ -133,8 +131,6 @@ class AudioStore {
 					volume: this.volume,
 					isMuted: this.isMuted,
 					playbackRate: this.playbackRate,
-					repeatMode: this.repeatMode,
-					shuffleEnabled: this.shuffleEnabled,
 					currentTime: this.currentTime,
 					currentQueueIndex: this.currentQueueIndex
 				})

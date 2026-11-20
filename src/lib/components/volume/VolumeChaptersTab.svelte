@@ -12,6 +12,7 @@
 	import { likeService } from '$lib/client/services/likeService';
 	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
+	import { formatDuration } from '$lib/utils/time';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -72,12 +73,7 @@
 
 	let selectedChapterForComments = $state<OfflineChapter | null>(null);
 	let isCommentsDrawerOpen = $state(false);
-
-	function formatDuration(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
+	let seekingChapterId = $state<string | null>(null);
 
 	async function handlePlayChapter(chapter: OfflineChapter, index: number) {
 		if (audioStore.currentTrack?.id === chapter.id) {
@@ -104,6 +100,37 @@
 		}));
 
 		audioStore.setQueueAndPlay(tracks, index);
+	}
+
+	function seekAtClientX(clientX: number, row: HTMLElement, chapter: OfflineChapter) {
+		const rect = row.getBoundingClientRect();
+		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+		const targetSeconds = ratio * (chapter.durationSeconds || audioStore.duration || 0);
+		audioStore.seek(targetSeconds);
+	}
+
+	function handleChapterPointerDown(e: PointerEvent, chapter: OfflineChapter) {
+		if (e.button !== 0) return;
+		const target = e.target as HTMLElement;
+		if (target.closest('button, a, input, textarea, select')) return;
+		if (audioStore.currentTrack?.id !== chapter.id) return;
+
+		e.preventDefault();
+		seekingChapterId = chapter.id;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		seekAtClientX(e.clientX, e.currentTarget as HTMLElement, chapter);
+	}
+
+	function handleChapterPointerMove(e: PointerEvent, chapter: OfflineChapter) {
+		if (seekingChapterId !== chapter.id) return;
+		seekAtClientX(e.clientX, e.currentTarget as HTMLElement, chapter);
+	}
+
+	function handleChapterPointerUp(e: PointerEvent, chapter: OfflineChapter) {
+		if (seekingChapterId !== chapter.id) return;
+		seekingChapterId = null;
+		const row = e.currentTarget as HTMLElement;
+		if (row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
 	}
 
 	function handleChapterRowClick(e: MouseEvent, chapter: OfflineChapter, index: number) {
@@ -172,13 +199,17 @@
 						role="button"
 						tabindex="0"
 						onclick={(e) => handleChapterRowClick(e, chapter, index)}
+						onpointerdown={(e) => handleChapterPointerDown(e, chapter)}
+						onpointermove={(e) => handleChapterPointerMove(e, chapter)}
+						onpointerup={(e) => handleChapterPointerUp(e, chapter)}
+						onpointercancel={(e) => handleChapterPointerUp(e, chapter)}
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
 								handlePlayChapter(chapter, index);
 							}
 						}}
-						class="group relative flex cursor-pointer items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
+						class="group relative flex cursor-pointer touch-pan-y items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
 							? 'bg-primary/5'
 							: 'hover:bg-muted/30'}"
 					>

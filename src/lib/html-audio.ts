@@ -421,11 +421,4 @@ class HtmlAudio {
 
 export const htmlAudio = new HtmlAudio();
 
-const MINUTE_IN_SECONDS = 60;
-
-export function formatDuration(seconds: number): string {
-	if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-	const minutes = Math.floor(seconds / MINUTE_IN_SECONDS);
-	const remainingSeconds = Math.floor(seconds % MINUTE_IN_SECONDS);
-	return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-}
+export { formatDuration } from '$lib/utils/time';

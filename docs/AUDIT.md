@@ -40,7 +40,7 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 **P2/P3, реализовано 2026-11-19:** SSR-каталог и поиск; sync API с лимитами,
 валидацией и транзакциями; плеер (Space/repeat/sleep/seek/OPFS); CSP, SW-кэши и
 PWA; пагинация и confirm-модалки админки; роли пользователей; a11y-фокус и
-keyboard; metrics endpoint; 196 unit и 46 e2e; чистка мёртвого кода и словаря.
+keyboard; metrics endpoint; 197 unit и 46 e2e; чистка мёртвого кода и словаря.
 
 ## 2. Проверочная база
 
@@ -60,7 +60,7 @@ keyboard; metrics endpoint; 196 unit и 46 e2e; чистка мёртвого к
 | Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                          |
 | Prettier           | prettier --check .                                        | OK                                                        |
 | ESLint             | eslint .                                                  | OK                                                        |
-| Unit               | node --import tsx --test "src/**/*.test.ts"               | 196 tests, 0 fail                                         |
+| Unit               | node --import tsx --test "src/**/*.test.ts"               | 197 tests, 0 fail                                         |
 | E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                              |
 | E2E full, 1 worker | playwright test --workers=1                               | ✅ 46/46 (сеть для OAuth-редиректов всё ещё нужна)        |
 | Sync safety e2e    | e2e/sync-data-safety.e2e.ts                               | ✅ 9/9 (guest, offline, owner, switch, consent)           |
