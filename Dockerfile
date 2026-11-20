@@ -2,7 +2,7 @@
 # Build: docker build -t hedgehog-x:prod .
 # Runtime contains only production dependencies and the built server.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 RUN npm install -g pnpm@11.7.0
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY . .
 RUN node ./node_modules/@sveltejs/kit/svelte-kit.js sync \
  && node ./node_modules/vite/bin/vite.js build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 RUN npm install -g pnpm@11.7.0
 WORKDIR /app
 
