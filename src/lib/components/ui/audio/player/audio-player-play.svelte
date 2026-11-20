@@ -34,7 +34,17 @@
 		if (spaceHandlerInstalled) return;
 		spaceHandlerInstalled = true;
 		function onKeyDown(e: KeyboardEvent) {
-			if (e.code === 'Space' && e.target === document.body) {
+			const target = e.target as HTMLElement | null;
+			if (
+				e.code === 'Space' &&
+				!e.ctrlKey &&
+				!e.metaKey &&
+				!e.altKey &&
+				(!target ||
+					!target.closest(
+						'input, textarea, select, button, a, [contenteditable="true"], [role="button"], [role="slider"]'
+					))
+			) {
 				e.preventDefault();
 				audioStore.togglePlay();
 			}

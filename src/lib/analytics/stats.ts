@@ -100,16 +100,20 @@ export function validateListenSession(input: unknown): {
 		startedAt = parsed;
 	}
 
-	const dateKey =
-		typeof data.dateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.dateKey)
-			? data.dateKey
-			: formatDateKey(startedAt);
-
 	const now = Date.now();
 	const startedMs = startedAt.getTime();
 	const maxAgeMs = 30 * 24 * 60 * 60 * 1000;
 	if (startedMs < now - maxAgeMs || startedMs > now + 5 * 60 * 1000) {
 		return { valid: false, error: 'startedAt is outside the accepted time window' };
+	}
+
+	let dateKey = formatDateKey(startedAt);
+	if (typeof data.dateKey === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.dateKey)) {
+		const parsedKeyMs = Date.parse(`${data.dateKey}T12:00:00Z`);
+		const oneDayMs = 36 * 60 * 60 * 1000;
+		if (Number.isFinite(parsedKeyMs) && Math.abs(parsedKeyMs - startedMs) <= oneDayMs) {
+			dateKey = data.dateKey;
+		}
 	}
 
 	return {

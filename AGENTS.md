@@ -1,4 +1,4 @@
-# AGENTS.md — Hedgehog X (аудиокниги, SvelteKit PWA)
+Е# AGENTS.md — Hedgehog X (аудиокниги, SvelteKit PWA)
 
 > Это основной входной документ для ИИ-агентов и разработчиков.
 > Он намеренно короткий: детали — в `docs/`. Читай его целиком перед первой правкой.
@@ -43,7 +43,7 @@
 - **Dexie 4** (IndexedDB) + **OPFS** для офлайн-аудио; `CacheStorage` для legacy/страниц.
 - **PWA**: `vite-plugin-pwa` (`injectManifest`), свой service worker.
 - **Тесты**: `node:test` + `tsx` (unit), Playwright (e2e).
-- **Пакетный менеджер**: pnpm 11.7.0 (`packageManager`, Node 24 в `engines`).
+- **Пакетный менеджер**: pnpm 11.7.0 (`packageManager`, Node 26 в `engines`).
 - **Хранилище**: Cloudflare R2 (S3 API) с локальным fallback в `static/uploads`.
 - **Аналитика**: собственные `listening_sessions` / `daily_listening_stats` + Umami (опционально).
 

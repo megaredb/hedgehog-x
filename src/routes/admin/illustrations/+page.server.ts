@@ -3,7 +3,12 @@ import { books, volumes, illustrations } from '$lib/server/db/schema';
 import { eq, desc, asc, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
 import { clampPage, pageCount } from '$lib/utils/pagination';
-import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
+import {
+	deleteFromStorage,
+	MAX_IMAGE_BYTES,
+	StorageValidationError,
+	uploadImage
+} from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -116,18 +121,24 @@ export const actions: Actions = {
 
 		const id = `ill_${volumeId}_${randomUUID().slice(0, 8)}`;
 
+		let uploadedUrl: string | null = null;
 		const imageFile = form.get('imageFile');
 		if (imageFile && imageFile instanceof File && imageFile.size > 0) {
+			if (imageFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер изображения не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await imageFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, {
 					folder: 'illustrations',
 					filenamePrefix: volumeId
 				});
+				uploadedUrl = uploaded.url;
 				imageUrl = uploaded.url;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки изображения: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -148,6 +159,7 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Ошибка базы данных: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -175,18 +187,24 @@ export const actions: Actions = {
 			.where(eq(illustrations.id, id))
 			.limit(1);
 
+		let uploadedUrl: string | null = null;
 		const imageFile = form.get('imageFile');
 		if (imageFile && imageFile instanceof File && imageFile.size > 0) {
+			if (imageFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер изображения не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await imageFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, {
 					folder: 'illustrations',
 					filenamePrefix: volumeId
 				});
+				uploadedUrl = uploaded.url;
 				imageUrl = uploaded.url;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки изображения: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -213,11 +231,12 @@ export const actions: Actions = {
 			}
 
 			await db.update(illustrations).set(updateData).where(eq(illustrations.id, id));
-			if (imageFile && old?.imageUrl && old.imageUrl !== imageUrl) {
+			if (updateData.imageUrl && old?.imageUrl && old.imageUrl !== updateData.imageUrl) {
 				await deleteFromStorage(old.imageUrl);
 			}
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Ошибка обновления иллюстрации: ${e instanceof Error ? e.message : String(e)}`
 			});

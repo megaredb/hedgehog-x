@@ -73,6 +73,12 @@
 
 	async function handlePlayBookmark(item: EnrichedBookmark) {
 		if (!item.chapter) return;
+		if (audioStore.currentTrack?.id === item.chapterId) {
+			audioStore.seek(item.timestampSeconds);
+			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
 		const volumeId = item.chapter.volumeId;
 		const allChapters = await db.chapters
 			.where('volumeId')

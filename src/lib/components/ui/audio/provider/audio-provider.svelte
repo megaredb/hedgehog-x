@@ -535,8 +535,6 @@
 			audioStore.volume,
 			audioStore.isMuted,
 			audioStore.playbackRate,
-			audioStore.repeatMode,
-			audioStore.shuffleEnabled,
 			audioStore.currentQueueIndex
 		];
 		audioStore.saveToStorage();

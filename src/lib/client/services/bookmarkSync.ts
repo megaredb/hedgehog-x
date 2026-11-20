@@ -6,6 +6,7 @@ import { createLogger } from '$lib/logger';
 const log = createLogger('Bookmarks');
 
 const BOOKMARK_ACTIONS = ['ADD_BOOKMARK', 'REMOVE_BOOKMARK'] as const;
+const MAX_SYNC_BATCH = 100;
 
 type BookmarkUpdate =
 	| {
@@ -75,27 +76,41 @@ async function flush(fetchFn: typeof fetch): Promise<number> {
 		return 0;
 	}
 
-	let res: Response;
-	try {
-		res = await fetchFn('/api/user/sync', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ bookmarkUpdates: updates })
-		});
-	} catch (e) {
-		log.info('Bookmark sync postponed (offline).', e);
-		return 0;
+	let synced = 0;
+	for (let i = 0; i < updates.length; i += MAX_SYNC_BATCH) {
+		const chunk = updates.slice(i, i + MAX_SYNC_BATCH);
+		const chunkIds = processedIds.slice(i, i + MAX_SYNC_BATCH);
+
+		let res: Response;
+		try {
+			res = await fetchFn('/api/user/sync', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ bookmarkUpdates: chunk })
+			});
+		} catch (e) {
+			log.info('Bookmark sync postponed (offline).', e);
+			break;
+		}
+
+		if (!res.ok) {
+			if (res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 429) {
+				log.warn('Dropping invalid bookmark batch after HTTP ' + res.status + '.');
+				await db.syncQueue.bulkDelete(chunkIds);
+				continue;
+			}
+			// 401 for guests, 429, or 5xx: keep remaining chunks for retry.
+			log.info('Bookmark sync postponed (HTTP ' + res.status + ').');
+			break;
+		}
+
+		await db.syncQueue.bulkDelete(chunkIds);
+		synced += chunk.length;
 	}
 
-	if (!res.ok) {
-		// 401 for guests is expected; keep the queue for after login/adoption.
-		log.info('Bookmark sync postponed (HTTP ' + res.status + ').');
-		return 0;
-	}
-
-	await db.syncQueue.bulkDelete([...processedIds, ...invalidIds]);
-	log.info('Synchronized ' + updates.length + ' bookmark change(s).');
-	return updates.length;
+	if (invalidIds.length > 0) await db.syncQueue.bulkDelete(invalidIds);
+	if (synced > 0) log.info('Synchronized ' + synced + ' bookmark change(s).');
+	return synced;
 }
 
 /**

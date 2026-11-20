@@ -16,8 +16,17 @@ const env = dynamicPrivate.env;
 
 const log = createLogger('R2Storage');
 
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
-const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+
+const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.mp4', '.ogg', '.opus', '.wav', '.aac']);
+
+export class StorageValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'StorageValidationError';
+	}
+}
 
 function isProduction(): boolean {
 	return process.env.NODE_ENV === 'production';
@@ -103,10 +112,10 @@ export async function uploadImage(
 	options: { folder?: string; filenamePrefix?: string } = {}
 ): Promise<UploadImageResult> {
 	if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) {
-		throw new Error('Image must be between 1 byte and 15 MB');
+		throw new StorageValidationError('Image must be between 1 byte and 15 MB');
 	}
 	if (!isSupportedImage(buffer)) {
-		throw new Error('Unsupported image format (PNG, JPEG, WebP, GIF only)');
+		throw new StorageValidationError('Unsupported image format (PNG, JPEG, WebP, GIF only)');
 	}
 
 	const folder = options.folder ?? 'images';
@@ -198,15 +207,17 @@ export async function uploadAudio(
 	options: { originalFilename?: string; contentType?: string; folder?: string } = {}
 ): Promise<UploadAudioResult> {
 	if (buffer.length === 0 || buffer.length > MAX_AUDIO_BYTES) {
-		throw new Error('Audio must be between 1 byte and 500 MB');
+		throw new StorageValidationError('Audio must be between 1 byte and 500 MB');
 	}
 	if (!isSupportedAudio(buffer)) {
-		throw new Error('Unsupported audio format');
+		throw new StorageValidationError('Unsupported audio format');
 	}
 
 	const folder = options.folder ?? 'audio';
-	const ext = options.originalFilename ? path.extname(options.originalFilename) : '.mp3';
-	const safeExt = ext || '.mp3';
+	const rawExt = options.originalFilename
+		? path.extname(options.originalFilename).toLowerCase()
+		: '.mp3';
+	const safeExt = ALLOWED_AUDIO_EXTENSIONS.has(rawExt) ? rawExt : '.mp3';
 	const key = `${folder}/${randomUUID()}${safeExt}`;
 	const contentType = options.contentType || 'audio/mpeg';
 

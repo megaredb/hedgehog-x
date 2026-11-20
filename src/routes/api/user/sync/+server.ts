@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
 	chapterLikes,
 	volumeLikes,
@@ -106,7 +106,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	let body: Record<string, unknown>;
 	try {
-		const parsed = await request.json();
+		const rawBody = await request.text();
+		if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
+			return json({ error: 'Sync body is too large', maxBytes: MAX_BODY_BYTES }, { status: 413 });
+		}
+		const parsed = JSON.parse(rawBody);
 		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
 			return json({ error: 'Body must be a JSON object' }, { status: 400 });
 		}
@@ -230,27 +234,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				knownVolumeIds.has(item.volumeId)
 			);
 
-			const currentProgress = await tx
-				.select()
-				.from(listeningProgress)
-				.where(eq(listeningProgress.userId, user.id));
-			const progressMap = new Map(currentProgress.map((item) => [item.chapterId, item]));
 			for (const item of validProgress) {
-				const previous = progressMap.get(item.chapterId);
-				const seconds = Math.max(previous?.progressSeconds ?? 0, item.progressSeconds);
-				const completed = previous?.isCompleted || item.isCompleted;
 				await tx
 					.insert(listeningProgress)
 					.values({
 						userId: user.id,
 						chapterId: item.chapterId,
-						progressSeconds: seconds,
-						isCompleted: completed,
+						progressSeconds: item.progressSeconds,
+						isCompleted: item.isCompleted,
 						updatedAt: new Date()
 					})
 					.onConflictDoUpdate({
 						target: [listeningProgress.userId, listeningProgress.chapterId],
-						set: { progressSeconds: seconds, isCompleted: completed, updatedAt: new Date() }
+						set: {
+							progressSeconds: sql`GREATEST(${listeningProgress.progressSeconds}, ${item.progressSeconds})`,
+							isCompleted: sql`COALESCE(${listeningProgress.isCompleted}, false) OR ${item.isCompleted}`,
+							updatedAt: new Date()
+						}
 					});
 			}
 
@@ -270,8 +270,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						.update(bookmarks)
 						.set({
 							timestampSeconds: item.timestampSeconds,
-							note: item.note,
-							createdAt: new Date()
+							note: item.note
 						})
 						.where(and(eq(bookmarks.id, item.id), eq(bookmarks.userId, user.id)));
 				} else {

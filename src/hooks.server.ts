@@ -28,16 +28,10 @@ const uploadRate = new Map<string, { count: number; resetAt: number }>();
 function allowUpload(event: RequestEvent): boolean {
 	const now = Date.now();
 	let key = 'unknown';
-	// Behind Traefik the socket address is the proxy; use the forwarded client IP.
-	const forwarded = event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-	if (forwarded) {
-		key = forwarded;
-	} else {
-		try {
-			key = event.getClientAddress();
-		} catch {
-			// Keep the shared fallback bucket for non-HTTP test contexts.
-		}
+	try {
+		key = event.getClientAddress();
+	} catch {
+		// Keep the shared fallback bucket for non-HTTP test contexts.
 	}
 	const current = uploadRate.get(key);
 	if (!current || current.resetAt <= now) {
@@ -81,8 +75,8 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	}
 
 	const response = await svelteKitHandler({ event, resolve, auth, building });
-	// Baseline hardening; CSP is intentionally not enforced until the app's
-	// inline Umami/bootstrap requirements are moved behind a nonce.
+	// Baseline security headers; inline Umami/bootstrap scripts still require
+	// 'unsafe-inline' until moved behind a per-request nonce.
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

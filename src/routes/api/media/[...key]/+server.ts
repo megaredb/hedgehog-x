@@ -1,4 +1,5 @@
 import { error, type RequestHandler } from '@sveltejs/kit';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -62,10 +63,13 @@ async function cacheImage(key: string, bytes: Uint8Array): Promise<void> {
 	if (!/\.(?:webp|png|jpe?g)$/i.test(key)) return;
 	const target = cachePath(key);
 	if (!target) return;
+	const tmp = `${target}.${randomUUID()}.tmp`;
 	try {
 		await fsp.mkdir(path.dirname(target), { recursive: true });
-		await fsp.writeFile(target, bytes);
+		await fsp.writeFile(tmp, bytes);
+		await fsp.rename(tmp, target);
 	} catch {
+		await fsp.unlink(tmp).catch(() => {});
 		// Cache is best-effort; R2 remains the source of truth.
 	}
 }

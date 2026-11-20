@@ -4,6 +4,10 @@ import { handler } from './build/handler.js';
 
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '0.0.0.0';
+const shutdownTimeoutSec = Math.max(
+	1,
+	Number.parseInt(process.env.SHUTDOWN_TIMEOUT || '30', 10) || 30
+);
 const compress = compression({ threshold: 1024 });
 
 function cacheHeaders(req, res, next) {
@@ -16,8 +20,29 @@ function cacheHeaders(req, res, next) {
 	next();
 }
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
 	cacheHeaders(req, res, () => compress(req, res, () => handler(req, res)));
-}).listen(port, host, () => {
+});
+
+server.listen(port, host, () => {
 	console.log(`Listening on http://${host}:${port}`);
 });
+
+let shutdownTimer;
+function gracefulShutdown(reason) {
+	if (shutdownTimer) return;
+	server.closeIdleConnections?.();
+	server.close((error) => {
+		if (error) return;
+		if (shutdownTimer) clearTimeout(shutdownTimer);
+		process.emit('sveltekit:shutdown', reason);
+	});
+	shutdownTimer = setTimeout(() => {
+		server.closeAllConnections?.();
+		process.emit('sveltekit:shutdown', reason);
+	}, shutdownTimeoutSec * 1000);
+	shutdownTimer.unref?.();
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

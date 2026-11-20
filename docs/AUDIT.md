@@ -512,7 +512,7 @@ UPDATE role='admin' админка недоступна.
 | ID    | Проблема                                                                                    | Где                          | Влияние/фикс                          |
 | ----- | ------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------- |
 | P2-68 | Runtime-зависимости в devDependencies — ИСПРАВЛЕНО                                          | package.json                 | перенесены в dependencies (P0-04)     |
-| P2-69 | Нет packageManager/engines — ИСПРАВЛЕНО                                                     | package.json/.npmrc          | pnpm@11.7.0 + Node 24                 |
+| P2-69 | Нет packageManager/engines — ИСПРАВЛЕНО                                                     | package.json/.npmrc          | pnpm@11.7.0 + Node 26                 |
 | P2-70 | Dockerfile.test ставит pnpm@12.14.0 — ИСПРАВЛЕНО                                            | Dockerfile.test              | pnpm@11.7.0                           |
 | P2-71 | compose.dev требует certs, которых нет                                                      | dynamic/dev.yaml             | dev onboarding                        |
 | P2-72 | compose.prod без app/dynamic — ИСПРАВЛЕНО                                                   | compose.prod                 | app-сервис добавлен                   |
