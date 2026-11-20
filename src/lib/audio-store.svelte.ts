@@ -14,9 +14,15 @@ import {
 import {
 	SEEK_STEP_STORAGE_KEY,
 	AUTO_ADVANCE_STORAGE_KEY,
-	PLAYBACK_RATE_STORAGE_KEY
+	PLAYBACK_RATE_STORAGE_KEY,
+	WAKE_LOCK_STORAGE_KEY
 } from '$lib/constants/settings';
-export { SEEK_STEP_STORAGE_KEY, AUTO_ADVANCE_STORAGE_KEY, PLAYBACK_RATE_STORAGE_KEY };
+export {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY,
+	WAKE_LOCK_STORAGE_KEY
+};
 
 // ─── Helper functions ────────────────────────────────────────────────────────
 
@@ -54,6 +60,7 @@ class AudioStore {
 	// ── User preferences ────────────────────────────────────────────────────
 	seekStep = $state(10);
 	autoAdvance = $state(true);
+	wakeLockEnabled = $state(false);
 
 	// ── Track completion event ──────────────────────────────────────────────
 	lastCompletedTrackId: string | null = $state(null);
@@ -106,6 +113,8 @@ class AudioStore {
 			if (step !== null) this.seekStep = step;
 			const auto = parseAutoAdvance(localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY));
 			if (auto !== null) this.autoAdvance = auto;
+			const wake = parseAutoAdvance(localStorage.getItem(WAKE_LOCK_STORAGE_KEY));
+			if (wake !== null) this.wakeLockEnabled = wake;
 			const rate = parsePlaybackRate(localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY));
 			if (rate !== null) this.playbackRate = rate;
 		} catch {
@@ -325,6 +334,17 @@ class AudioStore {
 		if (canUseDOM()) {
 			try {
 				localStorage.setItem(AUTO_ADVANCE_STORAGE_KEY, String(val));
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	setWakeLockEnabled(val: boolean): void {
+		this.wakeLockEnabled = val;
+		if (canUseDOM()) {
+			try {
+				localStorage.setItem(WAKE_LOCK_STORAGE_KEY, String(val));
 			} catch {
 				/* ignore */
 			}

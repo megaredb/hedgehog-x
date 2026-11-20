@@ -50,21 +50,34 @@
 
 	$effect(() => {
 		if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
-		if (!audioStore.isPlaying) {
+		if (!audioStore.wakeLockEnabled || !audioStore.isPlaying) {
 			void wakeLock?.release().catch(() => {});
 			wakeLock = null;
 			return;
 		}
+
 		let cancelled = false;
-		void navigator.wakeLock
-			.request('screen')
-			.then((lock) => {
-				if (cancelled) return lock.release();
-				wakeLock = lock;
-			})
-			.catch(() => {});
+		const acquire = () => {
+			if (cancelled || !audioStore.wakeLockEnabled || !audioStore.isPlaying) return;
+			if (wakeLock && !wakeLock.released) return;
+			void navigator.wakeLock
+				.request('screen')
+				.then((lock) => {
+					if (cancelled) return lock.release();
+					wakeLock = lock;
+				})
+				.catch(() => {});
+		};
+		const onVisibilityChange = () => {
+			if (document.visibilityState === 'visible') acquire();
+		};
+
+		acquire();
+		document.addEventListener('visibilitychange', onVisibilityChange);
+
 		return () => {
 			cancelled = true;
+			document.removeEventListener('visibilitychange', onVisibilityChange);
 			void wakeLock?.release().catch(() => {});
 			wakeLock = null;
 		};

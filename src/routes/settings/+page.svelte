@@ -53,6 +53,8 @@
 	let currentSeekStep = $state<SeekStep>(10);
 	let currentPlaybackRate = $state<PlaybackRate>(1);
 	let autoAdvance = $state(true);
+	let wakeLockEnabled = $state(false);
+	let wakeLockSupported = $state(false);
 
 	// ── State: Mirror & Network ──────────────────────────────────────────────
 	let mirrorPref = $state<MirrorPreference>('auto');
@@ -112,6 +114,12 @@
 		autoAdvance = enabled;
 		audioStore.setAutoAdvance(enabled);
 		showToast(enabled ? 'Автопереход включён' : 'Автопереход выключён');
+	}
+
+	function handleWakeLockChange(enabled: boolean) {
+		wakeLockEnabled = enabled;
+		audioStore.setWakeLockEnabled(enabled);
+		showToast(enabled ? 'Экран будет оставаться включённым' : 'Блокировка сна экрана выключена');
 	}
 
 	// ── Handlers: Mirror ─────────────────────────────────────────────────────
@@ -175,6 +183,8 @@
 		currentSeekStep = (audioStore.seekStep as SeekStep) || 10;
 		currentPlaybackRate = (audioStore.playbackRate as PlaybackRate) || 1;
 		autoAdvance = audioStore.autoAdvance;
+		wakeLockEnabled = audioStore.wakeLockEnabled;
+		wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
 		mirrorPref = getMirrorPreference();
 
 		// Realtime online status
@@ -292,6 +302,29 @@
 						checked={autoAdvance}
 						onCheckedChange={handleAutoAdvanceChange}
 						aria-label={strings.settings.autoAdvance}
+					/>
+				</div>
+
+				<Separator />
+
+				<!-- Keep screen awake -->
+				<div class="flex items-center justify-between gap-4">
+					<div class="space-y-0.5">
+						<label for="wake-lock-toggle" class="cursor-pointer text-sm font-medium">
+							{strings.settings.wakeLock}
+						</label>
+						<p class="text-xs text-muted-foreground">
+							{wakeLockSupported
+								? strings.settings.wakeLockDesc
+								: strings.settings.wakeLockUnsupported}
+						</p>
+					</div>
+					<Switch
+						id="wake-lock-toggle"
+						checked={wakeLockEnabled}
+						disabled={!wakeLockSupported}
+						onCheckedChange={handleWakeLockChange}
+						aria-label={strings.settings.wakeLock}
 					/>
 				</div>
 			</CardContent>

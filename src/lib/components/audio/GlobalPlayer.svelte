@@ -11,7 +11,7 @@
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { strings } from '$lib/constants/strings';
 	import { cn } from '$lib/utils';
-	import { Bookmark as BookmarkIcon, RotateCcw, X, Repeat, Shuffle } from '@lucide/svelte';
+	import { Bookmark as BookmarkIcon, RotateCcw, X } from '@lucide/svelte';
 	import { fly } from 'svelte/transition';
 
 	let isDrawerOpen = $state(false);
@@ -198,24 +198,6 @@
 				</div>
 
 				<div class="flex w-1/4 items-center justify-end gap-2">
-					<Button
-						variant="ghost"
-						size="icon"
-						aria-label="Повтор"
-						class={cn('text-muted-foreground', audioStore.repeatMode !== 'none' && 'text-primary')}
-						onclick={() => audioStore.changeRepeatMode()}
-					>
-						<Repeat class="h-4 w-4" />
-					</Button>
-					<Button
-						variant="ghost"
-						size="icon"
-						aria-label="Перемешать"
-						class={cn('text-muted-foreground', audioStore.shuffleEnabled && 'text-primary')}
-						onclick={() => audioStore.toggleShuffle()}
-					>
-						<Shuffle class="h-4 w-4" />
-					</Button>
 					<AudioPlayer.Download />
 					<AudioPlayer.SleepTimer />
 					<AudioPlayer.Speed />
@@ -317,31 +299,6 @@
 
 						<!-- Secondary controls -->
 						<div class="flex items-center justify-evenly gap-2 pt-2">
-							<AudioPlayer.Volume class="flex" />
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Повтор"
-								class={cn(
-									'h-9 w-9 text-muted-foreground',
-									audioStore.repeatMode !== 'none' && 'text-primary'
-								)}
-								onclick={() => audioStore.changeRepeatMode()}
-							>
-								<Repeat class="h-4 w-4" />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Перемешать"
-								class={cn(
-									'h-9 w-9 text-muted-foreground',
-									audioStore.shuffleEnabled && 'text-primary'
-								)}
-								onclick={() => audioStore.toggleShuffle()}
-							>
-								<Shuffle class="h-4 w-4" />
-							</Button>
 							<Button
 								variant="ghost"
 								size="icon"
