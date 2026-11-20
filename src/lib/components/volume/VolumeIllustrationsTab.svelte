@@ -49,11 +49,16 @@
 	{:else}
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each illustrationsQuery.data as ill (ill.id)}
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
 					role="button"
 					tabindex="0"
 					onclick={() => openLightbox(ill)}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							openLightbox(ill);
+						}
+					}}
 					class="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/60 bg-card text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<div class="relative aspect-3/4 w-full overflow-hidden bg-muted">

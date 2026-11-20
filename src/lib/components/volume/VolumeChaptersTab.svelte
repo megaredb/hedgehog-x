@@ -12,6 +12,7 @@
 	import { likeService } from '$lib/client/services/likeService';
 	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
+	import { formatDuration } from '$lib/utils/time';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -72,12 +73,7 @@
 
 	let selectedChapterForComments = $state<OfflineChapter | null>(null);
 	let isCommentsDrawerOpen = $state(false);
-
-	function formatDuration(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = Math.floor(seconds % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
+	let seekingChapterId = $state<string | null>(null);
 
 	async function handlePlayChapter(chapter: OfflineChapter, index: number) {
 		if (audioStore.currentTrack?.id === chapter.id) {
@@ -106,6 +102,37 @@
 		audioStore.setQueueAndPlay(tracks, index);
 	}
 
+	function seekAtClientX(clientX: number, row: HTMLElement, chapter: OfflineChapter) {
+		const rect = row.getBoundingClientRect();
+		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
+		audioStore.seek(targetSeconds);
+	}
+
+	function handleChapterPointerDown(e: PointerEvent, chapter: OfflineChapter) {
+		if (e.button !== 0) return;
+		const target = e.target as HTMLElement;
+		if (target.closest('button, a, input, textarea, select')) return;
+		if (audioStore.currentTrack?.id !== chapter.id) return;
+
+		e.preventDefault();
+		seekingChapterId = chapter.id;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		seekAtClientX(e.clientX, e.currentTarget as HTMLElement, chapter);
+	}
+
+	function handleChapterPointerMove(e: PointerEvent, chapter: OfflineChapter) {
+		if (seekingChapterId !== chapter.id) return;
+		seekAtClientX(e.clientX, e.currentTarget as HTMLElement, chapter);
+	}
+
+	function handleChapterPointerUp(e: PointerEvent, chapter: OfflineChapter) {
+		if (seekingChapterId !== chapter.id) return;
+		seekingChapterId = null;
+		const row = e.currentTarget as HTMLElement;
+		if (row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
+	}
+
 	function handleChapterRowClick(e: MouseEvent, chapter: OfflineChapter, index: number) {
 		const isCurrent = audioStore.currentTrack?.id === chapter.id;
 
@@ -120,7 +147,7 @@
 		const clickX = e.clientX - rect.left;
 		const ratio = Math.max(0, Math.min(1, clickX / rect.width));
 
-		const targetSeconds = ratio * (chapter.durationSeconds || audioStore.duration || 0);
+		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
 		audioStore.seek(targetSeconds);
 	}
 
@@ -162,18 +189,30 @@
 				{@const currentTrackTime = isCurrent
 					? audioStore.currentTime
 					: (saved?.progressSeconds ?? 0)}
+				{@const effectiveDuration = isCurrent
+					? audioStore.duration || chapter.durationSeconds
+					: chapter.durationSeconds}
 				{@const progressPercent =
-					chapter.durationSeconds > 0
-						? Math.min(100, Math.max(0, (currentTrackTime / chapter.durationSeconds) * 100))
+					effectiveDuration > 0
+						? Math.min(100, Math.max(0, (currentTrackTime / effectiveDuration) * 100))
 						: 0}
 
 				<li class="relative">
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						role="button"
 						tabindex="0"
 						onclick={(e) => handleChapterRowClick(e, chapter, index)}
-						class="group relative flex cursor-pointer items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
+						onpointerdown={(e) => handleChapterPointerDown(e, chapter)}
+						onpointermove={(e) => handleChapterPointerMove(e, chapter)}
+						onpointerup={(e) => handleChapterPointerUp(e, chapter)}
+						onpointercancel={(e) => handleChapterPointerUp(e, chapter)}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								handlePlayChapter(chapter, index);
+							}
+						}}
+						class="group relative flex cursor-pointer touch-pan-y items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
 							? 'bg-primary/5'
 							: 'hover:bg-muted/30'}"
 					>
@@ -198,8 +237,8 @@
 									? 'scale-105 bg-primary text-primary-foreground shadow-sm'
 									: 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground'}"
 								aria-label={isPlaying
-									? `Пауза: ${chapter.title}`
-									: `Воспроизвести: ${chapter.title}`}
+									? `Пауза: ${chapter.chapterNumber}. ${chapter.title}`
+									: `Воспроизвести: ${chapter.chapterNumber}. ${chapter.title}`}
 							>
 								{#if isPlaying}
 									<Pause class="h-4 w-4 fill-current" />
@@ -213,20 +252,18 @@
 
 							<!-- Chapter title and progress status -->
 							<div class="min-w-0 flex-1 pr-2">
-								<h3
+								<h2
 									class="truncate text-sm font-medium transition-colors {isCurrent
 										? 'font-bold text-primary'
 										: 'text-foreground'}"
 								>
 									{chapter.title}
-								</h3>
+								</h2>
 
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
 									{#if isCurrent}
 										<span class="font-mono font-semibold text-primary">
-											{formatDuration(audioStore.currentTime)} / {formatDuration(
-												chapter.durationSeconds
-											)}
+											{formatDuration(audioStore.currentTime)} / {formatDuration(effectiveDuration)}
 										</span>
 									{:else if saved?.isCompleted}
 										<span
@@ -269,9 +306,9 @@
 									: 'text-muted-foreground hover:text-foreground'}"
 								onclick={(e) => handleToggleChapterLike(e, chapter)}
 								title={likedChapterIds.has(chapter.id) ? 'Убрать лайк' : 'Поставить лайк'}
-								aria-label={likedChapterIds.has(chapter.id)
+								aria-label={(likedChapterIds.has(chapter.id)
 									? `Убрать лайк с ${chapter.title}`
-									: `Лайкнуть ${chapter.title}`}
+									: `Лайкнуть ${chapter.title}`) + ` ${chapter.likesCount || 0}`}
 							>
 								<Heart
 									class="h-3.5 w-3.5 transition-transform active:scale-125 {likedChapterIds.has(

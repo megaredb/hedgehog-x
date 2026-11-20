@@ -150,6 +150,11 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Профиль — HEDGEHOG.INC</title>
+	<meta name="description" content="Управление аккаунтом, способами входа и данными профиля." />
+</svelte:head>
+
 <div class="mx-auto max-w-2xl p-6">
 	<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
 	<p class="mt-2 text-muted-foreground">Профиль, идентификатор и способы входа.</p>
@@ -180,6 +185,9 @@
 							<img
 								src={session.user.image}
 								alt={session.user.name}
+								width={80}
+								height={80}
+								fetchpriority="high"
 								class="h-20 w-20 object-cover"
 							/>
 						{:else}

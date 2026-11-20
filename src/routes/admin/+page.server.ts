@@ -8,7 +8,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
-		throw redirect(303, '/auth?redirect=/admin');
+		throw redirect(303, '/auth?from=/admin');
 	}
 
 	if (locals.user.role !== 'admin') {
@@ -45,7 +45,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	makeSelfAdmin: async ({ locals }) => {
 		if (!locals.user) {
-			throw redirect(303, '/auth?redirect=/admin');
+			throw redirect(303, '/auth?from=/admin');
 		}
 		if (dev) {
 			await db.update(userTable).set({ role: 'admin' }).where(eq(userTable.id, locals.user.id));

@@ -3,6 +3,7 @@ import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { telegram } from 'better-auth-telegram';
 import { getRequestEvent } from '$app/server';
+import { building } from '$app/environment';
 import { db } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { createLogger } from '$lib/logger';
@@ -20,6 +21,22 @@ const baseURL = allowedHosts?.length
 	? { allowedHosts, fallback: env.BETTER_AUTH_FALLBACK_URL }
 	: undefined;
 
+const cookieDomain = env.BETTER_AUTH_COOKIE_DOMAIN?.trim();
+
+// better-auth requires string provider credentials even when an optional provider
+// is not configured. Empty values keep the provider registered and let better-auth
+// emit its "missing clientId/clientSecret" warning instead of failing type-checking.
+const discordClientId = env.DISCORD_CLIENT_ID ?? '';
+const discordClientSecret = env.DISCORD_CLIENT_SECRET ?? '';
+
+const authSecret = env.BETTER_AUTH_SECRET?.trim();
+if (!building && (!authSecret || authSecret.length < 32)) {
+	throw new Error(
+		'BETTER_AUTH_SECRET is required and must be at least 32 characters. ' +
+			'Generate one with: openssl rand -base64 32'
+	);
+}
+
 /**
  * Extracts real Telegram user ID from OIDC claims.
  */
@@ -29,7 +46,15 @@ function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): 
 
 export const auth = betterAuth({
 	baseURL,
-	secret: env.BETTER_AUTH_SECRET,
+	secret: authSecret ?? 'build-time-placeholder-secret-32-chars',
+	advanced: cookieDomain
+		? {
+				crossSubDomainCookies: {
+					enabled: true,
+					domain: cookieDomain
+				}
+			}
+		: undefined,
 	database: drizzleAdapter(db, { provider: 'pg' }),
 	emailAndPassword: { enabled: false },
 	// Additional user profile fields stored separately for Telegram & Discord
@@ -44,8 +69,8 @@ export const auth = betterAuth({
 	},
 	socialProviders: {
 		discord: {
-			clientId: env.DISCORD_CLIENT_ID,
-			clientSecret: env.DISCORD_CLIENT_SECRET,
+			clientId: discordClientId,
+			clientSecret: discordClientSecret,
 			mapProfileToUser: (profile) => ({
 				discordAvatar: profile.image_url,
 				discordUsername: profile.username ?? null

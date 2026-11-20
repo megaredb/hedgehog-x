@@ -8,6 +8,7 @@
 	import { authClient } from '$lib/client/authClient';
 	import { useSession } from '$lib/client/session.svelte';
 	import { AUTH_PROVIDERS, type AuthProvider } from '$lib/client/providers';
+	import { safeInternalPath } from '$lib/utils/safeRedirect';
 
 	const session = useSession();
 
@@ -16,10 +17,13 @@
 	let errorModalOpen = $state(false);
 
 	const from = $derived.by(() => {
-		const raw = page.url.searchParams.get('from') ?? resolve('/');
-		// Prevent redirect loop if 'from' is auth page
-		if (raw === resolve('/auth')) return resolve('/');
-		return raw;
+		// Support legacy ?redirect= used by admin pages and the canonical ?from=.
+		const raw =
+			page.url.searchParams.get('from') ?? page.url.searchParams.get('redirect') ?? resolve('/');
+		const safe = safeInternalPath(raw, resolve('/'));
+		// Prevent redirect loop if 'from' is the auth page itself.
+		if (safe === resolve('/auth')) return resolve('/');
+		return safe;
 	});
 
 	// Handle OAuth error parameters in query string
@@ -78,11 +82,15 @@
 	}
 
 	async function signOut() {
-		await authClient.signOut();
-		await session.refetch();
+		await session.signOut();
 		await goto(resolve('/'));
 	}
 </script>
+
+<svelte:head>
+	<title>Вход — HEDGEHOG.INC</title>
+	<meta name="description" content="Вход в аккаунт HEDGEHOG.INC" />
+</svelte:head>
 
 <div class="flex min-h-full items-center justify-center p-6">
 	<div class="w-full max-w-sm space-y-6">
@@ -129,8 +137,8 @@
 					{@const Icon = provider.icon}
 					<Button
 						size="lg"
-						class="w-full gap-2.5 border-0 py-3 text-white shadow-sm transition hover:brightness-110"
-						style="background-color: {provider.brandColor};"
+						class="w-full gap-2.5 border-0 py-3 shadow-sm transition hover:brightness-110"
+						style="background-color: {provider.brandColor}; color: {provider.brandForeground};"
 						disabled={isSubmitting !== null}
 						onclick={() => startOAuth(provider)}
 					>

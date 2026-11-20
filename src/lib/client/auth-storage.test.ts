@@ -66,6 +66,9 @@ describe('auth-storage (offline persistence)', () => {
 		assert.equal(loaded?.session?.id, 'sess_123');
 		assert.equal(loaded?.user?.name, 'Test User');
 		assert.ok(loaded?.session?.expiresAt instanceof Date);
+		assert.equal(loaded?.session?.token, undefined);
+		const raw = JSON.parse(localStorage.getItem(AUTH_SESSION_STORAGE_KEY) ?? '{}');
+		assert.equal(raw.session?.token, undefined);
 	});
 
 	it('аннулирует и удаляет кэш, если expiresAt истёк (строгий контроль)', () => {

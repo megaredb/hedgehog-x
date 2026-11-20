@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import type { Track } from '$lib/html-audio.js';
 	import {
 		db,
 		type OfflineBookmark,
@@ -16,6 +17,7 @@
 	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { strings } from '$lib/constants/strings';
 	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
+	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedBookmark extends OfflineBookmark {
 		chapter?: OfflineChapter;
@@ -51,20 +53,14 @@
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
+	const totalPages = $derived(Math.max(1, Math.ceil(bookmarksQuery.data.length / pageSize)));
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+	});
 
 	const paginatedBookmarks = $derived(
 		bookmarksQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
-
-	function formatTime(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-		}
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 
 	function formatDate(timestamp: number): string {
 		if (!timestamp) return '';
@@ -77,13 +73,19 @@
 
 	async function handlePlayBookmark(item: EnrichedBookmark) {
 		if (!item.chapter) return;
+		if (audioStore.currentTrack?.id === item.chapterId) {
+			audioStore.seek(item.timestampSeconds);
+			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
 		const volumeId = item.chapter.volumeId;
 		const allChapters = await db.chapters
 			.where('volumeId')
 			.equals(volumeId)
 			.sortBy('chapterNumber');
 
-		const tracks = allChapters.map((ch) => ({
+		const tracks: Track[] = allChapters.map((ch) => ({
 			id: ch.id,
 			title: ch.title,
 			url: ch.audioUrl,
@@ -97,10 +99,8 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
+			tracks[startIndex] = { ...tracks[startIndex], startTime: item.timestampSeconds };
 			audioStore.setQueueAndPlay(tracks, startIndex);
-			setTimeout(() => {
-				audioStore.seek(item.timestampSeconds, false);
-			}, 100);
 		}
 	}
 
@@ -119,6 +119,7 @@
 
 <svelte:head>
 	<title>{strings.bookmarks.title} | Hedgehog X</title>
+	<meta name="description" content="Сохранённые фрагменты и заметки к прослушанным аудиокнигам." />
 </svelte:head>
 
 <div class="layout-content mx-auto max-w-5xl py-6 md:py-10">
@@ -166,7 +167,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each paginatedBookmarks as item (item.id)}
+			{#each paginatedBookmarks as item, i (item.id)}
 				<Card.Root
 					class="group overflow-hidden border-border/60 bg-card/60 transition-all duration-200 hover:border-border hover:shadow-md"
 				>
@@ -177,6 +178,9 @@
 								<img
 									src={item.volume?.coverUrl || item.book?.coverUrl}
 									alt={item.volume?.title || item.chapter?.title || 'Cover'}
+									width={56}
+									height={80}
+									loading={i < 2 ? 'eager' : 'lazy'}
 									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
 								/>
 							{:else}
@@ -193,7 +197,7 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatTime(item.timestampSeconds)}</span>
+										<span>{formatDuration(item.timestampSeconds)}</span>
 									</span>
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">

@@ -1,10 +1,20 @@
-import { describe, it } from 'node:test';
+import { describe, it, after } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import sharp from 'sharp';
 import { decode } from 'blurhash';
 import { uploadImage, uploadAudio, deleteFromStorage } from './r2';
 
-describe('R2 & Image Processing Storage Service', () => {
+const r2Configured = Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_BUCKET_NAME);
+const testUploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hedgehog-uploads-'));
+process.env.LOCAL_UPLOAD_DIR = testUploadDir;
+
+after(() => fs.rmSync(testUploadDir, { recursive: true, force: true }));
+
+// Unit tests must not upload to a real bucket or leave files in static/uploads.
+describe('R2 & Image Processing Storage Service', { skip: r2Configured }, () => {
 	it('converts an image buffer to webp and computes a valid blurhash', async () => {
 		// Create a 100x100 test PNG image
 		const sampleBuffer = await sharp({

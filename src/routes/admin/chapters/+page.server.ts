@@ -1,8 +1,14 @@
 import { db } from '$lib/server/db';
+import { isUniqueViolation } from '$lib/server/db/errors';
 import { books, volumes, chapters } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadAudio } from '$lib/server/storage/r2';
+import {
+	deleteFromStorage,
+	MAX_AUDIO_BYTES,
+	StorageValidationError,
+	uploadAudio
+} from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -91,8 +97,12 @@ export const actions: Actions = {
 			id = `${volumeId}_ch_${chapterNumber}_${randomUUID().slice(0, 6)}`;
 		}
 
+		let uploadedUrl: string | null = null;
 		const audioFile = form.get('audioFile');
 		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
+			if (audioFile.size > MAX_AUDIO_BYTES) {
+				return fail(400, { error: 'Размер аудиофайла не должен превышать 500 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await audioFile.arrayBuffer());
 				const uploaded = await uploadAudio(buffer, {
@@ -100,9 +110,11 @@ export const actions: Actions = {
 					contentType: audioFile.type,
 					folder: 'chapters'
 				});
+				uploadedUrl = uploaded.url;
 				audioUrl = uploaded.url;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки аудиофайла: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -124,6 +136,10 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			if (isUniqueViolation(e)) {
+				return fail(400, { error: 'Глава с таким номером уже существует в этом томе' });
+			}
 			return fail(500, {
 				error: `Ошибка базы данных: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -149,8 +165,18 @@ export const actions: Actions = {
 			durationSeconds = 0;
 		}
 
+		const [old] = await db
+			.select({ audioUrl: chapters.audioUrl })
+			.from(chapters)
+			.where(eq(chapters.id, id))
+			.limit(1);
+
+		let uploadedUrl: string | null = null;
 		const audioFile = form.get('audioFile');
 		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
+			if (audioFile.size > MAX_AUDIO_BYTES) {
+				return fail(400, { error: 'Размер аудиофайла не должен превышать 500 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await audioFile.arrayBuffer());
 				const uploaded = await uploadAudio(buffer, {
@@ -158,9 +184,11 @@ export const actions: Actions = {
 					contentType: audioFile.type,
 					folder: 'chapters'
 				});
+				uploadedUrl = uploaded.url;
 				audioUrl = uploaded.url;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки аудиофайла: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -187,8 +215,15 @@ export const actions: Actions = {
 			}
 
 			await db.update(chapters).set(updateData).where(eq(chapters.id, id));
+			if (updateData.audioUrl && old?.audioUrl && old.audioUrl !== updateData.audioUrl) {
+				await deleteFromStorage(old.audioUrl);
+			}
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			if (isUniqueViolation(e)) {
+				return fail(400, { error: 'Глава с таким номером уже существует в этом томе' });
+			}
 			return fail(500, {
 				error: `Ошибка обновления главы: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -205,7 +240,13 @@ export const actions: Actions = {
 		}
 
 		try {
+			const [old] = await db
+				.select({ audioUrl: chapters.audioUrl })
+				.from(chapters)
+				.where(eq(chapters.id, id))
+				.limit(1);
 			await db.delete(chapters).where(eq(chapters.id, id));
+			if (old?.audioUrl) await deleteFromStorage(old.audioUrl);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

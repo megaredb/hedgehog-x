@@ -7,15 +7,23 @@ import {
 	type MirrorPreference
 } from '$lib/utils/mirror';
 
-export const SEEK_STEP_STORAGE_KEY = 'hedgehog:seek_step';
-export const AUTO_ADVANCE_STORAGE_KEY = 'hedgehog:auto_advance';
-export const PLAYBACK_RATE_STORAGE_KEY = 'hedgehog:playback_rate';
+import {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY
+} from '$lib/constants/settings';
+import { parseSeekStep, parsePlaybackRate, parseAutoAdvance } from '$lib/settings/values';
+import type { SeekStep, PlaybackRate } from '$lib/settings/values';
+export { SEEK_STEP_STORAGE_KEY, AUTO_ADVANCE_STORAGE_KEY, PLAYBACK_RATE_STORAGE_KEY };
 
-export const SEEK_STEPS = [5, 10, 15, 30] as const;
-export type SeekStep = (typeof SEEK_STEPS)[number];
-
-export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
-export type PlaybackRate = (typeof PLAYBACK_RATES)[number];
+export {
+	SEEK_STEPS,
+	PLAYBACK_RATES,
+	isValidSeekStep,
+	isValidPlaybackRate,
+	type SeekStep,
+	type PlaybackRate
+} from '$lib/settings/values';
 
 export interface MirrorOption {
 	value: MirrorPreference;
@@ -41,22 +49,11 @@ export const MIRROR_OPTIONS: MirrorOption[] = [
 	}
 ];
 
-export function isValidSeekStep(val: unknown): val is SeekStep {
-	return typeof val === 'number' && (SEEK_STEPS as readonly number[]).includes(val);
-}
-
-export function isValidPlaybackRate(val: unknown): val is PlaybackRate {
-	return typeof val === 'number' && (PLAYBACK_RATES as readonly number[]).includes(val);
-}
-
 export function getStoredSeekStep(): SeekStep {
 	if (typeof localStorage === 'undefined') return 10;
 	try {
-		const raw = localStorage.getItem(SEEK_STEP_STORAGE_KEY);
-		if (raw) {
-			const parsed = parseInt(raw, 10);
-			if (isValidSeekStep(parsed)) return parsed;
-		}
+		const parsed = parseSeekStep(localStorage.getItem(SEEK_STEP_STORAGE_KEY));
+		if (parsed !== null) return parsed;
 	} catch {
 		// Ignore storage errors
 	}
@@ -75,11 +72,8 @@ export function setStoredSeekStep(step: SeekStep): void {
 export function getStoredPlaybackRate(): PlaybackRate {
 	if (typeof localStorage === 'undefined') return 1;
 	try {
-		const raw = localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY);
-		if (raw) {
-			const parsed = parseFloat(raw);
-			if (isValidPlaybackRate(parsed)) return parsed;
-		}
+		const parsed = parsePlaybackRate(localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY));
+		if (parsed !== null) return parsed;
 	} catch {
 		// Ignore storage errors
 	}
@@ -98,10 +92,8 @@ export function setStoredPlaybackRate(rate: PlaybackRate): void {
 export function getStoredAutoAdvance(): boolean {
 	if (typeof localStorage === 'undefined') return true;
 	try {
-		const raw = localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY);
-		if (raw !== null) {
-			return raw === 'true';
-		}
+		const parsed = parseAutoAdvance(localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY));
+		if (parsed !== null) return parsed;
 	} catch {
 		// Ignore storage errors
 	}
@@ -269,15 +261,19 @@ export async function clearAppCache(
 export interface ManualSyncResult {
 	success: boolean;
 	syncedLikes: number;
+	syncedBookmarks: number;
 	error?: string;
 }
 
 /**
- * Performs manual synchronization of pending mutations in syncQueue (likes, progress).
+ * Performs manual synchronization of pending mutations in syncQueue
+ * (likes, progress, bookmarks).
  */
 export async function performManualSync(fetchFn: typeof fetch = fetch): Promise<ManualSyncResult> {
 	try {
 		const likeRes = await likeService.syncLikesQueue(fetchFn);
+		let syncedBookmarks = 0;
+
 		if (typeof window !== 'undefined') {
 			try {
 				const { progressSync } = await import('$lib/client/services/progressSync.svelte.js');
@@ -285,15 +281,33 @@ export async function performManualSync(fetchFn: typeof fetch = fetch): Promise<
 			} catch {
 				// Ignore progressSync error
 			}
+
+			try {
+				const { flushBookmarkQueue } = await import('$lib/client/services/bookmarkSync');
+				syncedBookmarks = await flushBookmarkQueue(fetchFn);
+			} catch {
+				// Ignore bookmarkSync error; queue stays for the next retry
+			}
+
+			try {
+				const { listeningTracker } = await import('$lib/client/services/listeningTracker.svelte');
+				listeningTracker.flush();
+				await listeningTracker.flushOfflineQueue();
+			} catch {
+				// Listening stats will retry later; do not fail the whole manual sync.
+			}
 		}
+
 		return {
 			success: true,
-			syncedLikes: likeRes.synced
+			syncedLikes: likeRes.synced,
+			syncedBookmarks
 		};
 	} catch (err) {
 		return {
 			success: false,
 			syncedLikes: 0,
+			syncedBookmarks: 0,
 			error: err instanceof Error ? err.message : String(err)
 		};
 	}

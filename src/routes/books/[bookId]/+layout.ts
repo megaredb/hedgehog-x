@@ -14,7 +14,7 @@ export const load: LayoutLoad = async ({ params, fetch }) => {
 			.syncBookDetails(bookId, fetch)
 			.catch((err) => log.error('Failed to sync book data:', err));
 
-		// Parallel sync of user-specific data (likes, progress, bookmarks)
+		// Keep user sync authoritative; the sync endpoint returns 401 for guests by design.
 		syncService.syncUserData(fetch).catch((err) => log.error('Failed to sync user data:', err));
 	}
 

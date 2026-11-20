@@ -27,7 +27,8 @@ export default defineConfig(
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: {
-				projectService: true,
+				// Type-aware rules are not enabled; projectService made full-tree lint
+				// prohibitively slow for the Svelte component count.
 				extraFileExtensions: ['.svelte'],
 				parser: ts.parser
 			}

@@ -5,6 +5,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer base {
+	button:not(:disabled):not([aria-disabled='true']),
+	[role='button']:not([aria-disabled='true']),
+	select:not(:disabled),
+	input[type='checkbox']:not(:disabled),
+	input[type='radio']:not(:disabled),
+	summary {
+		cursor: pointer;
+	}
+
+	button:disabled,
+	[aria-disabled='true'] {
+		cursor: not-allowed;
+	}
+}
+
 :root {
 	--background: oklch(0.96 0.02 85);
 	--foreground: oklch(0.2 0.02 85);
@@ -22,7 +38,7 @@
 	--secondary-foreground: oklch(0.25 0.05 85);
 
 	--muted: oklch(0.9 0.01 85);
-	--muted-foreground: oklch(0.556 0 0);
+	--muted-foreground: oklch(0.45 0 0);
 
 	--accent: oklch(0.9 0.01 85);
 	--accent-foreground: oklch(0.25 0.05 85);

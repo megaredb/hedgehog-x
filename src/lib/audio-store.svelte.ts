@@ -1,54 +1,33 @@
 import { htmlAudio, type Track } from '$lib/html-audio.js';
 import { resolveMediaUrl } from '$lib/utils/mirror.js';
+import { calculateNextIndex, calculatePreviousIndex, type RepeatMode } from '$lib/audio-queue.js';
 
-export type RepeatMode = 'none' | 'one' | 'all';
-export type InsertMode = 'first' | 'last' | 'after';
+export type { RepeatMode } from '$lib/audio-queue.js';
+export { calculateNextIndex, calculatePreviousIndex } from '$lib/audio-queue.js';
+import {
+	parseSeekStep,
+	parsePlaybackRate,
+	parseAutoAdvance,
+	isValidPlaybackRate
+} from '$lib/settings/values';
 
-export const SEEK_STEP_STORAGE_KEY = 'hedgehog:seek_step';
-export const AUTO_ADVANCE_STORAGE_KEY = 'hedgehog:auto_advance';
-export const PLAYBACK_RATE_STORAGE_KEY = 'hedgehog:playback_rate';
+import {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY,
+	WAKE_LOCK_STORAGE_KEY
+} from '$lib/constants/settings';
+export {
+	SEEK_STEP_STORAGE_KEY,
+	AUTO_ADVANCE_STORAGE_KEY,
+	PLAYBACK_RATE_STORAGE_KEY,
+	WAKE_LOCK_STORAGE_KEY
+};
 
 // ─── Helper functions ────────────────────────────────────────────────────────
 
 export function canUseDOM(): boolean {
 	return typeof window !== 'undefined' && !!window.document?.createElement;
-}
-
-type QueueNavigationParams = {
-	queue: Track[];
-	currentQueueIndex: number;
-	shuffleEnabled: boolean;
-	repeatMode: RepeatMode;
-};
-
-function getRandomShuffleIndex(queueLength: number, currentIndex: number): number {
-	if (queueLength === 1) return 0;
-	let idx: number;
-	do {
-		idx = Math.floor(Math.random() * queueLength);
-	} while (idx === currentIndex);
-	return idx;
-}
-
-function calculateQueueIndex(params: QueueNavigationParams & { direction: 1 | -1 }): number {
-	const { queue, currentQueueIndex, shuffleEnabled, repeatMode, direction } = params;
-	if (queue.length === 0) return -1;
-	if (shuffleEnabled) {
-		if (queue.length === 1) return repeatMode === 'none' ? -1 : 0;
-		return getRandomShuffleIndex(queue.length, currentQueueIndex);
-	}
-	const next = currentQueueIndex + direction;
-	if (next >= queue.length) return repeatMode === 'all' ? 0 : -1;
-	if (next < 0) return repeatMode === 'all' ? queue.length - 1 : -1;
-	return next;
-}
-
-export function calculateNextIndex(params: QueueNavigationParams): number {
-	return calculateQueueIndex({ ...params, direction: 1 });
-}
-
-export function calculatePreviousIndex(params: QueueNavigationParams): number {
-	return calculateQueueIndex({ ...params, direction: -1 });
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────
@@ -71,7 +50,6 @@ class AudioStore {
 	duration = $state(0);
 	progress = $state(0);
 	bufferedTime = $state(0);
-	insertMode: InsertMode = $state('last');
 	isError = $state(false);
 	errorMessage: string | null = $state(null);
 	currentQueueIndex = $state(-1);
@@ -82,6 +60,7 @@ class AudioStore {
 	// ── User preferences ────────────────────────────────────────────────────
 	seekStep = $state(10);
 	autoAdvance = $state(true);
+	wakeLockEnabled = $state(false);
 
 	// ── Track completion event ──────────────────────────────────────────────
 	lastCompletedTrackId: string | null = $state(null);
@@ -103,57 +82,39 @@ class AudioStore {
 			const raw = localStorage.getItem(STORAGE_KEY);
 			if (!raw) return;
 			const d = JSON.parse(raw);
-			if (d.currentTrack !== undefined && d.currentTrack !== null) {
+			if (!d || typeof d !== 'object') return;
+			const isTrack = (value: unknown): value is Track =>
+				!!value && typeof value === 'object' && typeof (value as Track).url === 'string';
+			if (isTrack(d.currentTrack)) {
 				this.currentTrack = {
 					...d.currentTrack,
 					url: resolveMediaUrl(d.currentTrack.url)
 				};
 			}
-			if (d.queue !== undefined && Array.isArray(d.queue)) {
-				this.queue = d.queue.map((t: Track) => ({
+			if (Array.isArray(d.queue)) {
+				this.queue = d.queue.filter(isTrack).map((t: Track) => ({
 					...t,
 					url: resolveMediaUrl(t.url)
 				}));
 			}
 			if (d.volume !== undefined) this.volume = d.volume;
 			if (d.isMuted !== undefined) this.isMuted = d.isMuted;
-			if (d.playbackRate !== undefined) this.playbackRate = d.playbackRate;
-			if (d.repeatMode !== undefined) this.repeatMode = d.repeatMode;
-			if (d.shuffleEnabled !== undefined) this.shuffleEnabled = d.shuffleEnabled;
+			if (isValidPlaybackRate(d.playbackRate)) this.playbackRate = d.playbackRate;
 			if (d.currentTime !== undefined) this.currentTime = d.currentTime;
-			if (d.insertMode !== undefined) this.insertMode = d.insertMode;
 			if (d.currentQueueIndex !== undefined) this.currentQueueIndex = d.currentQueueIndex;
 		} catch {
 			/* ignore */
 		}
 
 		try {
-			const storedSeek = localStorage.getItem(SEEK_STEP_STORAGE_KEY);
-			if (storedSeek) {
-				const val = parseInt(storedSeek, 10);
-				if ([5, 10, 15, 30].includes(val)) this.seekStep = val;
-			}
-		} catch {
-			/* ignore */
-		}
-
-		try {
-			const storedAuto = localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY);
-			if (storedAuto !== null) {
-				this.autoAdvance = storedAuto === 'true';
-			}
-		} catch {
-			/* ignore */
-		}
-
-		try {
-			const storedRate = localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY);
-			if (storedRate) {
-				const val = parseFloat(storedRate);
-				if (!isNaN(val) && val >= 0.25 && val <= 2) {
-					this.playbackRate = val;
-				}
-			}
+			const step = parseSeekStep(localStorage.getItem(SEEK_STEP_STORAGE_KEY));
+			if (step !== null) this.seekStep = step;
+			const auto = parseAutoAdvance(localStorage.getItem(AUTO_ADVANCE_STORAGE_KEY));
+			if (auto !== null) this.autoAdvance = auto;
+			const wake = parseAutoAdvance(localStorage.getItem(WAKE_LOCK_STORAGE_KEY));
+			if (wake !== null) this.wakeLockEnabled = wake;
+			const rate = parsePlaybackRate(localStorage.getItem(PLAYBACK_RATE_STORAGE_KEY));
+			if (rate !== null) this.playbackRate = rate;
 		} catch {
 			/* ignore */
 		}
@@ -170,10 +131,7 @@ class AudioStore {
 					volume: this.volume,
 					isMuted: this.isMuted,
 					playbackRate: this.playbackRate,
-					repeatMode: this.repeatMode,
-					shuffleEnabled: this.shuffleEnabled,
 					currentTime: this.currentTime,
-					insertMode: this.insertMode,
 					currentQueueIndex: this.currentQueueIndex
 				})
 			);
@@ -187,7 +145,10 @@ class AudioStore {
 	play(): void {
 		if (this.isLoading) return;
 		this.isPlaying = true;
-		htmlAudio.play().catch(() => {});
+		void htmlAudio.play().catch((error) => {
+			this.isPlaying = false;
+			this.setError(error instanceof Error ? error.message : 'Playback failed');
+		});
 	}
 
 	pause(): void {
@@ -267,6 +228,10 @@ class AudioStore {
 		});
 		const track = this.queue[idx];
 		if (idx === -1 || !track) {
+			if (this.currentQueueIndex === 0) {
+				this.seek(0, false);
+				return;
+			}
 			this.isLoading = false;
 			this.isPlaying = false;
 			this.isBuffering = false;
@@ -285,7 +250,18 @@ class AudioStore {
 			this.currentQueueIndex = -1;
 			return;
 		}
+		const wasSameTrack =
+			this.currentTrack?.id === target.id && Boolean(htmlAudio.getAudioElement()?.src);
 		this.setQueue(songs, startIndex);
+		if (wasSameTrack) {
+			if (target.startTime !== undefined) {
+				this.seek(target.startTime, false);
+			}
+			this.isLoading = false;
+			this.isBuffering = false;
+			if (!this.isPlaying) this.play();
+			return;
+		}
 		this.loadAndPlayTrack(target, startIndex);
 	}
 
@@ -316,56 +292,8 @@ class AudioStore {
 		return this.currentQueueIndex;
 	}
 
-	addToQueue(track: Track, mode: InsertMode = 'last'): void {
-		const resolvedTrack: Track = { ...track, url: resolveMediaUrl(track.url) };
-		if (!this.currentTrack) {
-			this.currentTrack = resolvedTrack;
-			this.currentQueueIndex = 0;
-			this.queue = [resolvedTrack];
-			return;
-		}
-		switch (mode) {
-			case 'first':
-				this.queue = [resolvedTrack, ...this.queue];
-				this.currentQueueIndex++;
-				break;
-			case 'after':
-				this.queue = [
-					...this.queue.slice(0, this.currentQueueIndex + 1),
-					resolvedTrack,
-					...this.queue.slice(this.currentQueueIndex + 1)
-				];
-				break;
-			default:
-				this.queue = [...this.queue, resolvedTrack];
-		}
-	}
-
-	removeFromQueue(trackId: string): void {
-		const idx = this.queue.findIndex((s) => s.id === trackId);
-		if (idx === -1) return;
-		this.queue = this.queue.filter((s) => s.id !== trackId);
-		if (idx < this.currentQueueIndex) this.currentQueueIndex--;
-	}
-
 	clearQueue(): void {
 		this.queue = [];
-	}
-
-	moveInQueue(fromIndex: number, toIndex: number): void {
-		const q = [...this.queue];
-		const [item] = q.splice(fromIndex, 1);
-		if (!item) return;
-		q.splice(toIndex, 0, item);
-		this.queue = q;
-	}
-
-	addTracksToEndOfQueue(tracks: Track[]): void {
-		if (!tracks?.length) return;
-		const resolvedTracks = tracks.map((t) => ({ ...t, url: resolveMediaUrl(t.url) }));
-		const ids = new Set(this.queue.map((s) => s.id));
-		const newTracks = resolvedTracks.filter((t) => !ids.has(t.id));
-		if (newTracks.length) this.queue = [...this.queue, ...newTracks];
 	}
 
 	// ── Control actions ─────────────────────────────────────────────────────
@@ -419,6 +347,17 @@ class AudioStore {
 		}
 	}
 
+	setWakeLockEnabled(val: boolean): void {
+		this.wakeLockEnabled = val;
+		if (canUseDOM()) {
+			try {
+				localStorage.setItem(WAKE_LOCK_STORAGE_KEY, String(val));
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
 	changeRepeatMode(): void {
 		const modes: RepeatMode[] = ['none', 'one', 'all'];
 		const i = modes.indexOf(this.repeatMode);
@@ -427,9 +366,6 @@ class AudioStore {
 
 	setRepeatMode(mode: RepeatMode): void {
 		this.repeatMode = mode;
-	}
-	setInsertMode(mode: InsertMode): void {
-		this.insertMode = mode;
 	}
 
 	startSleepTimer(duration: number | 'end_of_track'): void {
@@ -523,8 +459,10 @@ class AudioStore {
 
 		if (isLiveStream && this.playbackRate !== 1) this.playbackRate = 1;
 
-		// Signal provider: set isPlaying=true to trigger load+play effect
-		this.isLoading = false;
+		// Signal provider: set isPlaying=true to trigger load+play effect.
+		// Keep isLoading until the provider reports canplay/error, otherwise
+		// the spinner flashes for one frame and the play guard is bypassed.
+		this.isLoading = true;
 		this.isBuffering = false;
 		this.isPlaying = true;
 	}

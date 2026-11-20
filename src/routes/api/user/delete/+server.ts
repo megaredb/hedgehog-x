@@ -6,18 +6,22 @@ import { createLogger } from '$lib/logger';
 
 const log = createLogger('API');
 
-/**
- * User account deletion endpoint.
- * Requires authenticated session. Deletes user record and cascades associated data.
- */
-export const POST = async ({ locals }) => {
+export const POST = async ({ request, locals, cookies, url }) => {
 	const currentUser = locals.user;
 	if (!currentUser) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
+	const origin = request.headers.get('origin');
+	if (origin && origin !== url.origin) {
+		return json({ error: 'Invalid origin' }, { status: 403 });
+	}
+
 	try {
 		await db.delete(user).where(eq(user.id, currentUser.id));
+		for (const name of ['better-auth.session_token', '__Secure-better-auth.session_token']) {
+			cookies.delete(name, { path: '/' });
+		}
 		return json({ ok: true });
 	} catch (e) {
 		log.error('Failed to delete user:', e);

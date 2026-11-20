@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { replaceState } from '$app/navigation';
+	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { showcaseBooks } from '$lib/data/mockShowcase';
+	import { strings } from '$lib/constants/strings';
 
 	import ShowcaseBackground from '$lib/components/showcase/ShowcaseBackground.svelte';
 	import ShowcaseItem from '$lib/components/showcase/ShowcaseItem.svelte';
@@ -22,7 +23,8 @@
 	}
 
 	let currentIndex = $state(initialIndex);
-	let isVideoPlaying = $state(true);
+	// Video backgrounds are opt-in: autoplay pulls multi-megabyte media and delays LCP.
+	let isVideoPlaying = $state(false);
 	let scrollContainer: HTMLDivElement | null = $state(null);
 	let isProgrammaticScroll = $state(false);
 	let scrollTimeoutId: number | undefined;
@@ -86,7 +88,7 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('book', bookId);
 		// Shallow URL update without full page reload
-		replaceState(resolve((url.pathname + url.search) as '/'), page.state);
+		pushState(resolve((url.pathname + url.search) as '/'), page.state);
 	}
 
 	function handleSectionVisible(index: number) {
@@ -100,6 +102,10 @@
 
 <svelte:head>
 	<title>Hedgehog X - Главная</title>
+	<meta
+		name="description"
+		content="Аудиокниги HEDGEHOG.INC: «Повелитель», «Реинкарнация безработного» и другие книги."
+	/>
 </svelte:head>
 
 <!-- Showcase container -->
@@ -119,6 +125,7 @@
 	<!-- Scroll up indicator -->
 	{#if currentIndex > 0}
 		<button
+			type="button"
 			transition:fade={{ duration: 300 }}
 			onclick={() => {
 				currentIndex = currentIndex - 1;
@@ -132,9 +139,17 @@
 		</button>
 	{/if}
 
+	<a
+		href={resolve('/books')}
+		class="pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
+	>
+		{strings.common.allBooks}
+	</a>
+
 	<!-- Scroll down indicator -->
 	{#if currentIndex < showcaseBooks.length - 1}
 		<button
+			type="button"
 			transition:fade={{ duration: 300 }}
 			onclick={() => {
 				currentIndex = currentIndex + 1;

@@ -123,7 +123,7 @@
 					target="_blank"
 					rel="noopener noreferrer"
 					size="sm"
-					class="w-full gap-1.5 bg-[#21a038] text-white hover:bg-[#1b842e] sm:w-auto"
+					class="w-full gap-1.5 bg-[#15803d] text-white hover:bg-[#166534] sm:w-auto"
 				>
 					<ExternalLink class="h-4 w-4" />
 					<span>{strings.support.sberPayAction}</span>

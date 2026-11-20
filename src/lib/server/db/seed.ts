@@ -4,6 +4,10 @@ import { createLogger } from '../../logger';
 
 const log = createLogger('DB:Seed');
 
+// All seeded chapters point at static/audio/sample.mp3 (ffprobe: 1122.68s).
+// Keep seeded progress/analytics consistent with the actual asset.
+const SAMPLE_AUDIO_DURATION_SECONDS = 1123;
+
 export interface SeedChapter {
 	id: string;
 	volumeId: string;
@@ -74,7 +78,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 1,
 						title: 'Глава 1: Перерождение',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1240,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/Mushoku_Tensei_AudioBook/1'
 					},
 					{
@@ -83,7 +87,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 2,
 						title: 'Глава 2: Домашний учитель',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1380,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/Mushoku_Tensei_AudioBook/2'
 					},
 					{
@@ -92,7 +96,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 3,
 						title: 'Глава 3: Первая дуэль',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1510,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/Mushoku_Tensei_AudioBook/3'
 					}
 				],
@@ -123,7 +127,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 1,
 						title: 'Глава 1: Знакомство с госпожой',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1420,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/Mushoku_Tensei_AudioBook/4'
 					},
 					{
@@ -132,7 +136,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 2,
 						title: 'Глава 2: Похищение',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1640,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/Mushoku_Tensei_AudioBook/5'
 					}
 				],
@@ -175,7 +179,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 1,
 						title: 'Глава 1: Конец и начало',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1620,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/hedgehogincoverlord/1'
 					},
 					{
@@ -184,7 +188,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 2,
 						title: 'Глава 2: Стражи этажей',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1750,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/hedgehogincoverlord/2'
 					},
 					{
@@ -193,7 +197,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 3,
 						title: 'Глава 3: Битва за деревню Карн',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1890,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/hedgehogincoverlord/3'
 					}
 				],
@@ -224,7 +228,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 1,
 						title: 'Глава 1: Два искателя приключений',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1590,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/hedgehogincoverlord/4'
 					},
 					{
@@ -233,7 +237,7 @@ export const DEFAULT_BOOKS: SeedBook[] = [
 						chapterNumber: 2,
 						title: 'Глава 2: Путешествие',
 						audioUrl: '/audio/sample.mp3',
-						durationSeconds: 1710,
+						durationSeconds: SAMPLE_AUDIO_DURATION_SECONDS,
 						telegramPostUrl: 'https://t.me/hedgehogincoverlord/5'
 					}
 				],
@@ -266,9 +270,11 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 	seedPromise = (async () => {
 		try {
 			log.info('Checking default books initialization (mushoku_tensei, overlord)...');
+			let inserted = 0;
+			let skipped = 0;
 
 			for (const book of DEFAULT_BOOKS) {
-				await database
+				const bookRows = await database
 					.insert(books)
 					.values({
 						id: book.id,
@@ -279,10 +285,16 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 						themeColor: book.themeColor,
 						status: book.status
 					})
-					.onConflictDoNothing({ target: books.id });
+					.onConflictDoNothing({ target: books.id })
+					.returning({ id: books.id });
+				if (bookRows.length) inserted++;
+				else {
+					skipped++;
+					log.debug(`Skipped existing book ${book.id}`);
+				}
 
 				for (const volume of book.volumes) {
-					await database
+					const volumeRows = await database
 						.insert(volumes)
 						.values({
 							id: volume.id,
@@ -294,10 +306,13 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 							blurhash: volume.blurhash,
 							status: volume.status
 						})
-						.onConflictDoNothing({ target: volumes.id });
+						.onConflictDoNothing({ target: volumes.id })
+						.returning({ id: volumes.id });
+					if (volumeRows.length) inserted++;
+					else skipped++;
 
 					for (const chapter of volume.chapters) {
-						await database
+						const chapterRows = await database
 							.insert(chapters)
 							.values({
 								id: chapter.id,
@@ -308,11 +323,14 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								durationSeconds: chapter.durationSeconds,
 								telegramPostUrl: chapter.telegramPostUrl
 							})
-							.onConflictDoNothing({ target: chapters.id });
+							.onConflictDoNothing({ target: chapters.id })
+							.returning({ id: chapters.id });
+						if (chapterRows.length) inserted++;
+						else skipped++;
 					}
 
 					for (const illustration of volume.illustrations) {
-						await database
+						const illustrationRows = await database
 							.insert(illustrations)
 							.values({
 								id: illustration.id,
@@ -322,12 +340,15 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								caption: illustration.caption,
 								sortOrder: illustration.sortOrder
 							})
-							.onConflictDoNothing({ target: illustrations.id });
+							.onConflictDoNothing({ target: illustrations.id })
+							.returning({ id: illustrations.id });
+						if (illustrationRows.length) inserted++;
+						else skipped++;
 					}
 				}
 			}
 
-			log.info('Default books initialization finished successfully.');
+			log.info(`Default books initialization finished (inserted=${inserted}, skipped=${skipped}).`);
 		} catch (error) {
 			log.error('Failed to initialize default books:', error);
 			seedPromise = null;

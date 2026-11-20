@@ -14,13 +14,7 @@
 		[key: string]: unknown;
 	}
 
-	let {
-		class: className = '',
-		size = 'icon',
-		variant = 'ghost',
-		onclick,
-		...rest
-	}: Props = $props();
+	let { class: className = '', size = 'icon', variant = 'ghost', ...rest }: Props = $props();
 
 	const isLiveStream = $derived(htmlAudio.isLive(audioStore.duration));
 	const isDisabled = $derived.by(() => {
@@ -31,8 +25,7 @@
 		isLiveStream ? 'Недоступно для прямого эфира' : 'Перемотать вперёд'
 	);
 
-	function handleClick(e: MouseEvent) {
-		onclick?.(e);
+	function handleClick() {
 		if (!isLiveStream) {
 			audioStore.seek(
 				Math.min(audioStore.currentTime + (audioStore.seekStep || 10), audioStore.duration)
@@ -54,7 +47,7 @@
 				{...props}
 				onclick={(e) => {
 					(props as { onclick?: (e: MouseEvent) => void }).onclick?.(e);
-					handleClick(e);
+					handleClick();
 				}}
 			>
 				<FastForward fill="currentColor" />

@@ -13,13 +13,7 @@
 		[key: string]: unknown;
 	}
 
-	let {
-		class: className = '',
-		size = 'icon',
-		variant = 'ghost',
-		onclick,
-		...rest
-	}: Props = $props();
+	let { class: className = '', size = 'icon', variant = 'ghost', ...rest }: Props = $props();
 
 	const isDisabled = $derived(
 		!audioStore.currentTrack ||
@@ -42,7 +36,6 @@
 				{...props}
 				onclick={(e) => {
 					(props as { onclick?: (e: MouseEvent) => void }).onclick?.(e);
-					onclick?.(e);
 					audioStore.next();
 				}}
 			>

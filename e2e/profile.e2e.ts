@@ -32,9 +32,7 @@ async function mockLoggedIn(
 	accounts: unknown[],
 	user = mockUser
 ) {
-	await page.addInitScript(() => {
-		localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-	});
+	await page.addInitScript(() => {});
 	await page.route('**/api/auth/get-session', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -192,6 +190,14 @@ test.describe('Страница профиля: способы входа', () =
 	test('привязка Discord вызывает /link-social с правильным провайдером', async ({ page }) => {
 		await mockLoggedIn(page, [telegramAccount]);
 
+		await page.route('https://discord.com/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html',
+				body: '<html><body>Discord OAuth</body></html>'
+			});
+		});
+
 		await page.route('**/api/auth/link-social', async (route) => {
 			const body = (route.request().postDataJSON() ?? {}) as { provider?: string };
 			expect(body.provider).toBe('discord');
@@ -215,9 +221,7 @@ test.describe('Страница профиля: способы входа', () =
 	});
 
 	test('когда пользователь не авторизован — редирект на страницу входа', async ({ page }) => {
-		await page.addInitScript(() => {
-			localStorage.setItem('hedgehog-welcome-modal-dismissed', 'true');
-		});
+		await page.addInitScript(() => {});
 		await page.route('**/api/auth/get-session', async (route) => {
 			await route.fulfill({
 				status: 200,

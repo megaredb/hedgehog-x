@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { loadCachedSession } from '$lib/client/auth-storage';
 
 export interface OfflineBook {
 	id: string;
@@ -61,6 +62,12 @@ export interface OfflineBookmark {
 	createdAt: number;
 }
 
+export interface OfflineMeta {
+	key: string;
+	userId: string | null;
+	updatedAt: number;
+}
+
 export interface SyncItem {
 	id?: number;
 	action:
@@ -74,6 +81,8 @@ export interface SyncItem {
 		| 'LISTEN_SESSION';
 	payload: unknown;
 	timestamp: number;
+	/** Owner of the mutation. null/undefined = guest; never send under another account. */
+	ownerUserId?: string | null;
 }
 
 export interface OfflineDownload {
@@ -95,6 +104,7 @@ const db = new Dexie('HedgehogDB') as Dexie & {
 	volumeLikes: EntityTable<OfflineVolumeLike, 'volumeId'>;
 	chapterLikes: EntityTable<OfflineChapterLike, 'chapterId'>;
 	bookmarks: EntityTable<OfflineBookmark, 'id'>;
+	meta: EntityTable<OfflineMeta, 'key'>;
 
 	downloads: EntityTable<OfflineDownload, 'chapterId'>;
 
@@ -115,6 +125,29 @@ db.version(1).stores({
 	downloads: 'chapterId, status',
 
 	syncQueue: '++id, action, timestamp'
+});
+
+// v2: local sync ownership. When upgrading an existing v1 database, infer the
+// owner from the cached v1 auth session before new logins can overwrite it.
+db.version(2)
+	.stores({
+		meta: 'key'
+	})
+	.upgrade(async (tx) => {
+		const cached = loadCachedSession();
+		if (cached?.user?.id) {
+			await tx.table('meta').put({
+				key: 'syncOwner',
+				userId: cached.user.id,
+				updatedAt: Date.now()
+			});
+		}
+	});
+
+// v3: every mutation records its owner. Legacy rows have no owner and are
+// treated as guest data, never as the next logged-in account.
+db.version(3).stores({
+	syncQueue: '++id, action, timestamp, ownerUserId'
 });
 
 export { db };

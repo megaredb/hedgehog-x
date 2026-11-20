@@ -10,7 +10,8 @@
 		Heart,
 		Info,
 		Menu,
-		Settings
+		Settings,
+		ShieldCheck
 	} from '@lucide/svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Sheet from '$lib/components/ui/sheet';
@@ -28,16 +29,16 @@
 	// Check whether the route is currently active
 	const isActive = (path: string) => {
 		if (path === '/') {
-			return page.url.pathname === '/' || page.url.pathname.startsWith('/books/');
+			return page.url.pathname === '/books' || page.url.pathname.startsWith('/books/');
 		}
 		return page.url.pathname === path;
 	};
 
-	const groups = [
+	const groups = $derived([
 		{
 			title: strings.nav.library,
 			links: [
-				{ href: resolve('/'), icon: BookOpen, label: strings.nav.catalog },
+				{ href: resolve('/books'), icon: BookOpen, label: strings.nav.catalog },
 				{ href: resolve('/bookmarks'), icon: Bookmark, label: strings.nav.bookmarks },
 				{ href: resolve('/history'), icon: HistoryIcon, label: strings.nav.history },
 				{ href: resolve('/downloads'), icon: Download, label: strings.nav.downloads }
@@ -51,8 +52,22 @@
 				{ href: resolve('/about'), icon: Info, label: strings.nav.about },
 				{ href: resolve('/settings'), icon: Settings, label: strings.nav.settings }
 			]
-		}
-	];
+		},
+		...(page.data.isAdmin === true
+			? [
+					{
+						title: 'Администрирование',
+						links: [
+							{
+								href: resolve('/admin'),
+								icon: ShieldCheck,
+								label: 'Панель управления'
+							}
+						]
+					}
+				]
+			: [])
+	]);
 </script>
 
 <svelte:window bind:scrollY={y} />
@@ -77,7 +92,7 @@
 		{#each groups as group (group.title)}
 			<div class="space-y-1">
 				<span
-					class="text-xxs px-2 font-bold tracking-wider text-muted-foreground/60 uppercase select-none"
+					class="text-xxs px-2 font-bold tracking-wider text-muted-foreground uppercase select-none"
 				>
 					{group.title}
 				</span>
@@ -86,7 +101,7 @@
 						{@const Icon = link.icon}
 						<li>
 							<a
-								href={link.href}
+								href={resolve(link.href as '/')}
 								onclick={onLinkClick}
 								class="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200
 								{isActive(link.href)

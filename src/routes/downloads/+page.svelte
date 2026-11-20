@@ -11,6 +11,7 @@
 	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { resolve } from '$app/paths';
 	import { SvelteMap } from 'svelte/reactivity';
+	import { formatBytes } from '$lib/utils/format';
 
 	const manager = useDownloads();
 
@@ -71,6 +72,7 @@
 
 <svelte:head>
 	<title>Менеджер загрузок | Hedgehog.inc</title>
+	<meta name="description" content="Скачанные главы аудиокниг для офлайн-прослушивания." />
 </svelte:head>
 
 <div class="mx-auto max-w-4xl p-6">
@@ -126,7 +128,7 @@
 										class="block truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
-										{group.volume?.title || 'Неизвестный том'}
+										{group.volume?.title || 'Том ' + group.volumeId}
 									</a>
 									<p class="mt-0.5 text-xs text-muted-foreground">
 										{group.items.length}
@@ -217,7 +219,7 @@
 										class="block truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
-										{group.volume?.title || 'Неизвестный том'}
+										{group.volume?.title || 'Том ' + group.volumeId}
 									</a>
 									<p class="mt-0.5 text-xs font-medium text-green-600">
 										Доступно оффлайн: {group.items.length}
@@ -251,7 +253,7 @@
 											<p class="truncate text-sm font-medium">{chapter.title}</p>
 											<p class="mt-1 text-xs text-muted-foreground">
 												Размер: {stats.totalBytes > 0
-													? (stats.totalBytes / (1024 * 1024)).toFixed(2) + ' МБ'
+													? formatBytes(stats.totalBytes)
 													: 'Неизвестно'}
 											</p>
 										</div>

@@ -1,5 +1,6 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import {
 		Card,
 		CardHeader,
@@ -8,6 +9,8 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
+	import { formatDuration } from '$lib/utils/time';
+	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import {
@@ -19,7 +22,7 @@
 		TableRow
 	} from '$lib/components/ui/table';
 	import { PaginationBar } from '$lib/components/ui/pagination';
-	import { Disc3, Plus, Trash2, Edit, Play, MessageSquare } from '@lucide/svelte';
+	import { Disc3, Plus, Edit, Play, MessageSquare } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
@@ -41,12 +44,6 @@
 	const paginatedChapters = $derived(
 		data.chapters.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
-
-	function formatDuration(sec: number): string {
-		const m = Math.floor(sec / 60);
-		const s = Math.floor(sec % 60);
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
 </script>
 
 <div class="space-y-8">
@@ -168,24 +165,11 @@
 												>
 													<Edit class="h-3.5 w-3.5" />
 												</Button>
-												<form
-													method="POST"
-													action="?/delete"
-													onsubmit={(e) => {
-														if (!confirm(`Удалить главу «${ch.title}»?`)) e.preventDefault();
-													}}
-												>
-													<input type="hidden" name="id" value={ch.id} />
-													<Button
-														type="submit"
-														variant="ghost"
-														size="icon"
-														class="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-														title="Удалить"
-													>
-														<Trash2 class="h-3.5 w-3.5" />
-													</Button>
-												</form>
+												<ConfirmDeleteForm
+													id={ch.id}
+													title="Удалить главу «{ch.title}»?"
+													description="Это действие нельзя отменить."
+												/>
 											</div>
 										</TableCell>
 									</TableRow>
@@ -226,6 +210,7 @@
 					</CardHeader>
 					<CardContent>
 						<form
+							use:enhance
 							method="POST"
 							action={current ? '?/update' : '?/create'}
 							enctype="multipart/form-data"

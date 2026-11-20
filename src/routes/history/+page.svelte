@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import type { Track } from '$lib/html-audio.js';
 	import {
 		db,
 		type OfflineProgress,
@@ -9,6 +11,7 @@
 		type OfflineBook
 	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
+	import { progressSync } from '$lib/client/services/progressSync.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -16,6 +19,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { strings } from '$lib/constants/strings';
 	import { History, Play, Trash2, BookOpen, CheckCircle2, Clock } from '@lucide/svelte';
+	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedHistoryItem extends OfflineProgress {
 		chapter?: OfflineChapter;
@@ -52,24 +56,25 @@
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
+	let now = $state(Date.now());
+
+	onMount(() => {
+		const interval = setInterval(() => (now = Date.now()), 60_000);
+		return () => clearInterval(interval);
+	});
+
+	const totalPages = $derived(Math.max(1, Math.ceil(historyQuery.data.length / pageSize)));
+	$effect(() => {
+		if (currentPage > totalPages) currentPage = totalPages;
+	});
 
 	const paginatedHistory = $derived(
 		historyQuery.data.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 	);
 
-	function formatTime(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-		if (h > 0) {
-			return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-		}
-		return `${m}:${s.toString().padStart(2, '0')}`;
-	}
-
 	function formatRelativeTime(timestamp: number): string {
 		if (!timestamp) return '';
-		const diffMs = Date.now() - timestamp;
+		const diffMs = now - timestamp;
 		const diffMin = Math.floor(diffMs / 60000);
 		if (diffMin < 1) return 'Только что';
 		if (diffMin < 60) return `${diffMin} мин. назад`;
@@ -86,13 +91,20 @@
 
 	async function handleResume(item: EnrichedHistoryItem) {
 		if (!item.chapter) return;
+		const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
+		if (audioStore.currentTrack?.id === item.chapterId) {
+			audioStore.seek(targetSeek);
+			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
 		const volumeId = item.chapter.volumeId;
 		const allChapters = await db.chapters
 			.where('volumeId')
 			.equals(volumeId)
 			.sortBy('chapterNumber');
 
-		const tracks = allChapters.map((ch) => ({
+		const tracks: Track[] = allChapters.map((ch) => ({
 			id: ch.id,
 			title: ch.title,
 			url: ch.audioUrl,
@@ -106,24 +118,33 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
+			tracks[startIndex] = { ...tracks[startIndex], startTime: targetSeek };
 			audioStore.setQueueAndPlay(tracks, startIndex);
-			const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
-			if (targetSeek > 0) {
-				setTimeout(() => {
-					audioStore.seek(targetSeek, false);
-				}, 100);
-			}
 		}
 	}
 
+	let isClearingHistory = $state(false);
+	let clearHistoryError = $state<string | null>(null);
+
 	async function confirmClearHistory() {
-		await db.progress.clear();
-		isClearModalOpen = false;
+		isClearingHistory = true;
+		clearHistoryError = null;
+		try {
+			const cleared = await progressSync.clearAllProgress();
+			if (cleared) {
+				isClearModalOpen = false;
+			} else {
+				clearHistoryError = 'Не удалось очистить историю. Проверьте соединение и попробуйте снова.';
+			}
+		} finally {
+			isClearingHistory = false;
+		}
 	}
 </script>
 
 <svelte:head>
 	<title>{strings.history.title} | Hedgehog X</title>
+	<meta name="description" content="История прослушивания аудиокниг и прогресс по главам." />
 </svelte:head>
 
 <div class="layout-content mx-auto max-w-5xl py-6 md:py-10">
@@ -183,7 +204,7 @@
 		</div>
 	{:else}
 		<div class="grid gap-4">
-			{#each paginatedHistory as item (item.chapterId)}
+			{#each paginatedHistory as item, i (item.chapterId)}
 				{@const duration = item.chapter?.durationSeconds || 1}
 				{@const progressPct = Math.min(100, Math.round((item.progressSeconds / duration) * 100))}
 				{@const isFinished = item.isCompleted || progressPct >= 95}
@@ -197,6 +218,9 @@
 							<img
 								src={item.volume?.coverUrl || item.book?.coverUrl}
 								alt={item.volume?.title || item.chapter?.title || 'Cover'}
+								width={56}
+								height={96}
+								loading={i < 2 ? 'eager' : 'lazy'}
 								class="h-20 w-14 shrink-0 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
 							/>
 						{:else}
@@ -269,8 +293,8 @@
 							<div class="w-full space-y-1 pt-0.5">
 								<Progress value={progressPct} class="h-1.5 w-full" />
 								<div class="text-xxs flex w-full justify-between text-muted-foreground">
-									<span>{formatTime(item.progressSeconds)}</span>
-									<span>{formatTime(duration)}</span>
+									<span>{formatDuration(item.progressSeconds)}</span>
+									<span>{formatDuration(duration)}</span>
 								</div>
 							</div>
 						</div>
@@ -294,12 +318,15 @@
 				{strings.history.clearConfirmDescription}
 			</Dialog.Description>
 		</Dialog.Header>
+		{#if clearHistoryError}
+			<p class="text-sm text-destructive">{clearHistoryError}</p>
+		{/if}
 		<Dialog.Footer class="flex gap-2 sm:justify-end">
 			<Button variant="outline" onclick={() => (isClearModalOpen = false)}>
 				{strings.common.cancel}
 			</Button>
-			<Button variant="destructive" onclick={confirmClearHistory}>
-				{strings.history.clearHistory}
+			<Button variant="destructive" disabled={isClearingHistory} onclick={confirmClearHistory}>
+				{isClearingHistory ? 'Очистка…' : strings.history.clearHistory}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

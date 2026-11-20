@@ -1,11 +1,13 @@
 import { SvelteDate } from 'svelte/reactivity';
 import { db } from '$lib/client/db';
+import { getCurrentOwnerId } from '$lib/client/db/syncState';
 import {
 	sendListenHeartbeat,
 	trackEvent,
 	type ListenHeartbeatPayload
 } from '$lib/client/analytics';
 import { createLogger } from '$lib/logger';
+import { formatLocalDateKey } from '$lib/analytics/stats';
 
 const log = createLogger('ListeningTracker');
 
@@ -40,8 +42,12 @@ export class ListeningTrackerService {
 				});
 			}
 
-			// Initial queue flush attempt if online
-			if (typeof navigator !== 'undefined' && navigator.onLine) {
+			// Initial queue flush attempt if online (browser only).
+			if (
+				typeof indexedDB !== 'undefined' &&
+				typeof navigator !== 'undefined' &&
+				navigator.onLine
+			) {
 				setTimeout(() => this.flushOfflineQueue(), 2000);
 			}
 		}
@@ -85,7 +91,8 @@ export class ListeningTrackerService {
 				bookId: this.currentSession.bookId,
 				volumeId: this.currentSession.volumeId,
 				listenedSeconds: Math.min(secondsToEmit, MAX_SINGLE_SESSION_SECONDS),
-				startedAt: new SvelteDate(this.currentSession.startedAt).toISOString()
+				startedAt: new SvelteDate(this.currentSession.startedAt).toISOString(),
+				dateKey: formatLocalDateKey(this.currentSession.startedAt)
 			};
 
 			this.currentSession.startedAt = now;
@@ -113,10 +120,16 @@ export class ListeningTrackerService {
 				bookId,
 				volumeId,
 				listenedSeconds: Math.min(seconds, MAX_SINGLE_SESSION_SECONDS),
-				startedAt
+				startedAt,
+				dateKey: formatLocalDateKey(startedAt)
 			};
 			void this.dispatchSession(payload);
 		}
+	}
+
+	/** Drops the in-memory session so logout cannot send it under the next user. */
+	reset() {
+		this.currentSession = null;
 	}
 
 	/**
@@ -153,11 +166,14 @@ export class ListeningTrackerService {
 	 * Saves an unsubmitted listening session into Dexie offline syncQueue.
 	 */
 	private async enqueueOffline(session: ListenHeartbeatPayload) {
+		if (typeof indexedDB === 'undefined') return;
+
 		try {
 			await db.syncQueue.add({
 				action: 'LISTEN_SESSION',
 				payload: session,
-				timestamp: Date.now()
+				timestamp: Date.now(),
+				ownerUserId: await getCurrentOwnerId()
 			});
 			log.debug(`Saved ${session.listenedSeconds}s listening session to offline syncQueue`);
 		} catch (err) {
@@ -169,10 +185,14 @@ export class ListeningTrackerService {
 	 * Flushes all pending offline listening sessions to the server in a batch.
 	 */
 	async flushOfflineQueue() {
+		if (typeof indexedDB === 'undefined') return;
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
 		try {
-			const queued = await db.syncQueue.where('action').equals('LISTEN_SESSION').toArray();
+			const ownerUserId = await getCurrentOwnerId();
+			const queued = (await db.syncQueue.where('action').equals('LISTEN_SESSION').toArray()).filter(
+				(item) => (item.ownerUserId ?? null) === ownerUserId
+			);
 			if (queued.length === 0) return;
 
 			const sessions = queued

@@ -67,10 +67,8 @@ class HtmlAudio {
 		if (!audio) return;
 
 		audio.addEventListener('error', () => {
-			if (this.retryAttempts < this.maxRetries) {
-				this.retryAttempts++;
-				setTimeout(() => this.reloadAudio(), 1000);
-			}
+			// AudioProvider owns retries; retrying here as well caused two
+			// concurrent reloads for one failure.
 			this.eventTarget.dispatchEvent(new CustomEvent('audioError'));
 		});
 
@@ -352,15 +350,6 @@ class HtmlAudio {
 		updateVolume();
 	}
 
-	getVolume(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.volume;
-			}) ?? 0
-		);
-	}
-
 	setMuted(muted: boolean): void {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
@@ -374,23 +363,6 @@ class HtmlAudio {
 				this.fadeVolume({ audio, targetVolume: this.lastVolume, duration: 200 });
 			}
 		});
-	}
-
-	getDuration(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.duration;
-			}) ?? 0
-		);
-	}
-	getCurrentTime(): number {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.currentTime;
-			}) ?? 0
-		);
 	}
 
 	setCurrentTime(time: number): void {
@@ -418,28 +390,6 @@ class HtmlAudio {
 		options?: EventListenerOptions | boolean
 	): void {
 		this.eventTarget.removeEventListener(type, callback, options);
-	}
-
-	getSource(): string {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.src;
-			}) ?? ''
-		);
-	}
-	isPaused(): boolean {
-		return (
-			this.ifClient(() => {
-				const a = this.ensureAudio();
-				return a.paused;
-			}) ?? true
-		);
-	}
-
-	getBufferedRanges(): TimeRanges | null {
-		if (!this.isClient() || !this.audio) return null;
-		return this.audio.buffered;
 	}
 
 	setPlaybackRate(rate: number): void {
@@ -471,11 +421,4 @@ class HtmlAudio {
 
 export const htmlAudio = new HtmlAudio();
 
-const MINUTE_IN_SECONDS = 60;
-
-export function formatDuration(seconds: number): string {
-	if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-	const minutes = Math.floor(seconds / MINUTE_IN_SECONDS);
-	const remainingSeconds = Math.floor(seconds % MINUTE_IN_SECONDS);
-	return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-}
+export { formatDuration } from '$lib/utils/time';

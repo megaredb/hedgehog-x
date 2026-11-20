@@ -10,7 +10,7 @@
 			description: 'Официальная группа ВКонтакте',
 			url: 'https://vk.com/hedgehoginc',
 			badge: 'VK',
-			colorClass: 'text-blue-500 bg-blue-500/10 border-blue-500/20'
+			colorClass: 'text-blue-400 bg-blue-500/10 border-blue-500/20'
 		},
 		{
 			title: 'Telegram — Overlord',

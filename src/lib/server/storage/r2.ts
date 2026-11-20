@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+	S3Client,
+	PutObjectCommand,
+	DeleteObjectCommand,
+	GetObjectCommand
+} from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { encode } from 'blurhash';
 import { randomUUID } from 'node:crypto';
@@ -10,6 +15,43 @@ const dynamicPrivate = await import('$env/dynamic/private').catch(() => ({ env: 
 const env = dynamicPrivate.env;
 
 const log = createLogger('R2Storage');
+
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+
+const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.mp4', '.ogg', '.opus', '.wav', '.aac']);
+
+export class StorageValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'StorageValidationError';
+	}
+}
+
+function isProduction(): boolean {
+	return process.env.NODE_ENV === 'production';
+}
+
+function isSupportedImage(buffer: Buffer): boolean {
+	return (
+		(buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) ||
+		(buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) ||
+		(buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+			buffer.subarray(8, 12).toString('ascii') === 'WEBP') ||
+		buffer.subarray(0, 3).toString('ascii') === 'GIF'
+	);
+}
+
+function isSupportedAudio(buffer: Buffer): boolean {
+	const ascii = buffer.subarray(0, 12).toString('ascii');
+	return (
+		ascii.startsWith('ID3') ||
+		(buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) ||
+		ascii.startsWith('OggS') ||
+		ascii.startsWith('RIFF') ||
+		ascii.slice(4, 8) === 'ftyp'
+	);
+}
 
 export interface UploadImageResult {
 	url: string;
@@ -25,7 +67,20 @@ export interface UploadAudioResult {
 	key: string;
 }
 
-function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
+/** Fetches an object for the local media proxy (including byte ranges for audio seeking). */
+export async function getMediaObject(key: string, range?: string) {
+	const r2 = getS3Client();
+	if (!r2) return null;
+	return r2.client.send(
+		new GetObjectCommand({
+			Bucket: r2.bucket,
+			Key: key,
+			...(range ? { Range: range } : {})
+		})
+	);
+}
+
+export function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
 	const accountId = env.R2_ACCOUNT_ID;
 	const accessKeyId = env.R2_ACCESS_KEY_ID;
 	const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
@@ -56,6 +111,13 @@ export async function uploadImage(
 	buffer: Buffer,
 	options: { folder?: string; filenamePrefix?: string } = {}
 ): Promise<UploadImageResult> {
+	if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) {
+		throw new StorageValidationError('Image must be between 1 byte and 15 MB');
+	}
+	if (!isSupportedImage(buffer)) {
+		throw new StorageValidationError('Unsupported image format (PNG, JPEG, WebP, GIF only)');
+	}
+
 	const folder = options.folder ?? 'images';
 	const prefix = options.filenamePrefix ? `${options.filenamePrefix}-` : '';
 	const key = `${folder}/${prefix}${randomUUID()}.webp`;
@@ -116,8 +178,12 @@ export async function uploadImage(
 		};
 	}
 
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
+	}
+
 	// Fallback for local development if R2 credentials are not set
-	const localDir = path.resolve('static/uploads', folder);
+	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
 	await fs.mkdir(localDir, { recursive: true });
 	const localFilePath = path.resolve(localDir, `${prefix}${path.basename(key)}`);
 	await fs.writeFile(localFilePath, webpBuffer);
@@ -140,9 +206,18 @@ export async function uploadAudio(
 	buffer: Buffer,
 	options: { originalFilename?: string; contentType?: string; folder?: string } = {}
 ): Promise<UploadAudioResult> {
+	if (buffer.length === 0 || buffer.length > MAX_AUDIO_BYTES) {
+		throw new StorageValidationError('Audio must be between 1 byte and 500 MB');
+	}
+	if (!isSupportedAudio(buffer)) {
+		throw new StorageValidationError('Unsupported audio format');
+	}
+
 	const folder = options.folder ?? 'audio';
-	const ext = options.originalFilename ? path.extname(options.originalFilename) : '.mp3';
-	const safeExt = ext || '.mp3';
+	const rawExt = options.originalFilename
+		? path.extname(options.originalFilename).toLowerCase()
+		: '.mp3';
+	const safeExt = ALLOWED_AUDIO_EXTENSIONS.has(rawExt) ? rawExt : '.mp3';
 	const key = `${folder}/${randomUUID()}${safeExt}`;
 	const contentType = options.contentType || 'audio/mpeg';
 
@@ -163,8 +238,12 @@ export async function uploadAudio(
 		};
 	}
 
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
+	}
+
 	// Fallback for local development
-	const localDir = path.resolve('static/uploads', folder);
+	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
 	await fs.mkdir(localDir, { recursive: true });
 	const localFilePath = path.resolve(localDir, path.basename(key));
 	await fs.writeFile(localFilePath, buffer);
@@ -192,6 +271,8 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 		}
 	} else if (keyOrUrl.startsWith('/uploads/')) {
 		key = keyOrUrl.replace(/^\/uploads\//, '');
+	} else if (keyOrUrl.startsWith('/api/media/')) {
+		key = keyOrUrl.replace(/^\/api\/media\//, '');
 	}
 
 	if (r2) {
@@ -209,9 +290,14 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 		}
 	}
 
+	if (isProduction()) {
+		log.error('R2 is not configured; refusing local deletion in production');
+		return false;
+	}
+
 	// Local file fallback
 	try {
-		const localFilePath = path.resolve('static/uploads', key);
+		const localFilePath = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', key);
 		await fs.unlink(localFilePath);
 		return true;
 	} catch {

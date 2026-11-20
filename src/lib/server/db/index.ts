@@ -15,3 +15,14 @@ try {
 const client = postgres(databaseUrl ?? 'postgres://root:mysecretpassword@localhost:5432/local');
 
 export const db = drizzle(client, { schema });
+
+// adapter-node emits this after the HTTP server has stopped accepting requests.
+// Without closing postgres-js, its pool keeps the process alive until Docker
+// sends SIGKILL, so the container is never actually graceful.
+process.once('sveltekit:shutdown', async () => {
+	try {
+		await client.end({ timeout: 5 });
+	} catch {
+		// Already closed or shutdown deadline exceeded.
+	}
+});

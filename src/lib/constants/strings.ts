@@ -4,21 +4,13 @@
 export const strings = {
 	common: {
 		appName: 'HEDGEHOG.INC',
-		appTagline: 'Аудиокниги онлайн',
 		loading: 'Загрузка...',
-		save: 'Сохранить',
 		cancel: 'Отмена',
 		delete: 'Удалить',
-		edit: 'Редактировать',
 		close: 'Закрыть',
-		confirm: 'Подтвердить',
-		back: 'Назад',
-		actions: 'Действия',
-		error: 'Ошибка',
-		success: 'Успешно',
-		empty: 'Нет данных',
 		search: 'Поиск...',
 		notFound: 'Ничего не найдено',
+		allBooks: 'Все книги',
 		guest: 'Гость',
 		signIn: 'Войти в аккаунт',
 		signOut: 'Выйти'
@@ -34,8 +26,7 @@ export const strings = {
 		support: 'Поддержать',
 		about: 'О сайте',
 		profile: 'Профиль',
-		settings: 'Настройки',
-		admin: 'Панель управления'
+		settings: 'Настройки'
 	},
 	breadcrumbs: {
 		home: 'Главная',
@@ -49,19 +40,15 @@ export const strings = {
 		profile: 'Профиль',
 		settings: 'Настройки',
 		admin: 'Панель управления',
+		analytics: 'Аналитика',
 		chapters: 'Главы',
 		volumes: 'Тома',
 		illustrations: 'Иллюстрации',
-		auth: 'Авторизация'
+		auth: 'Авторизация',
+		unknown: 'Раздел'
 	},
 	player: {
-		play: 'Воспроизвести',
-		pause: 'Пауза',
-		skipForward: 'Вперед на 10 сек',
-		skipBack: 'Назад на 10 сек',
-		speed: 'Скорость',
 		volume: 'Громкость',
-		sleepTimer: 'Таймер сна',
 		undoSeek: 'Отменить',
 		undoSeekTo: 'К',
 		addBookmark: 'Добавить закладку',
@@ -78,15 +65,13 @@ export const strings = {
 			'Создавайте закладки во время прослушивания с помощью кнопки с иконкой закладки в плеере.',
 		addModalTitle: 'Новая закладка',
 		addModalDescription: 'Сохраните текущую позицию прослушивания с заметкой.',
-		timeLabel: 'Таймкод',
 		noteLabel: 'Заметка',
 		saveBookmark: 'Сохранить закладку',
 		deleteBookmark: 'Удалить закладку',
 		deleteConfirmTitle: 'Удалить закладку?',
 		deleteConfirmDescription:
 			'Вы уверены, что хотите удалить эту закладку? Это действие необратимо.',
-		jumpToBookmark: 'Перейти к фрагменту',
-		noNote: 'Без заметки'
+		jumpToBookmark: 'Перейти к фрагменту'
 	},
 	history: {
 		title: 'История прослушиваний',
@@ -95,16 +80,14 @@ export const strings = {
 		emptyDescription: 'Начните слушать аудиокниги в каталоге, и они появятся здесь.',
 		resume: 'Продолжить',
 		completed: 'Прослушано',
-		inProgress: 'В процессе',
 		clearHistory: 'Очистить историю',
 		clearConfirmTitle: 'Очистить историю?',
 		clearConfirmDescription: 'Вы уверены, что хотите очистить всю локальную историю прослушиваний?',
-		chaptersCount: 'глав',
-		today: 'Сегодня',
 		yesterday: 'Вчера'
 	},
 	volume: {
 		chaptersTab: 'Главы',
+		bookmarksTab: 'Закладки',
 		illustrationsTab: 'Иллюстрации',
 		commentsTab: 'Обсуждение',
 		volumeCompletedTitle: 'Том завершен',
@@ -120,32 +103,24 @@ export const strings = {
 		volumeReleasedStatusDesc: 'Все главы тома полностью выпущены.',
 		volumeRecordingStatus: 'В процессе озвучки',
 		volumeRecordingStatusDesc: 'Новые главы появятся по мере записи. Подпишитесь на уведомления!',
-		noIllustrationsTitle: 'Иллюстраций пока нет',
-		noIllustrationsDesc: 'Для этого тома ещё не добавлены официальные иллюстрации.',
-		zoomImage: 'Увеличить',
 		discussionTitle: 'Обсуждение тома',
 		discussionSubtitle: (num: number, title: string) =>
 			`Комментарии последней выпущенной главы (${num}: ${title})`
 	},
 	support: {
 		title: 'Поддержать автора',
-		description:
-			'Ваша поддержка помогает быстрее выпускать новые главы и озвучивать любимые книги.',
 		cardTransferTitle: 'Перевод по карте',
 		cardNumber: '4817 7603 3434 7832',
 		copyCard: 'Скопировать номер карты',
 		copyCardShort: 'Скопировать карту',
-		cardCopied: 'Номер скопирован!',
 		sberPayAction: 'Перевод',
 		boostyTitle: 'Boosty',
 		boostyDesc: 'Ежемесячная подписка и донаты',
-		bankQrTitle: 'Банковский перевод',
 		bankQrSubtitle: 'Отсканируйте QR-код или нажмите на него',
 		cryptoTitle: 'Криптовалюта (Сеть TON)',
 		cryptoSubtitle: 'Отсканируйте QR-код или скопируйте адрес',
 		cryptoAddress: 'UQDoqpcudSDCZGqKWCoLDT008_BNhSKBUao_G5MZR9jcpf-i',
 		copyCrypto: 'Скопировать адрес',
-		cryptoCopied: 'Адрес скопирован!',
 		copied: 'Скопировано!',
 		qrCodeBtn: 'QR-код',
 		cardQrAriaLabel: 'QR-код карты',
@@ -174,7 +149,6 @@ export const strings = {
 		copyText: 'Скопировать текст',
 		textCopied: 'Текст скопирован!',
 		shareAction: 'Поделиться...',
-		shareFallbackToast: 'Ссылка скопирована в буфер обмена!',
 		shareLink: 'Скопировать ссылку'
 	},
 	settings: {
@@ -187,42 +161,19 @@ export const strings = {
 		playbackRateDesc: 'Скорость воспроизведения новых глав',
 		autoAdvance: 'Автопереход',
 		autoAdvanceDesc: 'Автоматически включать следующую главу по окончании текущей',
+		wakeLock: 'Не давать экрану гаснуть',
+		wakeLockDesc: 'Оставлять экран включённым во время прослушивания. Может расходовать батарею.',
+		wakeLockUnsupported: 'Этот браузер не поддерживает блокировку сна экрана.',
 		networkSection: 'Сеть и зеркала',
 		mirrorPreference: 'Активное зеркало CDN',
 		mirrorPreferenceDesc: 'Выберите сервер для загрузки аудио и обложек',
 		storageSection: 'Хранилище и кэш PWA',
 		storageUsage: 'Использовано дискового пространства',
 		clearCacheBtn: 'Очистить кэш прослушанных глав',
-		cacheClearedToast: 'Локальный кэш успешно очищен',
 		syncSection: 'Синхронизация',
 		syncStatus: 'Синхронизация с сервером',
 		queueCount: 'Действий в очереди:',
-		syncNowBtn: 'Синхронизировать сейчас',
-		syncSuccessToast: 'Все действия синхронизированы'
-	},
-	community: {
-		title: 'Сообщество',
-		subtitle:
-			'Хотите узнать больше об авторе? Подпишитесь на социальные сети и будьте в курсе всех новостей!',
-		whyJoinTitle: 'Почему стоит подписаться?',
-		notificationsTitle: 'Уведомления',
-		notificationsDesc: 'Получайте уведомления о новых главах и обновлениях',
-		chatTitle: 'Общение',
-		chatDesc: 'Общайтесь с другими слушателями и делитесь мнениями',
-		exclusivesTitle: 'Эксклюзивы',
-		exclusivesDesc: 'Доступ к эксклюзивному контенту и бонусам'
-	},
-	admin: {
-		title: 'Панель управления',
-		books: 'Книги',
-		volumes: 'Тома',
-		chapters: 'Главы',
-		illustrations: 'Иллюстрации',
-		addBook: 'Добавить книгу',
-		addVolume: 'Добавить том',
-		addChapter: 'Добавить главу',
-		addIllustration: 'Добавить иллюстрацию',
-		deleteConfirm: 'Вы уверены, что хотите удалить эту запись?'
+		syncNowBtn: 'Синхронизировать сейчас'
 	}
 } as const;
 

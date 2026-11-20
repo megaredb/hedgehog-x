@@ -29,6 +29,59 @@
 	let prevTrackId: string | number | undefined = undefined;
 	let lastProgressSaveTime = 0;
 	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
+	let wakeLock: WakeLockSentinel | null = null;
+
+	$effect(() => {
+		if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+		const track = audioStore.currentTrack;
+		if (track) {
+			const artwork = track.artwork
+				? [{ src: track.artwork, sizes: '512x512', type: 'image/webp' }]
+				: [];
+			navigator.mediaSession.metadata = new MediaMetadata({
+				title: track.title || 'Hedgehog X',
+				artist: track.artist || 'HEDGEHOG.INC',
+				album: track.album || '',
+				artwork
+			});
+		}
+		navigator.mediaSession.playbackState = audioStore.isPlaying ? 'playing' : 'paused';
+	});
+
+	$effect(() => {
+		if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+		if (!audioStore.wakeLockEnabled || !audioStore.isPlaying) {
+			void wakeLock?.release().catch(() => {});
+			wakeLock = null;
+			return;
+		}
+
+		let cancelled = false;
+		const acquire = () => {
+			if (cancelled || !audioStore.wakeLockEnabled || !audioStore.isPlaying) return;
+			if (wakeLock && !wakeLock.released) return;
+			void navigator.wakeLock
+				.request('screen')
+				.then((lock) => {
+					if (cancelled) return lock.release();
+					wakeLock = lock;
+				})
+				.catch(() => {});
+		};
+		const onVisibilityChange = () => {
+			if (document.visibilityState === 'visible') acquire();
+		};
+
+		acquire();
+		document.addEventListener('visibilitychange', onVisibilityChange);
+
+		return () => {
+			cancelled = true;
+			document.removeEventListener('visibilitychange', onVisibilityChange);
+			void wakeLock?.release().catch(() => {});
+			wakeLock = null;
+		};
+	});
 
 	// ─── Sync tracks prop → store ───────────────────────────────────────────────
 	$effect(() => {
@@ -141,6 +194,33 @@
 
 	// ─── Main setup (event listeners on HTMLAudioElement) ──────────────────────
 	onMount(() => {
+		if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+			const actions: Array<[MediaSessionAction, (details?: MediaSessionActionDetails) => void]> = [
+				['play', () => audioStore.play()],
+				['pause', () => audioStore.pause()],
+				['previoustrack', () => audioStore.previous()],
+				['nexttrack', () => audioStore.next()],
+				[
+					'seekbackward',
+					() => audioStore.seek(audioStore.currentTime - audioStore.seekStep, false)
+				],
+				['seekforward', () => audioStore.seek(audioStore.currentTime + audioStore.seekStep, false)],
+				[
+					'seekto',
+					(details) => {
+						if (details?.seekTime != null) audioStore.seek(details.seekTime, false);
+					}
+				]
+			];
+			for (const [action, handler] of actions) {
+				try {
+					navigator.mediaSession.setActionHandler(action, handler);
+				} catch {
+					/* action unsupported */
+				}
+			}
+		}
+
 		htmlAudio.init();
 
 		preloadAudio = new Audio();
@@ -245,6 +325,12 @@
 				return;
 			}
 
+			if (audioStore.sleepTimerEndOnTrack) {
+				audioStore.pause();
+				audioStore.cancelSleepTimer();
+				return;
+			}
+
 			if (audioStore.repeatMode === 'one' && audioStore.currentTrack) {
 				try {
 					await htmlAudio.load({
@@ -260,12 +346,6 @@
 				} catch {
 					/* fall through to next */
 				}
-			}
-
-			if (audioStore.sleepTimerEndOnTrack) {
-				audioStore.pause();
-				audioStore.cancelSleepTimer();
-				return;
 			}
 
 			audioStore.handleTrackEnd();
@@ -455,13 +535,16 @@
 			audioStore.volume,
 			audioStore.isMuted,
 			audioStore.playbackRate,
-			audioStore.repeatMode,
-			audioStore.shuffleEnabled,
-			audioStore.currentTime,
-			audioStore.insertMode,
 			audioStore.currentQueueIndex
 		];
 		audioStore.saveToStorage();
+	});
+
+	/** Persist playback position at most every 5 seconds while playing. */
+	$effect(() => {
+		if (!audioStore.isPlaying) return;
+		const interval = setInterval(() => audioStore.saveToStorage(), 5000);
+		return () => clearInterval(interval);
 	});
 </script>
 

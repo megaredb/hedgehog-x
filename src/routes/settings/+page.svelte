@@ -53,6 +53,8 @@
 	let currentSeekStep = $state<SeekStep>(10);
 	let currentPlaybackRate = $state<PlaybackRate>(1);
 	let autoAdvance = $state(true);
+	let wakeLockEnabled = $state(false);
+	let wakeLockSupported = $state(false);
 
 	// ── State: Mirror & Network ──────────────────────────────────────────────
 	let mirrorPref = $state<MirrorPreference>('auto');
@@ -114,6 +116,12 @@
 		showToast(enabled ? 'Автопереход включён' : 'Автопереход выключён');
 	}
 
+	function handleWakeLockChange(enabled: boolean) {
+		wakeLockEnabled = enabled;
+		audioStore.setWakeLockEnabled(enabled);
+		showToast(enabled ? 'Экран будет оставаться включённым' : 'Блокировка сна экрана выключена');
+	}
+
 	// ── Handlers: Mirror ─────────────────────────────────────────────────────
 	function handleMirrorSelect(pref: MirrorPreference) {
 		mirrorPref = pref;
@@ -125,9 +133,10 @@
 	async function handleConfirmClearCache() {
 		isClearing = true;
 		try {
-			const res = await clearAppCache({ clearDownloads: true });
+			// Cache cleanup must not silently delete the user's offline library.
+			const res = await clearAppCache({ clearDownloads: false });
 			if (res.success) {
-				showToast('Локальный кэш и загрузки успешно очищены');
+				showToast('Кэш страниц очищен; скачанные главы сохранены');
 			} else {
 				showToast('Не удалось полностью очистить кэш');
 			}
@@ -145,8 +154,9 @@
 		try {
 			const result = await performManualSync();
 			if (result.success) {
-				if (result.syncedLikes > 0) {
-					showToast(`Синхронизировано ${result.syncedLikes} действий`);
+				const syncedCount = result.syncedLikes + result.syncedBookmarks;
+				if (syncedCount > 0) {
+					showToast(`Синхронизировано ${syncedCount} действий`);
 				} else {
 					showToast('Все данные уже синхронизированы с сервером');
 				}
@@ -173,6 +183,8 @@
 		currentSeekStep = (audioStore.seekStep as SeekStep) || 10;
 		currentPlaybackRate = (audioStore.playbackRate as PlaybackRate) || 1;
 		autoAdvance = audioStore.autoAdvance;
+		wakeLockEnabled = audioStore.wakeLockEnabled;
+		wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
 		mirrorPref = getMirrorPreference();
 
 		// Realtime online status
@@ -197,6 +209,7 @@
 
 <svelte:head>
 	<title>{strings.settings.title} — {strings.common.appName}</title>
+	<meta name="description" content="Настройки воспроизведения, зеркал и офлайн-кэша." />
 </svelte:head>
 
 <div class="mx-auto max-w-4xl space-y-8 p-4 sm:p-6 lg:p-8">
@@ -289,6 +302,29 @@
 						checked={autoAdvance}
 						onCheckedChange={handleAutoAdvanceChange}
 						aria-label={strings.settings.autoAdvance}
+					/>
+				</div>
+
+				<Separator />
+
+				<!-- Keep screen awake -->
+				<div class="flex items-center justify-between gap-4">
+					<div class="space-y-0.5">
+						<label for="wake-lock-toggle" class="cursor-pointer text-sm font-medium">
+							{strings.settings.wakeLock}
+						</label>
+						<p class="text-xs text-muted-foreground">
+							{wakeLockSupported
+								? strings.settings.wakeLockDesc
+								: strings.settings.wakeLockUnsupported}
+						</p>
+					</div>
+					<Switch
+						id="wake-lock-toggle"
+						checked={wakeLockEnabled}
+						disabled={!wakeLockSupported}
+						onCheckedChange={handleWakeLockChange}
+						aria-label={strings.settings.wakeLock}
 					/>
 				</div>
 			</CardContent>
@@ -388,7 +424,11 @@
 							{storageInfo.formattedUsage} из {storageInfo.formattedQuota} ({storageInfo.percentage}%)
 						</span>
 					</div>
-					<Progress value={storageInfo.percentage} class="h-2" />
+					<Progress
+						value={storageInfo.percentage}
+						aria-label="Использовано дискового пространства"
+						class="h-2"
+					/>
 				</div>
 
 				<Separator />
@@ -423,7 +463,7 @@
 							>{strings.settings.clearCacheBtn}</span
 						>
 						<p class="text-xs text-muted-foreground">
-							Удаляет кэш CacheStorage, загруженные аудиофайлы и данные из локальной БД
+							Очищает кэш страниц. Скачанные главы и данные локальной БД остаются.
 						</p>
 					</div>
 					<Button

@@ -23,6 +23,11 @@
 	// Touch pinch state
 	let initialTouchDistance = 0;
 	let initialZoom = 1;
+	let dialogEl = $state<HTMLDivElement | null>(null);
+
+	$effect(() => {
+		if (open) dialogEl?.focus();
+	});
 
 	function resetZoom() {
 		zoom = 1;
@@ -118,8 +123,26 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && open) {
+		if (!open) return;
+		if (e.key === 'Escape') {
 			close();
+			return;
+		}
+		if (e.key !== 'Tab' || !dialogEl) return;
+		const focusable = [
+			...dialogEl.querySelectorAll<HTMLElement>(
+				'button, [href], input, [tabindex]:not([tabindex="-1"])'
+			)
+		].filter((el) => !el.hasAttribute('disabled'));
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
 		}
 	}
 </script>
@@ -128,8 +151,8 @@
 
 {#if open}
 	<Portal>
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div
+			bind:this={dialogEl}
 			role="dialog"
 			aria-modal="true"
 			tabindex="-1"
@@ -137,6 +160,9 @@
 			transition:fade={{ duration: 200 }}
 			onclick={(e) => {
 				if (e.target === e.currentTarget && !isDragging) close();
+			}}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') close();
 			}}
 		>
 			<!-- Top control bar -->
@@ -186,8 +212,10 @@
 			</div>
 
 			<!-- Image viewport -->
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div
+				role="application"
+				aria-label="Просмотр изображения"
 				class="relative flex w-full max-w-5xl flex-1 items-center justify-center overflow-hidden"
 				onwheel={handleWheel}
 				onmousedown={handleMouseDown}

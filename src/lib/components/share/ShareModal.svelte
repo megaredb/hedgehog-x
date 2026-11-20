@@ -55,6 +55,12 @@
 		userIncludeTimestamp = null;
 		userCustomTimestamp = null;
 		customTimeInput = null;
+		copiedLink = false;
+		copiedText = false;
+		if (linkTimeout) clearTimeout(linkTimeout);
+		if (textTimeout) clearTimeout(textTimeout);
+		linkTimeout = null;
+		textTimeout = null;
 	}
 
 	function parseTimeInput(input: string): number {

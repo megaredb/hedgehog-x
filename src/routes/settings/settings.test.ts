@@ -160,8 +160,10 @@ describe('Settings Center Utilities & Formatters', () => {
 	});
 
 	describe('Playback rate validation and persistence', () => {
-		it('validates standard playback rates (0.75, 1, 1.25, 1.5, 1.75, 2)', () => {
-			assert.deepEqual(PLAYBACK_RATES, [0.75, 1, 1.25, 1.5, 1.75, 2]);
+		it('validates standard playback rates (0.25..2)', () => {
+			assert.deepEqual(PLAYBACK_RATES, [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]);
+			assert.equal(isValidPlaybackRate(0.25), true);
+			assert.equal(isValidPlaybackRate(0.5), true);
 			assert.equal(isValidPlaybackRate(0.75), true);
 			assert.equal(isValidPlaybackRate(1), true);
 			assert.equal(isValidPlaybackRate(1.25), true);
@@ -169,7 +171,7 @@ describe('Settings Center Utilities & Formatters', () => {
 			assert.equal(isValidPlaybackRate(1.75), true);
 			assert.equal(isValidPlaybackRate(2), true);
 
-			assert.equal(isValidPlaybackRate(0.5), false);
+			assert.equal(isValidPlaybackRate(0.1), false);
 			assert.equal(isValidPlaybackRate(3.0), false);
 			assert.equal(isValidPlaybackRate('1.5'), false);
 		});

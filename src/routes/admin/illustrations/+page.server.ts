@@ -1,8 +1,14 @@
 import { db } from '$lib/server/db';
 import { books, volumes, illustrations } from '$lib/server/db/schema';
-import { eq, desc, asc } from 'drizzle-orm';
+import { eq, desc, asc, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadImage } from '$lib/server/storage/r2';
+import { clampPage, pageCount } from '$lib/utils/pagination';
+import {
+	deleteFromStorage,
+	MAX_IMAGE_BYTES,
+	StorageValidationError,
+	uploadImage
+} from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import type { PageServerLoad } from './$types';
@@ -43,19 +49,57 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.leftJoin(volumes, eq(illustrations.volumeId, volumes.id))
 		.leftJoin(books, eq(volumes.bookId, books.id));
 
-	const allIllustrations = selectedVolumeId
-		? await allIllustrationsQuery
-				.where(eq(illustrations.volumeId, selectedVolumeId))
-				.orderBy(asc(illustrations.sortOrder))
-		: await allIllustrationsQuery.orderBy(desc(illustrations.updatedAt)).limit(100);
+	const pageSize = 50;
+	const requestedPage = Number.parseInt(url.searchParams.get('page') ?? '1', 10);
+	const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+	const where = selectedVolumeId ? eq(illustrations.volumeId, selectedVolumeId) : undefined;
+
+	const [countRow] = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(illustrations)
+		.where(where);
+	const total = Number(countRow?.count ?? 0);
+	const totalPages = pageCount(total, pageSize);
+	const safePage = clampPage(page, total, pageSize);
+
+	const allIllustrations = await allIllustrationsQuery
+		.where(where)
+		.orderBy(selectedVolumeId ? asc(illustrations.sortOrder) : desc(illustrations.updatedAt))
+		.limit(pageSize)
+		.offset((safePage - 1) * pageSize);
 
 	const editId = url.searchParams.get('edit');
-	const editIllustration = editId ? allIllustrations.find((i) => i.id === editId) : null;
+	const editIllustration = editId
+		? ((
+				await db
+					.select({
+						id: illustrations.id,
+						volumeId: illustrations.volumeId,
+						imageUrl: illustrations.imageUrl,
+						blurhash: illustrations.blurhash,
+						caption: illustrations.caption,
+						sortOrder: illustrations.sortOrder,
+						volumeTitle: volumes.title,
+						volumeNumber: volumes.volumeNumber,
+						bookId: volumes.bookId,
+						bookTitle: books.title
+					})
+					.from(illustrations)
+					.leftJoin(volumes, eq(illustrations.volumeId, volumes.id))
+					.leftJoin(books, eq(volumes.bookId, books.id))
+					.where(eq(illustrations.id, editId))
+					.limit(1)
+			)[0] ?? null)
+		: null;
 
 	return {
 		volumes: allVolumes,
 		illustrations: allIllustrations,
 		selectedVolumeId,
+		page: safePage,
+		pageSize,
+		total,
+		totalPages,
 		editIllustration
 	};
 };
@@ -77,18 +121,24 @@ export const actions: Actions = {
 
 		const id = `ill_${volumeId}_${randomUUID().slice(0, 8)}`;
 
+		let uploadedUrl: string | null = null;
 		const imageFile = form.get('imageFile');
 		if (imageFile && imageFile instanceof File && imageFile.size > 0) {
+			if (imageFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер изображения не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await imageFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, {
 					folder: 'illustrations',
 					filenamePrefix: volumeId
 				});
+				uploadedUrl = uploaded.url;
 				imageUrl = uploaded.url;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки изображения: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -109,6 +159,7 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Ошибка базы данных: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -130,18 +181,30 @@ export const actions: Actions = {
 			return fail(400, { error: 'ID и том обязательны' });
 		}
 
+		const [old] = await db
+			.select({ imageUrl: illustrations.imageUrl })
+			.from(illustrations)
+			.where(eq(illustrations.id, id))
+			.limit(1);
+
+		let uploadedUrl: string | null = null;
 		const imageFile = form.get('imageFile');
 		if (imageFile && imageFile instanceof File && imageFile.size > 0) {
+			if (imageFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер изображения не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await imageFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, {
 					folder: 'illustrations',
 					filenamePrefix: volumeId
 				});
+				uploadedUrl = uploaded.url;
 				imageUrl = uploaded.url;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки изображения: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -168,8 +231,12 @@ export const actions: Actions = {
 			}
 
 			await db.update(illustrations).set(updateData).where(eq(illustrations.id, id));
+			if (updateData.imageUrl && old?.imageUrl && old.imageUrl !== updateData.imageUrl) {
+				await deleteFromStorage(old.imageUrl);
+			}
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Ошибка обновления иллюстрации: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -186,7 +253,13 @@ export const actions: Actions = {
 		}
 
 		try {
+			const [old] = await db
+				.select({ imageUrl: illustrations.imageUrl })
+				.from(illustrations)
+				.where(eq(illustrations.id, id))
+				.limit(1);
 			await db.delete(illustrations).where(eq(illustrations.id, id));
+			if (old?.imageUrl) await deleteFromStorage(old.imageUrl);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

@@ -37,6 +37,7 @@
 	{/if}
 	<meta property="og:url" content={meta.url} />
 	<meta property="og:site_name" content={meta.siteName} />
+	<link rel="canonical" href={meta.url} />
 
 	<!-- Twitter Cards -->
 	<meta name="twitter:card" content="summary_large_image" />

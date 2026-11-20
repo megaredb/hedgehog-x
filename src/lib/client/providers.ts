@@ -11,6 +11,7 @@ export interface AuthProvider {
 	description: string;
 	icon: Component;
 	brandColor: string;
+	brandForeground: string;
 	userAvatarField: string;
 	userUsernameField: string;
 }
@@ -22,6 +23,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
 		description: 'Вход через Telegram',
 		icon: TelegramIcon,
 		brandColor: '#26A5E4',
+		brandForeground: '#0b1f2a',
 		userAvatarField: 'telegramAvatar',
 		userUsernameField: 'telegramOidcUsername'
 	},
@@ -31,6 +33,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
 		description: 'Вход через Discord',
 		icon: DiscordIcon,
 		brandColor: '#5865F2',
+		brandForeground: '#ffffff',
 		userAvatarField: 'discordAvatar',
 		userUsernameField: 'discordUsername'
 	}

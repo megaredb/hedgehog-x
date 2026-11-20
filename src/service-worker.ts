@@ -3,6 +3,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { ExpirationPlugin } from 'workbox-expiration';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { createLogger } from './lib/logger';
 
@@ -20,31 +21,37 @@ const navigationStrategy = new NetworkFirst({
 	plugins: [new CacheableResponsePlugin({ statuses: [200] })]
 });
 
-const navigationRoute = new NavigationRoute(async (params) => {
-	try {
-		const response = await navigationStrategy.handle(params);
-		if (response) return response;
-	} catch (error) {
-		log.warn('Network request failed, falling back to cache:', error);
-	}
-
-	// 1. Match exact URL in cache
-	const cachedResponse = await caches.match(params.request);
-	if (cachedResponse) return cachedResponse;
-
-	// 2. Fallback to cached root shell ('/')
-	const fallbackShell = await caches.match('/');
-	if (fallbackShell) return fallbackShell;
-
-	// 3. Static offline fallback page
-	return new Response(
-		'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Оффлайн | Hedgehog X</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#fafafa;text-align:center;padding:1rem;"><h2>Нет подключения к сети</h2><p style="color:#a1a1aa;max-width:400px;">Эта страница ещё не была загружена в оффлайн-кэш. Подключитесь к интернету и откройте её снова.</p><a href="/" style="color:#60a5fa;text-decoration:none;margin-top:1rem;">Вернуться на главную</a></body></html>',
-		{
-			headers: { 'Content-Type': 'text/html; charset=utf-8' },
-			status: 200
+const navigationRoute = new NavigationRoute(
+	async (params) => {
+		try {
+			const response = await navigationStrategy.handle(params);
+			if (response) return response;
+		} catch (error) {
+			log.warn('Network request failed, falling back to cache:', error);
 		}
-	);
-});
+
+		// 1. Match exact URL in cache
+		const cachedResponse = await caches.match(params.request);
+		if (cachedResponse) return cachedResponse;
+
+		// 2. Fallback to cached root shell ('/')
+		const fallbackShell = await caches.match('/');
+		if (fallbackShell) return fallbackShell;
+
+		// 3. Static offline fallback page
+		return new Response(
+			'<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Оффлайн | Hedgehog X</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;background:#09090b;color:#fafafa;text-align:center;padding:1rem;"><h2>Нет подключения к сети</h2><p style="color:#a1a1aa;max-width:400px;">Эта страница ещё не была загружена в оффлайн-кэш. Подключитесь к интернету и откройте её снова.</p><a href="/" style="color:#60a5fa;text-decoration:none;margin-top:1rem;">Вернуться на главную</a></body></html>',
+			{
+				headers: { 'Content-Type': 'text/html; charset=utf-8' },
+				status: 200
+			}
+		);
+	},
+	{
+		// Never cache authenticated/personal pages in the shared pages-cache.
+		denylist: [/^\/admin/, /^\/auth/, /^\/bookmarks/, /^\/history/, /^\/profile/, /^\/settings/]
+	}
+);
 registerRoute(navigationRoute);
 
 // 3. Audio caching configuration with seekable Range requests
@@ -54,7 +61,8 @@ registerRoute(
 		cacheName: 'audio-cache',
 		plugins: [
 			new CacheableResponsePlugin({ statuses: [200] }),
-			new RangeRequestsPlugin() // Critical for media seeking on iOS/Safari
+			new RangeRequestsPlugin(), // Critical for media seeking on iOS/Safari
+			new ExpirationPlugin({ maxEntries: 40, maxAgeSeconds: 30 * 24 * 60 * 60 })
 		]
 	})
 );

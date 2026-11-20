@@ -1,17 +1,20 @@
 <script lang="ts">
 	import './layout.css';
-	import favicon from '$lib/assets/favicon.svg';
 	import AppNavigation from '$lib/components/header/AppNavigation.svelte';
 	import AppBreadcrumbs from '$lib/components/layout/AppBreadcrumbs.svelte';
 	import GlobalPlayer from '$lib/components/audio/GlobalPlayer.svelte';
-	import { ModeWatcher } from 'mode-watcher';
+	import { ModeWatcher, mode } from 'mode-watcher';
 	import { onNavigate, afterNavigate } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { pwaInfo } from 'virtual:pwa-info';
 	import { AudioProvider } from '$lib/components/ui/audio/provider';
 	import { Tooltip } from 'bits-ui';
 	import ValueChangeOverlay from '$lib/components/overlay/ValueChangeOverlay.svelte';
+	import GuestDataAdoptionModal from '$lib/components/overlay/GuestDataAdoptionModal.svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { useSession } from '$lib/client/session.svelte';
+	import { syncService } from '$lib/client/services/syncService';
 	import { createLogger } from '$lib/logger';
 	import { env } from '$env/dynamic/public';
 
@@ -23,8 +26,40 @@
 	const umamiHost =
 		env.PUBLIC_UMAMI_HOST || import.meta.env.PUBLIC_UMAMI_HOST || 'https://cloud.umami.is';
 
+	const themeColor = $derived(mode.current === 'dark' ? '#09090b' : '#ffffff');
 	let displayVolume = $derived(`${Math.round(audioStore.volume * 100)}%`);
 	let displayRate = $derived(`${Math.round(audioStore.playbackRate * 100)}%`);
+
+	const session = useSession();
+	let lastSyncedUserId: string | null = null;
+
+	// Load server-side personal data as soon as a user signs in, regardless of
+	// whether the destination is a book page. Without this, /bookmarks and /
+	// show stale empty Dexie until the user opens a book.
+	$effect(() => {
+		if (!browser) return;
+
+		const userId = session.user?.id ?? null;
+		if (!userId) {
+			lastSyncedUserId = null;
+			return;
+		}
+		if (lastSyncedUserId === userId) return;
+
+		lastSyncedUserId = userId;
+		void syncService.syncUserData();
+	});
+
+	// A reconnect must also refresh server data, not only flush local queues.
+	$effect(() => {
+		if (!browser) return;
+
+		const onOnline = () => {
+			if (session.user?.id) void syncService.syncUserData();
+		};
+		window.addEventListener('online', onOnline);
+		return () => window.removeEventListener('online', onOnline);
+	});
 
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
@@ -71,7 +106,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href="/pwa-64x64.png" type="image/png" />
+	<meta name="theme-color" content={themeColor} />
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	{@html pwaInfo ? pwaInfo.webManifest.linkTag : ''}
 	{#if umamiWebsiteId}
@@ -102,6 +138,7 @@
 					{@render children()}
 				</main>
 				<GlobalPlayer />
+				<GuestDataAdoptionModal />
 			</div>
 		</div>
 	</Tooltip.Provider>

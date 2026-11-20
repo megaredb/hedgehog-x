@@ -3,7 +3,13 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
-	import { db, type OfflineVolume } from '$lib/client/db';
+	import {
+		db,
+		type OfflineBook,
+		type OfflineBookmark,
+		type OfflineChapter,
+		type OfflineVolume
+	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import type { Track } from '$lib/html-audio.js';
 	import { parseShareParams } from '$lib/components/share/share.js';
@@ -11,16 +17,22 @@
 	import VolumeHeader from '$lib/components/volume/VolumeHeader.svelte';
 	import VolumeChaptersTab from '$lib/components/volume/VolumeChaptersTab.svelte';
 	import VolumeIllustrationsTab from '$lib/components/volume/VolumeIllustrationsTab.svelte';
+	import VolumeBookmarksTab from '$lib/components/volume/VolumeBookmarksTab.svelte';
 	import TelegramComments from '$lib/components/comments/TelegramComments.svelte';
 	import VolumeCompletionModal from '$lib/components/volume/VolumeCompletionModal.svelte';
 	import { OpenGraphMeta, formatVolumeOgTitle } from '$lib/components/seo';
-	import { Headphones, Image as ImageIcon, MessageSquare } from '@lucide/svelte';
+	import {
+		Bookmark as BookmarkIcon,
+		Headphones,
+		Image as ImageIcon,
+		MessageSquare
+	} from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { strings } from '$lib/constants/strings';
 
 	let { data } = $props();
 
-	let activeTab = $state<'chapters' | 'illustrations' | 'comments'>('chapters');
+	let activeTab = $state<'chapters' | 'bookmarks' | 'illustrations' | 'comments'>('chapters');
 	let isCompletionModalOpen = $state(false);
 
 	const volumeQuery = useDexie(
@@ -47,9 +59,32 @@
 		() => [data.bookId]
 	);
 
-	const volume = $derived(volumeQuery.data);
-	const chapters = $derived(chaptersQuery.data);
-	const book = $derived(bookQuery.data);
+	const serverData = $derived(
+		data as typeof data & {
+			book?: OfflineBook;
+			volumes?: OfflineVolume[];
+			volume?: OfflineVolume;
+			chapters?: OfflineChapter[];
+		}
+	);
+	const volume = $derived(volumeQuery.data ?? serverData.volume);
+	const chapters = $derived(
+		chaptersQuery.data.length > 0 ? chaptersQuery.data : (serverData.chapters ?? [])
+	);
+	const volumeBookmarksQuery = useDexie(
+		() => {
+			const chapterIds = chapters.map((chapter) => chapter.id);
+			if (chapterIds.length === 0) return Promise.resolve([] as OfflineBookmark[]);
+			return db.bookmarks.where('chapterId').anyOf(chapterIds).toArray();
+		},
+		() => [] as OfflineBookmark[],
+		() => chapters.map((chapter) => chapter.id).join('|')
+	);
+	const book = $derived(bookQuery.data ?? serverData.book);
+	const allBookVolumes = $derived(
+		allBookVolumesQuery.data.length > 0 ? allBookVolumesQuery.data : (serverData.volumes ?? [])
+	);
+	const volumeBookmarks = $derived(volumeBookmarksQuery.data);
 
 	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
 	let handledUrlParamsForVolumeId: string | null = null;
@@ -88,17 +123,12 @@
 		}
 
 		audioStore.setQueueAndPlay(tracks, targetIndex);
-		if (seekTime > 0) {
-			setTimeout(() => {
-				audioStore.seek(seekTime, false);
-			}, 150);
-		}
 	});
 
 	// Next volume in this book series
 	const nextVolume = $derived.by(() => {
 		if (!volume) return null;
-		return allBookVolumesQuery.data.find((v) => v.volumeNumber === volume.volumeNumber + 1) || null;
+		return allBookVolumes.find((v) => v.volumeNumber === volume.volumeNumber + 1) || null;
 	});
 
 	// Latest chapter of the volume that has a Telegram discussion post linked
@@ -163,10 +193,14 @@
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="mx-auto mb-6 grid w-full max-w-md grid-cols-3 rounded-xl bg-muted/60 p-1">
+		<Tabs.List class="mx-auto mb-6 grid w-full max-w-lg grid-cols-4 rounded-xl bg-muted/60 p-1">
 			<Tabs.Trigger value="chapters" class="gap-1.5 text-xs sm:text-sm">
 				<Headphones class="h-4 w-4" />
 				<span>{strings.volume.chaptersTab} ({chapters.length})</span>
+			</Tabs.Trigger>
+			<Tabs.Trigger value="bookmarks" class="gap-1.5 text-xs sm:text-sm">
+				<BookmarkIcon class="h-4 w-4" />
+				<span>{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
 			</Tabs.Trigger>
 			<Tabs.Trigger value="illustrations" class="gap-1.5 text-xs sm:text-sm">
 				<ImageIcon class="h-4 w-4" />
@@ -188,7 +222,18 @@
 			/>
 		</Tabs.Content>
 
-		<!-- Tab 2: Illustrations -->
+		<!-- Tab 2: Bookmarks -->
+		<Tabs.Content value="bookmarks" class="outline-none">
+			<VolumeBookmarksTab
+				bookmarks={volumeBookmarks}
+				{chapters}
+				{volume}
+				{book}
+				bookId={data.bookId}
+			/>
+		</Tabs.Content>
+
+		<!-- Tab 3: Illustrations -->
 		<Tabs.Content value="illustrations" class="outline-none">
 			<VolumeIllustrationsTab volumeId={data.volumeId} />
 		</Tabs.Content>

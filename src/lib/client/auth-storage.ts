@@ -4,7 +4,7 @@ import { createLogger } from '../logger';
 const log = createLogger('Storage');
 
 export interface SessionData {
-	session: { id: string; userId: string; expiresAt: Date; token: string } | null;
+	session: { id: string; userId: string; expiresAt: Date; token?: string } | null;
 	user: {
 		id: string;
 		name: string;
@@ -50,9 +50,12 @@ export function loadCachedSession(now = Date.now()): SessionData | null {
 			return null;
 		}
 
+		// Never expose a cached bearer token to XSS. Older caches may still
+		// contain one, so strip it while reading too.
 		return {
 			session: {
-				...session,
+				id: session.id,
+				userId: session.userId,
 				expiresAt: new Date(session.expiresAt)
 			},
 			user
@@ -78,7 +81,15 @@ export function saveCachedSession(data: SessionData | null): void {
 			return;
 		}
 
-		localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(data));
+		const safeSession = {
+			id: data.session.id,
+			userId: data.session.userId,
+			expiresAt: data.session.expiresAt
+		};
+		localStorage.setItem(
+			AUTH_SESSION_STORAGE_KEY,
+			JSON.stringify({ session: safeSession, user: data.user })
+		);
 	} catch (e) {
 		log.warn('Failed to save session to storage:', e);
 	}

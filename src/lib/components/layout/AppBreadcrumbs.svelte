@@ -39,8 +39,12 @@
 				title = volumeQuery.data?.title || strings.common.loading;
 			} else if (breadcrumbTranslations[segment]) {
 				title = breadcrumbTranslations[segment];
+			} else if (segment.length > 32 || /^[0-9a-f-]{16,}$/i.test(segment)) {
+				// Never expose a raw database ID as a breadcrumb label.
+				title = strings.breadcrumbs.unknown;
 			} else {
-				title = segment.charAt(0).toUpperCase() + segment.slice(1);
+				title = segment.replace(/[-_]+/g, ' ');
+				title = title.charAt(0).toUpperCase() + title.slice(1);
 			}
 
 			return {
