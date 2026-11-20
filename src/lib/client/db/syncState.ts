@@ -1,5 +1,4 @@
 import { db, type OfflineMeta, type SyncItem } from './index';
-import { loadCachedSession } from '$lib/client/auth-storage';
 
 const SYNC_OWNER_KEY = 'syncOwner';
 
@@ -45,26 +44,12 @@ export async function getCurrentOwnerId(): Promise<string | null> {
 
 /**
  * Returns the user who currently owns local user-scoped data.
- * Missing owner means "not known yet" (treated as guest by syncPolicy).
- *
- * On the first run after the v2 upgrade, infer the owner from the offline auth
- * cache. Without this, old local data could be adopted by the next logged-in user.
+ * Missing owner means guest / not adopted yet (treated as guest by syncPolicy).
  */
 export async function getSyncOwner(): Promise<SyncOwner | undefined> {
 	const record = await db.meta.get(SYNC_OWNER_KEY);
 	if (record) {
 		return { userId: record.userId ?? null, updatedAt: record.updatedAt };
-	}
-
-	const cached = loadCachedSession();
-	if (cached?.user?.id) {
-		const owner = { userId: cached.user.id, updatedAt: Date.now() };
-		await db.meta.put({
-			key: SYNC_OWNER_KEY,
-			userId: owner.userId,
-			updatedAt: owner.updatedAt
-		});
-		return owner;
 	}
 
 	return undefined;

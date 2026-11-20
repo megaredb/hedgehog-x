@@ -22,6 +22,7 @@ import {
 } from './mappers';
 
 const log = createLogger('Sync');
+const MAX_SYNC_BATCH = 100;
 
 type ServerVolume = typeof import('$lib/server/db/schema').volumes.$inferSelect;
 type ServerChapter = typeof import('$lib/server/db/schema').chapters.$inferSelect;
@@ -82,37 +83,48 @@ async function pushLocalUserData(fetchFn: typeof fetch): Promise<void> {
 		return;
 	}
 
-	const res = await fetchFn('/api/user/sync', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			progressUpdates: progress.map((p) => ({
-				chapterId: p.chapterId,
-				progressSeconds: p.progressSeconds,
-				isCompleted: p.isCompleted
-			})),
-			bookmarkUpdates: bookmarks.map((b) => ({
-				id: b.id,
-				chapterId: b.chapterId,
-				timestampSeconds: b.timestampSeconds,
-				note: b.note,
-				action: 'upsert'
-			})),
-			volumeLikeUpdates: volumeLikes.map((l) => ({
-				id: l.volumeId,
-				volumeId: l.volumeId,
-				action: 'like'
-			})),
-			chapterLikeUpdates: chapterLikes.map((l) => ({
-				id: l.chapterId,
-				chapterId: l.chapterId,
-				action: 'like'
-			}))
-		})
-	});
+	const totalBatches = Math.max(
+		Math.ceil(progress.length / MAX_SYNC_BATCH),
+		Math.ceil(bookmarks.length / MAX_SYNC_BATCH),
+		Math.ceil(volumeLikes.length / MAX_SYNC_BATCH),
+		Math.ceil(chapterLikes.length / MAX_SYNC_BATCH)
+	);
 
-	if (!res.ok) {
-		throw new Error(`Failed to adopt local user data: HTTP ${res.status}`);
+	for (let i = 0; i < totalBatches; i++) {
+		const start = i * MAX_SYNC_BATCH;
+		const end = start + MAX_SYNC_BATCH;
+		const res = await fetchFn('/api/user/sync', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				progressUpdates: progress.slice(start, end).map((p) => ({
+					chapterId: p.chapterId,
+					progressSeconds: p.progressSeconds,
+					isCompleted: p.isCompleted
+				})),
+				bookmarkUpdates: bookmarks.slice(start, end).map((b) => ({
+					id: b.id,
+					chapterId: b.chapterId,
+					timestampSeconds: b.timestampSeconds,
+					note: b.note,
+					action: 'upsert'
+				})),
+				volumeLikeUpdates: volumeLikes.slice(start, end).map((l) => ({
+					id: l.volumeId,
+					volumeId: l.volumeId,
+					action: 'like'
+				})),
+				chapterLikeUpdates: chapterLikes.slice(start, end).map((l) => ({
+					id: l.chapterId,
+					chapterId: l.chapterId,
+					action: 'like'
+				}))
+			})
+		});
+
+		if (!res.ok) {
+			throw new Error(`Failed to adopt local user data: HTTP ${res.status}`);
+		}
 	}
 }
 
@@ -259,7 +271,9 @@ export const syncService = {
 	async syncBookDetails(bookId: string, fetchFn: typeof fetch = fetch) {
 		try {
 			const etagKey = 'book-etag:' + bookId;
-			const etag = typeof localStorage !== 'undefined' ? localStorage.getItem(etagKey) : null;
+			const hasLocalBook = Boolean(await db.books.get(bookId));
+			const etag =
+				hasLocalBook && typeof localStorage !== 'undefined' ? localStorage.getItem(etagKey) : null;
 			const res = await fetchFn(`/api/books/${bookId}`, {
 				headers: etag ? { 'If-None-Match': etag } : undefined
 			});

@@ -1,12 +1,18 @@
 import { db } from '$lib/server/db';
 import { isUniqueViolation } from '$lib/server/db/errors';
-import { books, volumes } from '$lib/server/db/schema';
+import { books, chapters, illustrations, volumes } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
+import {
+	deleteFromStorage,
+	MAX_IMAGE_BYTES,
+	StorageValidationError,
+	uploadImage
+} from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { slugify } from '$lib/utils/slugify';
+import { isValidContentStatus } from '$lib/utils/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -69,6 +75,9 @@ export const actions: Actions = {
 		if (isNaN(volumeNumber)) {
 			return fail(400, { error: 'Номер тома должен быть числом' });
 		}
+		if (!isValidContentStatus(status)) {
+			return fail(400, { error: 'Некорректный статус тома' });
+		}
 
 		if (!id) {
 			const slug = slugify(title);
@@ -77,17 +86,23 @@ export const actions: Actions = {
 				: `${bookId}_vol_${volumeNumber}_${randomUUID().slice(0, 6)}`;
 		}
 
+		let uploadedUrl: string | null = null;
 		const coverFile = form.get('coverFile');
 		if (coverFile && coverFile instanceof File && coverFile.size > 0) {
+			if (coverFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер обложки не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'volumes', filenamePrefix: id });
+				uploadedUrl = uploaded.url;
 				coverUrl = uploaded.url;
 				coverWidth = uploaded.width;
 				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки обложки: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -108,6 +123,7 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			if (isUniqueViolation(e)) {
 				return fail(400, { error: 'Том с таким номером уже существует в этой книге' });
 			}
@@ -135,6 +151,9 @@ export const actions: Actions = {
 		if (!id || !bookId || !title || isNaN(volumeNumber)) {
 			return fail(400, { error: 'ID, книга, номер тома и название обязательны' });
 		}
+		if (!isValidContentStatus(status)) {
+			return fail(400, { error: 'Некорректный статус тома' });
+		}
 
 		const [old] = await db
 			.select({ coverUrl: volumes.coverUrl })
@@ -142,17 +161,24 @@ export const actions: Actions = {
 			.where(eq(volumes.id, id))
 			.limit(1);
 
+		let uploadedUrl: string | null = null;
 		const coverFile = form.get('coverFile');
-		if (coverFile && coverFile instanceof File && coverFile.size > 0) {
+		const hasNewCoverFile = coverFile instanceof File && coverFile.size > 0;
+		if (hasNewCoverFile) {
+			if (coverFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер обложки не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'volumes', filenamePrefix: id });
+				uploadedUrl = uploaded.url;
 				coverUrl = uploaded.url;
 				coverWidth = uploaded.width;
 				coverHeight = uploaded.height;
 				blurhash = uploaded.blurhash;
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки обложки: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -177,7 +203,7 @@ export const actions: Actions = {
 				status
 			};
 
-			if (coverFile instanceof File && coverFile.size > 0) {
+			if (hasNewCoverFile) {
 				updateData.coverUrl = coverUrl;
 				updateData.coverWidth = coverWidth;
 				updateData.coverHeight = coverHeight;
@@ -192,11 +218,16 @@ export const actions: Actions = {
 			}
 
 			await db.update(volumes).set(updateData).where(eq(volumes.id, id));
-			if (coverFile && old?.coverUrl && old.coverUrl !== coverUrl) {
+			if (
+				updateData.coverUrl !== undefined &&
+				old?.coverUrl &&
+				old.coverUrl !== updateData.coverUrl
+			) {
 				await deleteFromStorage(old.coverUrl);
 			}
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			if (isUniqueViolation(e)) {
 				return fail(400, { error: 'Том с таким номером уже существует в этой книге' });
 			}
@@ -221,8 +252,22 @@ export const actions: Actions = {
 				.from(volumes)
 				.where(eq(volumes.id, id))
 				.limit(1);
+			const [volChapters, volIllustrations] = await Promise.all([
+				db.select({ audioUrl: chapters.audioUrl }).from(chapters).where(eq(chapters.volumeId, id)),
+				db
+					.select({ imageUrl: illustrations.imageUrl })
+					.from(illustrations)
+					.where(eq(illustrations.volumeId, id))
+			]);
+
 			await db.delete(volumes).where(eq(volumes.id, id));
-			if (old?.coverUrl) await deleteFromStorage(old.coverUrl);
+
+			const mediaUrls = [
+				old?.coverUrl,
+				...volChapters.map((c) => c.audioUrl),
+				...volIllustrations.map((i) => i.imageUrl)
+			].filter((u): u is string => Boolean(u));
+			await Promise.allSettled(mediaUrls.map((u) => deleteFromStorage(u)));
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

@@ -332,4 +332,73 @@ test.describe('P0-01: local user data safety', () => {
 		expect(await readCounts(page)).toMatchObject({ progress: 0, bookmarks: 0, volumeLikes: 0 });
 		expect(posted).toBeNull();
 	});
+
+	test('guest data adoption still prompts when better-auth session caches localStorage first', async ({
+		page
+	}) => {
+		let authenticated = false;
+		let posted: Record<string, unknown> | null = null;
+
+		await page.route('**/api/auth/get-session', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(
+					authenticated
+						? {
+								session: {
+									id: 'sess-adopt-1',
+									userId: 'user-a',
+									expiresAt: new Date(Date.now() + 3600_000).toISOString()
+								},
+								user: {
+									id: 'user-a',
+									name: 'Тестовый пользователь',
+									email: 'a@example.test',
+									emailVerified: false,
+									createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+									updatedAt: new Date().toISOString()
+								}
+							}
+						: null
+				)
+			});
+		});
+
+		await page.route('**/api/user/sync', async (route) => {
+			if (route.request().method() === 'GET' && !authenticated) {
+				await route.fulfill({
+					status: 401,
+					contentType: 'application/json',
+					body: JSON.stringify({ error: 'Unauthorized' })
+				});
+				return;
+			}
+			if (route.request().method() === 'GET') {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					body: JSON.stringify(authPayload('user-a'))
+				});
+				return;
+			}
+			posted = route.request().postDataJSON() as Record<string, unknown>;
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ success: true })
+			});
+		});
+
+		await openVolume(page);
+		await seedGuestData(page);
+
+		authenticated = true;
+		await page.goto(BOOK_URL);
+		await expect(page.getByText('Перенести локальные данные?')).toBeVisible();
+		await page.getByRole('button', { name: 'Перенести в аккаунт' }).click();
+		await expect.poll(async () => (await readCounts(page)).owner).toBe('user-a');
+		await expect.poll(() => posted?.progressUpdates).toBeTruthy();
+		expect((await readCounts(page)).progress).toBe(1);
+	});
 });

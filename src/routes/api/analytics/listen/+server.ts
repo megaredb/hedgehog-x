@@ -22,6 +22,11 @@ function allowRequest(key: string): boolean {
 	const bucket = buckets.get(key);
 	if (!bucket || bucket.resetAt <= now) {
 		buckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+		if (buckets.size > 5000) {
+			for (const [k, value] of buckets) {
+				if (value.resetAt <= now) buckets.delete(k);
+			}
+		}
 		return true;
 	}
 	if (bucket.count >= RATE_LIMIT) return false;

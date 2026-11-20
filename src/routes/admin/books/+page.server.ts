@@ -1,11 +1,18 @@
 import { db } from '$lib/server/db';
-import { books } from '$lib/server/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { isUniqueViolation } from '$lib/server/db/errors';
+import { books, chapters, illustrations, volumes } from '$lib/server/db/schema';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
-import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
+import {
+	deleteFromStorage,
+	MAX_IMAGE_BYTES,
+	StorageValidationError,
+	uploadImage
+} from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import { slugify } from '$lib/utils/slugify';
+import { isValidContentStatus, isValidThemeColor } from '$lib/utils/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -39,18 +46,29 @@ export const actions: Actions = {
 		if (!title) {
 			return fail(400, { error: 'Название книги обязательно' });
 		}
+		if (!isValidContentStatus(status)) {
+			return fail(400, { error: 'Некорректный статус книги' });
+		}
+		if (themeColor && !isValidThemeColor(themeColor)) {
+			return fail(400, { error: 'Цвет темы должен состоять из 6 HEX-символов' });
+		}
 
 		if (!id) {
 			const slug = slugify(title);
 			id = slug || randomUUID().slice(0, 8);
 		}
 
+		let uploadedUrl: string | null = null;
 		// Handle file upload if provided
 		const coverFile = form.get('coverFile');
 		if (coverFile && coverFile instanceof File && coverFile.size > 0) {
+			if (coverFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер обложки не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'books', filenamePrefix: id });
+				uploadedUrl = uploaded.url;
 				coverUrl = uploaded.url;
 				coverWidth = uploaded.width;
 				coverHeight = uploaded.height;
@@ -59,7 +77,8 @@ export const actions: Actions = {
 					themeColor = uploaded.themeColor;
 				}
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки обложки: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -79,6 +98,10 @@ export const actions: Actions = {
 			});
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			if (isUniqueViolation(e)) {
+				return fail(400, { error: 'Книга с таким ID уже существует' });
+			}
 			return fail(500, {
 				error: `Ошибка базы данных: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -102,6 +125,12 @@ export const actions: Actions = {
 		if (!id || !title) {
 			return fail(400, { error: 'ID и Название обязательны' });
 		}
+		if (!isValidContentStatus(status)) {
+			return fail(400, { error: 'Некорректный статус книги' });
+		}
+		if (themeColor && !isValidThemeColor(themeColor)) {
+			return fail(400, { error: 'Цвет темы должен состоять из 6 HEX-символов' });
+		}
 
 		const [old] = await db
 			.select({ coverUrl: books.coverUrl })
@@ -109,11 +138,17 @@ export const actions: Actions = {
 			.where(eq(books.id, id))
 			.limit(1);
 
+		let uploadedUrl: string | null = null;
 		const coverFile = form.get('coverFile');
-		if (coverFile && coverFile instanceof File && coverFile.size > 0) {
+		const hasNewCoverFile = coverFile instanceof File && coverFile.size > 0;
+		if (hasNewCoverFile) {
+			if (coverFile.size > MAX_IMAGE_BYTES) {
+				return fail(400, { error: 'Размер обложки не должен превышать 15 МБ' });
+			}
 			try {
 				const buffer = Buffer.from(await coverFile.arrayBuffer());
 				const uploaded = await uploadImage(buffer, { folder: 'books', filenamePrefix: id });
+				uploadedUrl = uploaded.url;
 				coverUrl = uploaded.url;
 				coverWidth = uploaded.width;
 				coverHeight = uploaded.height;
@@ -122,7 +157,8 @@ export const actions: Actions = {
 					themeColor = uploaded.themeColor;
 				}
 			} catch (e) {
-				return fail(500, {
+				const statusCode = e instanceof StorageValidationError ? 400 : 500;
+				return fail(statusCode, {
 					error: `Ошибка загрузки обложки: ${e instanceof Error ? e.message : String(e)}`
 				});
 			}
@@ -145,7 +181,7 @@ export const actions: Actions = {
 			};
 
 			// Explicit empty values clear the cover/theme; fields not present mean "not supplied".
-			if (coverFile instanceof File && coverFile.size > 0) {
+			if (hasNewCoverFile) {
 				updateData.coverUrl = coverUrl;
 				updateData.coverWidth = coverWidth;
 				updateData.coverHeight = coverHeight;
@@ -163,11 +199,16 @@ export const actions: Actions = {
 			}
 
 			await db.update(books).set(updateData).where(eq(books.id, id));
-			if (coverFile && old?.coverUrl && old.coverUrl !== coverUrl) {
+			if (
+				updateData.coverUrl !== undefined &&
+				old?.coverUrl &&
+				old.coverUrl !== updateData.coverUrl
+			) {
 				await deleteFromStorage(old.coverUrl);
 			}
 			return { success: true };
 		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Ошибка обновления: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -189,8 +230,33 @@ export const actions: Actions = {
 				.from(books)
 				.where(eq(books.id, id))
 				.limit(1);
+			const bookVolumes = await db
+				.select({ id: volumes.id, coverUrl: volumes.coverUrl })
+				.from(volumes)
+				.where(eq(volumes.bookId, id));
+			const volumeIds = bookVolumes.map((v) => v.id);
+			const [bookChapters, bookIllustrations] = volumeIds.length
+				? await Promise.all([
+						db
+							.select({ audioUrl: chapters.audioUrl })
+							.from(chapters)
+							.where(inArray(chapters.volumeId, volumeIds)),
+						db
+							.select({ imageUrl: illustrations.imageUrl })
+							.from(illustrations)
+							.where(inArray(illustrations.volumeId, volumeIds))
+					])
+				: [[], []];
+
 			await db.delete(books).where(eq(books.id, id));
-			if (old?.coverUrl) await deleteFromStorage(old.coverUrl);
+
+			const mediaUrls = [
+				old?.coverUrl,
+				...bookVolumes.map((v) => v.coverUrl),
+				...bookChapters.map((c) => c.audioUrl),
+				...bookIllustrations.map((i) => i.imageUrl)
+			].filter((u): u is string => Boolean(u));
+			await Promise.allSettled(mediaUrls.map((u) => deleteFromStorage(u)));
 			return { success: true };
 		} catch (e) {
 			return fail(500, { error: `Ошибка удаления: ${e instanceof Error ? e.message : String(e)}` });

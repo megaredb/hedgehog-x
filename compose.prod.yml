@@ -25,6 +25,8 @@ services:
       # Traefik's forwarded headers instead of pinning a single ORIGIN.
       PROTOCOL_HEADER: x-forwarded-proto
       HOST_HEADER: x-forwarded-host
+      ADDRESS_HEADER: x-forwarded-for
+      XFF_DEPTH: 1
       BETTER_AUTH_ALLOWED_HOSTS: ${APP_HOST:?APP_HOST is required},${APP_HOST_RU:?APP_HOST_RU is required},${BETTER_AUTH_ALLOWED_HOSTS:-localhost}
       BETTER_AUTH_FALLBACK_URL: https://${APP_HOST:?APP_HOST is required}
       BETTER_AUTH_COOKIE_DOMAIN: ${BETTER_AUTH_COOKIE_DOMAIN:-.hedgehog-inc.one}
@@ -39,6 +41,9 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
       R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      MEDIA_CACHE_DIR: ${MEDIA_CACHE_DIR:-/tmp/hedgehog-media}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
       PUBLIC_UMAMI_HOST: ${PUBLIC_UMAMI_HOST:-}
       PUBLIC_UMAMI_WEBSITE_ID: ${PUBLIC_UMAMI_WEBSITE_ID:-}
     expose:

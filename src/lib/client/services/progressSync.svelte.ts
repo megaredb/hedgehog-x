@@ -91,7 +91,7 @@ class ProgressSyncService {
 		const currentOwner = await getCurrentOwnerId();
 		const isOnline = typeof navigator !== 'undefined' && navigator.onLine;
 
-		if (!isOnline || recordedOwner !== currentOwner) {
+		if (!isOnline || currentOwner === null || recordedOwner !== currentOwner) {
 			await this.enqueue(updates, recordedOwner);
 			return;
 		}
@@ -134,15 +134,27 @@ class ProgressSyncService {
 
 			for (const item of queuedItems) {
 				const updates = item.payload as ProgressUpdate[];
-				const res = await fetch('/api/user/sync', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ progressUpdates: updates })
-				});
+				let shouldDelete = true;
+				for (let i = 0; i < updates.length; i += 100) {
+					const chunk = updates.slice(i, i + 100);
+					const res = await fetch('/api/user/sync', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ progressUpdates: chunk })
+					});
 
-				if (item.id && (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 401))) {
-					// 4xx is a permanent validation error; retrying it would block
-					// every later progress update. Keep 401/5xx for retry.
+					if (
+						!res.ok &&
+						!(res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 429)
+					) {
+						shouldDelete = false;
+						break;
+					}
+				}
+
+				if (item.id && shouldDelete) {
+					// 4xx (except 401/429) is a permanent validation error; retrying it would block
+					// every later progress update. Keep 401/429/5xx for retry.
 					await db.syncQueue.delete(item.id);
 				}
 			}

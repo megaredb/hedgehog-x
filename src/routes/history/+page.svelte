@@ -91,6 +91,13 @@
 
 	async function handleResume(item: EnrichedHistoryItem) {
 		if (!item.chapter) return;
+		const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
+		if (audioStore.currentTrack?.id === item.chapterId) {
+			audioStore.seek(targetSeek);
+			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
 		const volumeId = item.chapter.volumeId;
 		const allChapters = await db.chapters
 			.where('volumeId')
@@ -111,7 +118,6 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
-			const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
 			tracks[startIndex] = { ...tracks[startIndex], startTime: targetSeek };
 			audioStore.setQueueAndPlay(tracks, startIndex);
 		}

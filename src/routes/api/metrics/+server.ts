@@ -1,7 +1,15 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { renderPrometheus } from '$lib/server/metrics';
 
 const startedAt = Date.now();
+
+function matchesBearerToken(headerValue: string | null, expectedToken: string): boolean {
+	if (!headerValue) return false;
+	const expected = Buffer.from(`Bearer ${expectedToken}`, 'utf8');
+	const actual = Buffer.from(headerValue, 'utf8');
+	return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
 
 /**
  * Minimal internal metrics endpoint. Admin session or METRICS_TOKEN is required;
@@ -11,7 +19,7 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 	const token = process.env.METRICS_TOKEN;
 	const authorized =
 		locals.user?.role === 'admin' ||
-		(!!token && request.headers.get('authorization') === `Bearer ${token}`);
+		(!!token && matchesBearerToken(request.headers.get('authorization'), token));
 	if (!authorized) return new Response('Forbidden', { status: 403 });
 
 	const uptime = (Date.now() - startedAt) / 1000;

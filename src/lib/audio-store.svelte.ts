@@ -250,7 +250,18 @@ class AudioStore {
 			this.currentQueueIndex = -1;
 			return;
 		}
+		const wasSameTrack =
+			this.currentTrack?.id === target.id && Boolean(htmlAudio.getAudioElement()?.src);
 		this.setQueue(songs, startIndex);
+		if (wasSameTrack) {
+			if (target.startTime !== undefined) {
+				this.seek(target.startTime, false);
+			}
+			this.isLoading = false;
+			this.isBuffering = false;
+			if (!this.isPlaying) this.play();
+			return;
+		}
 		this.loadAndPlayTrack(target, startIndex);
 	}
 
@@ -386,11 +397,6 @@ class AudioStore {
 
 	unshuffle(): void {
 		this.shuffleEnabled = false;
-	}
-
-	toggleShuffle(): void {
-		if (this.shuffleEnabled) this.unshuffle();
-		else this.shuffle();
 	}
 
 	// ── State actions ───────────────────────────────────────────────────────
