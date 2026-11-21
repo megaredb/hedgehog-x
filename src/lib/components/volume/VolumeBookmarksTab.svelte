@@ -42,6 +42,9 @@
 		[...bookmarks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 	);
 	const chapterMap = $derived(new Map(chapters.map((chapter) => [chapter.id, chapter])));
+	const hasMultipleVersions = $derived(
+		chapterVersions.some((version) => version.versionId !== 'default')
+	);
 
 	function formatDate(timestamp: number): string {
 		if (!timestamp) return '';
@@ -209,15 +212,16 @@
 											{formatDate(bookmark.createdAt)}
 										</span>
 									{/if}
-									<span
-										class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {bookmark.versionId ===
-											'default' || !bookmark.versionId
-											? 'border-primary/30 bg-primary/10 text-primary'
-											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
-										>{bookmark.versionId === 'default' || !bookmark.versionId
-											? 'Новая версия'
-											: 'Старая версия'}</span
-									>
+									{#if bookmark.versionId !== 'default' || hasMultipleVersions}
+										<span
+											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {bookmark.versionId ===
+												'default' || !bookmark.versionId
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+											>{bookmark.versionId === 'default' || !bookmark.versionId
+												? 'Новая версия'
+												: 'Старая версия'}</span
+										>{/if}
 								</div>
 
 								<h3 class="truncate text-sm font-semibold text-foreground sm:text-base">

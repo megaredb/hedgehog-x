@@ -9,9 +9,11 @@
 		CardContent
 	} from '$lib/components/ui/card';
 	import { formatDuration } from '$lib/utils/time';
-	import { AudioLines, Upload, Archive, Play, Trash2 } from '@lucide/svelte';
+	import { AudioLines, Upload, Archive, Play, Trash2, Music } from '@lucide/svelte';
 
 	let { data, form } = $props();
+	let currentChapterId = $state('');
+	const currentChapter = $derived(data.chapters.find((chapter) => chapter.id === currentChapterId));
 	const oldVersion = $derived(data.versions.find((version) => version.id === 'old'));
 
 	function chapterLabel(chapter: (typeof data.chapters)[number]) {
@@ -45,6 +47,83 @@
 			Изменения сохранены.
 		</div>
 	{/if}
+
+	<Card class="border-border/50">
+		<CardHeader>
+			<CardTitle class="flex items-center gap-2 text-base">
+				<Music class="h-4 w-4 text-primary" />
+				Новая версия (текущая озвучка)
+			</CardTitle>
+			<CardDescription>
+				Измените аудиофайл или ссылку на пост Telegram для текущей, новой версии главы.
+			</CardDescription>
+		</CardHeader>
+		<CardContent>
+			<form
+				method="POST"
+				action="?/updateCurrent"
+				enctype="multipart/form-data"
+				class="grid gap-4 lg:grid-cols-2"
+			>
+				<label class="space-y-1.5 text-sm lg:col-span-2">
+					<span class="font-medium">Глава</span>
+					<select
+						name="chapterId"
+						bind:value={currentChapterId}
+						required
+						class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+					>
+						<option value="">Выберите главу</option>
+						{#each data.chapters as chapter (chapter.id)}
+							<option value={chapter.id}>{chapterLabel(chapter)}</option>
+						{/each}
+					</select>
+				</label>
+
+				{#key currentChapterId}
+					<label class="space-y-1.5 text-sm">
+						<span class="font-medium">Длительность, секунд</span>
+						<input
+							name="durationSeconds"
+							type="number"
+							min="0"
+							value={currentChapter?.durationSeconds ?? ''}
+							class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+						/>
+					</label>
+					<label class="space-y-1.5 text-sm">
+						<span class="font-medium">Ссылка на пост Telegram</span>
+						<input
+							name="telegramPostUrl"
+							value={currentChapter?.telegramPostUrl ?? ''}
+							placeholder="https://t.me/..."
+							class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+						/>
+					</label>
+					<label class="space-y-1.5 text-sm">
+						<span class="font-medium">Новый аудиофайл</span>
+						<input name="audioFile" type="file" accept="audio/*" class="block w-full text-sm" />
+					</label>
+					<label class="space-y-1.5 text-sm">
+						<span class="font-medium">Или URL аудио</span>
+						<input
+							name="audioUrl"
+							value={currentChapter?.audioUrl ?? ''}
+							placeholder="/api/media/... или https://..."
+							class="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm"
+						/>
+					</label>
+				{/key}
+
+				<div class="lg:col-span-2">
+					<Button type="submit" class="gap-2" disabled={!currentChapterId}>
+						<Upload class="h-4 w-4" />
+						Сохранить новую версию
+					</Button>
+				</div>
+			</form>
+		</CardContent>
+	</Card>
 
 	<Card class="border-border/50">
 		<CardHeader>

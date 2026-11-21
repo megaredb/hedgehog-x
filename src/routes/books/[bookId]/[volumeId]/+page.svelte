@@ -32,8 +32,14 @@
 
 	let { data } = $props();
 
-	let activeTab = $state<'chapters' | 'bookmarks' | 'illustrations' | 'comments'>('chapters');
-	let selectedVersionId = $state('default');
+	type VolumeTab = 'chapters' | 'bookmarks' | 'illustrations' | 'comments';
+	const queryTab = page.url.searchParams.get('tab');
+	let activeTab = $state<VolumeTab>(
+		queryTab === 'bookmarks' || queryTab === 'illustrations' || queryTab === 'comments'
+			? queryTab
+			: 'chapters'
+	);
+	let selectedVersionId = $state(page.url.searchParams.get('version') ?? 'default');
 	let isCompletionModalOpen = $state(false);
 
 	const volumeQuery = useDexie(
@@ -109,6 +115,31 @@
 		if (versionId === selectedVersionId) return;
 		selectedVersionId = versionId;
 	}
+
+	$effect(() => {
+		if (!versionOptions.some((version) => version.id === selectedVersionId)) {
+			selectedVersionId = 'default';
+		}
+	});
+
+	$effect(() => {
+		const url = new URL(page.url);
+		if (activeTab === 'chapters') url.searchParams.delete('tab');
+		else url.searchParams.set('tab', activeTab);
+		if (selectedVersionId === 'default') url.searchParams.delete('version');
+		else url.searchParams.set('version', selectedVersionId);
+		if (url.search === page.url.search) return;
+		const path = resolve('/books/[bookId]/[volumeId]', {
+			bookId: data.bookId,
+			volumeId: data.volumeId
+		});
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(`${path}${url.search}${url.hash}`, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true
+		});
+	});
 
 	// Handle deep links from bookmarks/history/downloads: ?chapter=...&version=...
 	let handledChapterAnchor = '';
@@ -249,41 +280,41 @@
 	<Tabs.Root bind:value={activeTab} class="w-full">
 		<div class="mb-5 flex flex-col gap-2.5 lg:flex-row lg:items-center">
 			<Tabs.List
-				class="order-2 grid w-full grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1 sm:grid-cols-4 lg:order-1 lg:flex-1"
+				class="order-1 grid w-full grid-cols-4 gap-0.5 rounded-xl bg-muted/60 p-0.5 sm:gap-1 sm:p-1 lg:order-1 lg:flex-1"
 			>
 				<Tabs.Trigger
 					value="chapters"
-					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
-					<Headphones class="h-4 w-4 shrink-0" />
+					<Headphones class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.chaptersTab} ({chapters.length})</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="bookmarks"
-					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
-					<BookmarkIcon class="h-4 w-4 shrink-0" />
+					<BookmarkIcon class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="illustrations"
-					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
-					<ImageIcon class="h-4 w-4 shrink-0" />
+					<ImageIcon class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.illustrationsTab}</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="comments"
-					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
-					<MessageSquare class="h-4 w-4 shrink-0" />
+					<MessageSquare class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.commentsTab}</span>
 				</Tabs.Trigger>
 			</Tabs.List>
 
 			{#if versionOptions.length > 1}
 				<div
-					class="order-1 flex w-full items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1 lg:order-2 lg:w-auto lg:shrink-0"
+					class="order-2 flex w-full items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1 lg:order-2 lg:w-auto lg:shrink-0"
 					role="radiogroup"
 					aria-label="Версия озвучки"
 				>

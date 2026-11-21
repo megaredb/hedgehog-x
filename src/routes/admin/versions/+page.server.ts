@@ -31,6 +31,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				volumeNumber: volumes.volumeNumber,
 				bookTitle: books.title,
 				audioUrl: chapters.audioUrl,
+				telegramPostUrl: chapters.telegramPostUrl,
 				durationSeconds: chapters.durationSeconds
 			})
 			.from(chapters)
@@ -135,6 +136,67 @@ export const actions: Actions = {
 			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
 			return fail(500, {
 				error: `Не удалось сохранить версию: ${e instanceof Error ? e.message : String(e)}`
+			});
+		}
+	},
+
+	updateCurrent: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		const chapterId = String(form.get('chapterId') ?? '').trim();
+		if (!chapterId) return fail(400, { error: 'Выберите главу' });
+
+		const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
+		if (!chapter) return fail(400, { error: 'Глава не найдена' });
+
+		const audioFile = form.get('audioFile');
+		const audioUrlInput = String(form.get('audioUrl') ?? '').trim();
+		const telegramPostUrl = String(form.get('telegramPostUrl') ?? '').trim() || null;
+		const durationInput = parseNumber(form.get('durationSeconds'));
+
+		let uploadedUrl: string | null = null;
+		let audioUrl = chapter.audioUrl;
+		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
+			if (audioFile.size > MAX_AUDIO_BYTES) return fail(400, { error: 'Аудиофайл больше 500 МБ' });
+			try {
+				const uploaded = await uploadAudio(Buffer.from(await audioFile.arrayBuffer()), {
+					originalFilename: audioFile.name,
+					contentType: audioFile.type,
+					folder: 'chapters'
+				});
+				uploadedUrl = uploaded.url;
+				audioUrl = uploaded.url;
+			} catch (e) {
+				return fail(e instanceof StorageValidationError ? 400 : 500, {
+					error: `Ошибка загрузки: ${e instanceof Error ? e.message : String(e)}`
+				});
+			}
+		} else if (audioUrlInput) {
+			audioUrl = audioUrlInput;
+		}
+
+		const durationSeconds =
+			Number.isFinite(durationInput) && durationInput > 0 ? durationInput : chapter.durationSeconds;
+
+		try {
+			await db
+				.update(chapters)
+				.set({ audioUrl, durationSeconds, telegramPostUrl })
+				.where(eq(chapters.id, chapterId));
+
+			if (audioUrl !== chapter.audioUrl) {
+				const [archived] = await db
+					.select({ id: chapterAudioVersions.id })
+					.from(chapterAudioVersions)
+					.where(eq(chapterAudioVersions.audioUrl, chapter.audioUrl))
+					.limit(1);
+				if (!archived) await deleteFromStorage(chapter.audioUrl).catch(() => {});
+			}
+			return { success: true };
+		} catch (e) {
+			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			return fail(500, {
+				error: `Не удалось обновить новую версию: ${e instanceof Error ? e.message : String(e)}`
 			});
 		}
 	},

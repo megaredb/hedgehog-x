@@ -29,6 +29,7 @@
 		volume?: OfflineVolume;
 		book?: OfflineBook;
 		version?: import('$lib/client/db').OfflineChapterAudioVersion;
+		hasMultipleVersions?: boolean;
 	}
 
 	const historyQuery = useDexie(
@@ -39,6 +40,17 @@
 			filtered.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
 			const versionRows = await db.chapterAudioVersions.toArray();
+			const alternativeChapterIds = [
+				...new Set(
+					versionRows
+						.filter((version) => version.versionId !== 'default')
+						.map((version) => version.chapterId)
+				)
+			];
+			const alternativeChapters = await db.chapters.bulkGet(alternativeChapterIds);
+			const alternativeVolumeIds = new Set(
+				alternativeChapters.filter(Boolean).map((chapter) => chapter!.volumeId)
+			);
 			const enriched: EnrichedHistoryItem[] = await Promise.all(
 				filtered.map(async (p) => {
 					const baseChapterId = p.baseChapterId ?? p.chapterId;
@@ -54,7 +66,8 @@
 						chapter,
 						volume,
 						book,
-						version
+						version,
+						hasMultipleVersions: volume ? alternativeVolumeIds.has(volume.id) : false
 					};
 				})
 			);
@@ -322,15 +335,16 @@
 												{formatRelativeTime(item.updatedAt)}
 											</span>
 										{/if}
-										<span
-											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
-												'default' || !item.versionId
-												? 'border-primary/30 bg-primary/10 text-primary'
-												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
-											>{item.versionId === 'default' || !item.versionId
-												? 'Новая версия'
-												: 'Старая версия'}</span
-										>
+										{#if item.versionId !== 'default' || item.hasMultipleVersions}
+											<span
+												class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
+													'default' || !item.versionId
+													? 'border-primary/30 bg-primary/10 text-primary'
+													: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+												>{item.versionId === 'default' || !item.versionId
+													? 'Новая версия'
+													: 'Старая версия'}</span
+											>{/if}
 									</div>
 
 									<div>

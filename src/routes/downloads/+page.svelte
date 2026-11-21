@@ -6,7 +6,7 @@
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
-	import { ChevronDown, Trash2, XCircle, HardDriveDownload, Clock } from '@lucide/svelte';
+	import { Trash2, XCircle, HardDriveDownload, Clock } from '@lucide/svelte';
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Item } from '$lib/components/ui/item';
 	import { Empty } from '$lib/components/ui/empty';
@@ -29,6 +29,28 @@
 		() => []
 	);
 	const booksMap = $derived(new SvelteMap(booksQuery.data.map((book) => [book.id, book])));
+	const audioVersionsQuery = useDexie(
+		() => db.chapterAudioVersions.toArray(),
+		() => [],
+		() => []
+	);
+	const chaptersQuery = useDexie(
+		() => db.chapters.toArray(),
+		() => [],
+		() => []
+	);
+	const alternativeVolumeIds = $derived(
+		new Set(
+			audioVersionsQuery.data
+				.filter((version) => version.versionId !== 'default')
+				.map((version) => chaptersQuery.data.find((chapter) => chapter.id === version.chapterId))
+				.filter((chapter): chapter is NonNullable<typeof chapter> => Boolean(chapter))
+				.map((chapter) => chapter.volumeId)
+		)
+	);
+	function hasMultipleVersions(volumeId: string): boolean {
+		return alternativeVolumeIds.has(volumeId);
+	}
 
 	const activeGroups = $derived.by(() => {
 		const groups = new SvelteMap<
@@ -134,7 +156,7 @@
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
 				{#each activeGroups as group (group.volumeId + ':' + group.versionId)}
 					<Accordion.Item value={`${group.volumeId}:${group.versionId}`}>
-						<div class="flex items-center gap-2 pr-3">
+						<div class="flex items-center gap-2 px-4 py-3">
 							<div class="flex min-w-0 flex-1 items-center gap-4">
 								{#if group.volume?.coverUrl}
 									<a
@@ -153,7 +175,7 @@
 										href={group.volume
 											? resolve(`/books/${group.volume.bookId}/${group.volume.id}`)
 											: '#'}
-										class="inline-block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
+										class="block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
@@ -162,7 +184,7 @@
 										<a
 											href={`/books/${group.book.id}#volumes`}
 											onclick={(e) => e.stopPropagation()}
-											class="mt-0.5 inline-block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+											class="mt-0.5 block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
 										>
 											{group.book.title}
 										</a>
@@ -171,14 +193,16 @@
 										{group.items.length}
 										{group.items.length === 1 ? 'глава' : 'глав'} в очереди
 									</p>
-									<span
-										class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
-										'default'
-											? 'border-primary/30 bg-primary/10 text-primary'
-											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
-									>
-										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
-									</span>
+									{#if group.versionId !== 'default' || hasMultipleVersions(group.volumeId)}
+										<span
+											class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
+											'default'
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+										>
+											{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+										</span>
+									{/if}
 								</div>
 								<Button
 									variant="outline"
@@ -195,12 +219,11 @@
 							<Accordion.Trigger
 								class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 								title="Показать главы"
-							>
-								<ChevronDown class="h-4 w-4" />
-							</Accordion.Trigger>
+								aria-label="Показать главы"
+							/>
 						</div>
-						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
-							<div class="mt-2 flex flex-col gap-2">
+						<Accordion.Content class="border-t bg-muted/5 p-3 pt-0">
+							<div class="mt-1 flex flex-col gap-2">
 								{#each group.items as { chapter, download } (download.chapterId)}
 									<Item
 										class="flex items-center justify-between rounded-lg border bg-background p-3 transition-colors hover:bg-muted/10"
@@ -257,7 +280,7 @@
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
 				{#each paginatedDownloadedGroups as group (group.volumeId + ':' + group.versionId)}
 					<Accordion.Item value={`${group.volumeId}:${group.versionId}`}>
-						<div class="flex items-center gap-2 pr-3">
+						<div class="flex items-center gap-2 px-4 py-3">
 							<div class="flex min-w-0 flex-1 items-center gap-4">
 								{#if group.volume?.coverUrl}
 									<a
@@ -276,7 +299,7 @@
 										href={group.volume
 											? resolve(`/books/${group.volume.bookId}/${group.volume.id}`)
 											: '#'}
-										class="inline-block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
+										class="block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
@@ -285,7 +308,7 @@
 										<a
 											href={`/books/${group.book.id}#volumes`}
 											onclick={(e) => e.stopPropagation()}
-											class="mt-0.5 inline-block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+											class="mt-0.5 block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
 										>
 											{group.book.title}
 										</a>
@@ -294,14 +317,16 @@
 										Доступно оффлайн: {group.items.length}
 										{group.items.length === 1 ? 'глава' : 'глав'}
 									</p>
-									<span
-										class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
-										'default'
-											? 'border-primary/30 bg-primary/10 text-primary'
-											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
-									>
-										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
-									</span>
+									{#if group.versionId !== 'default' || hasMultipleVersions(group.volumeId)}
+										<span
+											class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
+											'default'
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+										>
+											{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+										</span>
+									{/if}
 								</div>
 								<Button
 									variant="outline"
@@ -321,12 +346,11 @@
 							<Accordion.Trigger
 								class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 								title="Показать главы"
-							>
-								<ChevronDown class="h-4 w-4" />
-							</Accordion.Trigger>
+								aria-label="Показать главы"
+							/>
 						</div>
-						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
-							<div class="mt-2 flex flex-col gap-2">
+						<Accordion.Content class="border-t bg-muted/5 p-3 pt-0">
+							<div class="mt-1 flex flex-col gap-2">
 								{#each group.items as { chapter, download } (download.chapterId)}
 									{@const stats = manager.getProgress(download.chapterId)}
 									<Item
