@@ -15,6 +15,8 @@ export type Track = {
 	live?: boolean;
 	/** Start playback from this position in seconds (used for resume) */
 	startTime?: number;
+	/** Audio version selected for this track; undefined means the default version. */
+	versionId?: string;
 	[key: string]: unknown;
 };
 

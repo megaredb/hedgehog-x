@@ -1,7 +1,14 @@
 import { error } from '@sveltejs/kit';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { books, chapters, illustrations, volumes } from '$lib/server/db/schema';
+import {
+	audioVersions,
+	books,
+	chapters,
+	chapterAudioVersions,
+	illustrations,
+	volumes
+} from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -14,7 +21,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		.orderBy(asc(volumes.volumeNumber));
 	const volume = allVolumes.find((v) => v.id === params.volumeId);
 	if (!volume) throw error(404, 'Том не найден');
-	const [chapterRows, illustrationRows] = await Promise.all([
+	const [chapterRows, illustrationRows, versionRows, chapterVersionRows] = await Promise.all([
 		db
 			.select()
 			.from(chapters)
@@ -24,7 +31,14 @@ export const load: PageServerLoad = async ({ params }) => {
 			.select()
 			.from(illustrations)
 			.where(eq(illustrations.volumeId, volume.id))
-			.orderBy(asc(illustrations.sortOrder))
+			.orderBy(asc(illustrations.sortOrder)),
+		db.select().from(audioVersions).orderBy(asc(audioVersions.sortOrder)),
+		db
+			.select()
+			.from(chapterAudioVersions)
+			.innerJoin(chapters, eq(chapterAudioVersions.chapterId, chapters.id))
+			.where(eq(chapters.volumeId, volume.id))
+			.orderBy(asc(chapterAudioVersions.chapterStart))
 	]);
 	return {
 		bookId: params.bookId,
@@ -33,6 +47,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		volume,
 		volumes: allVolumes,
 		chapters: chapterRows,
-		illustrations: illustrationRows
+		illustrations: illustrationRows,
+		audioVersions: versionRows,
+		chapterVersions: chapterVersionRows.map(({ chapter_audio_versions }) => chapter_audio_versions)
 	};
 };

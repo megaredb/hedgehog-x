@@ -33,6 +33,7 @@
 	let { data } = $props();
 
 	let activeTab = $state<'chapters' | 'bookmarks' | 'illustrations' | 'comments'>('chapters');
+	let selectedVersionId = $state('default');
 	let isCompletionModalOpen = $state(false);
 
 	const volumeQuery = useDexie(
@@ -85,6 +86,25 @@
 		allBookVolumesQuery.data.length > 0 ? allBookVolumesQuery.data : (serverData.volumes ?? [])
 	);
 	const volumeBookmarks = $derived(volumeBookmarksQuery.data);
+	const audioVersions = $derived(data.audioVersions ?? []);
+	const chapterVersions = $derived(data.chapterVersions ?? []);
+	const versionOptions = $derived([
+		{ id: 'default', label: 'Новая версия', description: 'Текущая озвучка' },
+		...audioVersions
+			.filter((version) => version.id !== 'default')
+			.map((version) => ({
+				id: version.id,
+				label: version.label,
+				description: version.description ?? ''
+			}))
+	]);
+
+	function handleVersionChange(versionId: string) {
+		if (versionId === selectedVersionId) return;
+		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
+		if (audioStore.isPlaying && currentVersion !== versionId) audioStore.pause();
+		selectedVersionId = versionId;
+	}
 
 	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
 	let handledUrlParamsForVolumeId: string | null = null;
@@ -193,7 +213,9 @@
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="mx-auto mb-6 grid w-full max-w-lg grid-cols-4 rounded-xl bg-muted/60 p-1">
+		<Tabs.List
+			class="mx-auto mb-6 grid w-full max-w-lg grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1 sm:grid-cols-4"
+		>
 			<Tabs.Trigger value="chapters" class="gap-1.5 text-xs sm:text-sm">
 				<Headphones class="h-4 w-4" />
 				<span>{strings.volume.chaptersTab} ({chapters.length})</span>
@@ -214,11 +236,40 @@
 
 		<!-- Tab 1: Chapters -->
 		<Tabs.Content value="chapters" class="outline-none">
+			{#if versionOptions.length > 1}
+				<div
+					class="mb-4 flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div>
+						<p class="text-sm font-semibold text-foreground">Слушать в исполнении</p>
+						<p class="text-xs text-muted-foreground">Версия озвучки для всех глав этого тома</p>
+					</div>
+					<div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Версия озвучки">
+						{#each versionOptions as version (version.id)}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={selectedVersionId === version.id}
+								class="rounded-full border px-4 py-2 text-xs font-semibold transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden {selectedVersionId ===
+								version.id
+									? 'border-primary bg-primary text-primary-foreground'
+									: 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'}"
+								onclick={() => handleVersionChange(version.id)}
+								title={version.description}
+							>
+								{version.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
 			<VolumeChaptersTab
 				{volume}
 				{chapters}
 				bookId={data.bookId}
 				isLoading={chaptersQuery.isLoading}
+				{selectedVersionId}
+				{chapterVersions}
 			/>
 		</Tabs.Content>
 

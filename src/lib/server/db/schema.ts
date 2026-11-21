@@ -81,7 +81,7 @@ export const chapters = pgTable(
 			.notNull(),
 		chapterNumber: integer('chapter_number').notNull(),
 		title: varchar('title', { length: 255 }).notNull(),
-		audioUrl: varchar('audio_url', { length: 1024 }).notNull(),
+		audioUrl: varchar('audio_url', { length: 2048 }).notNull(),
 		durationSeconds: integer('duration_seconds').notNull(),
 		telegramPostUrl: varchar('telegram_post_url', { length: 1024 }),
 		createdAt: timestamp('created_at').defaultNow(),
@@ -92,6 +92,38 @@ export const chapters = pgTable(
 	(t) => [
 		index('chapters_volume_id_idx').on(t.volumeId),
 		uniqueIndex('chapters_volume_number_unique').on(t.volumeId, t.chapterNumber)
+	]
+);
+
+export const audioVersions = pgTable('audio_versions', {
+	id: varchar('id', { length: 64 }).primaryKey(),
+	label: varchar('label', { length: 120 }).notNull(),
+	description: text('description'),
+	sortOrder: integer('sort_order').notNull().default(0),
+	createdAt: timestamp('created_at').defaultNow()
+});
+
+export const chapterAudioVersions = pgTable(
+	'chapter_audio_versions',
+	{
+		id: varchar('id', { length: 200 }).primaryKey(),
+		chapterId: varchar('chapter_id', { length: 128 })
+			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		versionId: varchar('version_id', { length: 64 })
+			.references(() => audioVersions.id, { onDelete: 'cascade', onUpdate: 'cascade' })
+			.notNull(),
+		title: varchar('title', { length: 255 }).notNull(),
+		audioUrl: varchar('audio_url', { length: 2048 }).notNull(),
+		durationSeconds: integer('duration_seconds').notNull(),
+		chapterStart: integer('chapter_start').notNull(),
+		chapterEnd: integer('chapter_end').notNull(),
+		createdAt: timestamp('created_at').defaultNow()
+	},
+	(t) => [
+		index('chapter_audio_versions_chapter_id_idx').on(t.chapterId),
+		index('chapter_audio_versions_version_id_idx').on(t.versionId),
+		uniqueIndex('chapter_audio_versions_chapter_version_unique').on(t.chapterId, t.versionId)
 	]
 );
 
@@ -197,10 +229,26 @@ export const volumesRelations = relations(volumes, ({ one, many }) => ({
 	illustrations: many(illustrations)
 }));
 
-export const chaptersRelations = relations(chapters, ({ one }) => ({
+export const chaptersRelations = relations(chapters, ({ one, many }) => ({
 	volume: one(volumes, {
 		fields: [chapters.volumeId],
 		references: [volumes.id]
+	}),
+	audioVersions: many(chapterAudioVersions)
+}));
+
+export const audioVersionsRelations = relations(audioVersions, ({ many }) => ({
+	chapterTracks: many(chapterAudioVersions)
+}));
+
+export const chapterAudioVersionsRelations = relations(chapterAudioVersions, ({ one }) => ({
+	chapter: one(chapters, {
+		fields: [chapterAudioVersions.chapterId],
+		references: [chapters.id]
+	}),
+	version: one(audioVersions, {
+		fields: [chapterAudioVersions.versionId],
+		references: [audioVersions.id]
 	})
 }));
 

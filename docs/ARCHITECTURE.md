@@ -106,6 +106,8 @@ lib/*.svelte.ts, lib/*.ts     # плеер, логгер, утилиты
 Полная схема — [PROJECT_MAP.md §7](PROJECT_MAP.md#7-база-данных). Ключевое:
 
 - Контент: books → volumes → chapters/illustrations (FK cascade).
+- Версии озвучки: audio_versions + chapter_audio_versions (архивные треки и
+  диапазоны объединённых глав; для активной версии UI использует отдельный URL/длительность).
 - Активность: listening_progress, volume_likes, chapter_likes, bookmarks
   (PK по user+сущность).
 - Аналитика: listening_sessions (сырые сессии) и daily_listening_stats
@@ -114,7 +116,9 @@ lib/*.svelte.ts, lib/*.ts     # плеер, логгер, утилиты
 - ID — строки; контентные ID генерируются админкой/сидом; bookmarks.id — UUID.
 - **Миграции соответствуют схеме** (после P0-02): 0000–0004 — история, 0005 —
   намеренный no-op, 0006 — catch-up (role/status/listening-таблицы/длины). Текущая
-  БД пересобрана через db:migrate; `drizzle-kit generate` — no-op.
+  БД пересобрана через db:migrate; `drizzle-kit generate` — no-op. Для версий
+  озвучки добавлены 0009 (audio_versions/chapter_audio_versions) и 0010
+  (audio_url до 2048 символов).
 
 ### 4.2. API-стиль
 
@@ -538,7 +542,7 @@ static/uploads после сборки.
   runtime-only deps; entrypoint применяет миграции, `/health` проверяет БД;
   Traefik-роутер на `${APP_HOST}`/`${APP_HOST_RU}`, non-root, graceful shutdown. Подробности —
   OPERATIONS §5.1.
-- **Миграции**: db:migrate — рабочий способ (0000–0008); db:push — dev-shortcut,
+- **Миграции**: db:migrate — рабочий способ (0000–0010); db:push — dev-shortcut,
   может удалять колонки. Перед reset/migrate — pg_dump.
 - **R2**: без кредов — локальный fallback (dev only).
 - **Traefik dev**: dynamic/dev.yaml ссылается на /certs/*.pem, которых нет в
@@ -571,7 +575,7 @@ static/uploads после сборки.
 | Публичная аналитика             | гость тоже слушает                     | нет rate limit; пачка отклоняется целиком; id может переполниться             |
 | «Единый словарь строк»          | i18n-заготовка                         | половина UI хардкодит русский, словарь частично не используется               |
 | «Индексы на FK, enum/check»     | дисциплина схемы                       | индексов на контентные FK нет; status/theme — свободный текст                 |
-| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0008 проходят на чистой БД; 0005 no-op, 0006 catch-up; generate no-op |
+| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0010 проходят на чистой БД; 0005 no-op, 0006 catch-up; generate no-op |
 | «SSR/SEO»                       | OG для соцсетей                        | книги/тома SSR + OG; unknown → 404                                            |
 
 Исторический ARCHITECTURE.md (коммит fd70f92, не в текущем дереве) описывал
