@@ -6,7 +6,7 @@
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
-	import { Trash2, XCircle, HardDriveDownload, Clock } from '@lucide/svelte';
+	import { ChevronDown, Trash2, XCircle, HardDriveDownload, Clock } from '@lucide/svelte';
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Item } from '$lib/components/ui/item';
 	import { Empty } from '$lib/components/ui/empty';
@@ -74,6 +74,14 @@
 		});
 	});
 
+	function downloadedVersionsForVolume(volumeId: string): number {
+		return new Set(
+			downloadedGroups
+				.filter((group) => group.volumeId === volumeId)
+				.map((group) => group.versionId)
+		).size;
+	}
+
 	let downloadedPage = $state(1);
 	let downloadedPageSize = $state(5);
 
@@ -125,9 +133,9 @@
 		{:else}
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
 				{#each activeGroups as group (group.volumeId + ':' + group.versionId)}
-					<Accordion.Item value={group.volumeId}>
-						<Accordion.Trigger class="px-4 transition-colors hover:bg-muted/30 hover:no-underline">
-							<div class="flex w-full items-center gap-4">
+					<Accordion.Item value={`${group.volumeId}:${group.versionId}`}>
+						<div class="flex items-center gap-2 pr-3">
+							<div class="flex min-w-0 flex-1 items-center gap-4">
 								{#if group.volume?.coverUrl}
 									<a
 										href={`/books/${group.volume.bookId}/${group.volume.id}`}
@@ -145,7 +153,7 @@
 										href={group.volume
 											? resolve(`/books/${group.volume.bookId}/${group.volume.id}`)
 											: '#'}
-										class="block truncate text-base font-semibold text-foreground hover:underline"
+										class="inline-block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
@@ -153,16 +161,24 @@
 									{#if group.book}
 										<a
 											href={`/books/${group.book.id}#volumes`}
-											class="block truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+											onclick={(e) => e.stopPropagation()}
+											class="mt-0.5 inline-block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
 										>
 											{group.book.title}
 										</a>
 									{/if}
 									<p class="mt-0.5 text-xs text-muted-foreground">
 										{group.items.length}
-										{group.items.length === 1 ? 'глава' : 'глав'} в очереди ·
-										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+										{group.items.length === 1 ? 'глава' : 'глав'} в очереди
 									</p>
+									<span
+										class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
+										'default'
+											? 'border-primary/30 bg-primary/10 text-primary'
+											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+									>
+										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+									</span>
 								</div>
 								<Button
 									variant="outline"
@@ -176,7 +192,13 @@
 									Отменить том
 								</Button>
 							</div>
-						</Accordion.Trigger>
+							<Accordion.Trigger
+								class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								title="Показать главы"
+							>
+								<ChevronDown class="h-4 w-4" />
+							</Accordion.Trigger>
+						</div>
 						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
 							<div class="mt-2 flex flex-col gap-2">
 								{#each group.items as { chapter, download } (download.chapterId)}
@@ -186,7 +208,7 @@
 										<div class="min-w-0 flex-1 pr-4">
 											<a
 												href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
-												class="block truncate text-sm font-medium hover:text-primary hover:underline"
+												class="inline-block w-fit max-w-full truncate text-sm font-medium hover:text-primary hover:underline"
 												>{download.title || chapter.title}</a
 											>
 											{#if download.status === 'downloading'}
@@ -234,9 +256,9 @@
 		{:else}
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
 				{#each paginatedDownloadedGroups as group (group.volumeId + ':' + group.versionId)}
-					<Accordion.Item value={group.volumeId}>
-						<Accordion.Trigger class="px-4 transition-colors hover:bg-muted/30 hover:no-underline">
-							<div class="flex w-full items-center gap-4">
+					<Accordion.Item value={`${group.volumeId}:${group.versionId}`}>
+						<div class="flex items-center gap-2 pr-3">
+							<div class="flex min-w-0 flex-1 items-center gap-4">
 								{#if group.volume?.coverUrl}
 									<a
 										href={`/books/${group.volume.bookId}/${group.volume.id}`}
@@ -254,7 +276,7 @@
 										href={group.volume
 											? resolve(`/books/${group.volume.bookId}/${group.volume.id}`)
 											: '#'}
-										class="block truncate text-base font-semibold text-foreground hover:underline"
+										class="inline-block w-fit max-w-full truncate text-base font-semibold text-foreground hover:underline"
 										onclick={(e) => e.stopPropagation()}
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
@@ -262,16 +284,24 @@
 									{#if group.book}
 										<a
 											href={`/books/${group.book.id}#volumes`}
-											class="block truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+											onclick={(e) => e.stopPropagation()}
+											class="mt-0.5 inline-block w-fit max-w-full truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
 										>
 											{group.book.title}
 										</a>
 									{/if}
 									<p class="mt-0.5 text-xs font-medium text-green-600">
 										Доступно оффлайн: {group.items.length}
-										{group.items.length === 1 ? 'глава' : 'глав'} ·
-										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+										{group.items.length === 1 ? 'глава' : 'глав'}
 									</p>
+									<span
+										class="mt-1 inline-flex w-fit rounded-md border px-2 py-0.5 text-[11px] font-semibold {group.versionId ===
+										'default'
+											? 'border-primary/30 bg-primary/10 text-primary'
+											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+									>
+										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+									</span>
 								</div>
 								<Button
 									variant="outline"
@@ -285,10 +315,16 @@
 										});
 									}}
 								>
-									Удалить версию
+									{downloadedVersionsForVolume(group.volumeId) > 1 ? 'Удалить версию' : 'Удалить'}
 								</Button>
 							</div>
-						</Accordion.Trigger>
+							<Accordion.Trigger
+								class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+								title="Показать главы"
+							>
+								<ChevronDown class="h-4 w-4" />
+							</Accordion.Trigger>
+						</div>
 						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
 							<div class="mt-2 flex flex-col gap-2">
 								{#each group.items as { chapter, download } (download.chapterId)}
@@ -299,7 +335,7 @@
 										<div class="min-w-0 flex-1 pr-4">
 											<a
 												href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
-												class="block truncate text-sm font-medium hover:text-primary hover:underline"
+												class="inline-block w-fit max-w-full truncate text-sm font-medium hover:text-primary hover:underline"
 												>{download.title || chapter.title}</a
 											>
 											<p class="mt-1 text-xs text-muted-foreground">

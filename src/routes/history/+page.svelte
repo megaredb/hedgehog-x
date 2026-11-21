@@ -322,11 +322,15 @@
 												{formatRelativeTime(item.updatedAt)}
 											</span>
 										{/if}
-										<span class="text-xxs text-muted-foreground/70">
-											{item.versionId === 'default' || !item.versionId
+										<span
+											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
+												'default' || !item.versionId
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+											>{item.versionId === 'default' || !item.versionId
 												? 'Новая версия'
-												: 'Старая версия'}
-										</span>
+												: 'Старая версия'}</span
+										>
 									</div>
 
 									<div>

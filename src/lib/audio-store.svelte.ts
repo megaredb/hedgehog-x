@@ -236,13 +236,6 @@ class AudioStore {
 	}
 
 	previous(): void {
-		if (this.currentTime > 3 && !this.shuffleEnabled) {
-			this.currentTime = 0;
-			this.progress = 0;
-			// Must call directly: $effect skips seek when lastSeekTime === 0 (same value).
-			htmlAudio.setCurrentTime(0);
-			return;
-		}
 		const idx = calculatePreviousIndex({
 			queue: this.queue,
 			currentQueueIndex: this.currentQueueIndex,

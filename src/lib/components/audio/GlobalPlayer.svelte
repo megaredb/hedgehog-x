@@ -8,6 +8,7 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
@@ -20,7 +21,9 @@
 	let isDrawerOpen = $state(false);
 	let isBookmarkModalOpen = $state(false);
 	let bookmarkNote = $state('');
+	let bookmarkStart = $state(0);
 	let bookmarkEnd = $state<number | null>(null);
+	let hasBookmarkEnd = $state(false);
 	let isSavingBookmark = $state(false);
 	let isBookmarkSaved = $state(false);
 
@@ -57,7 +60,9 @@
 	function openBookmarkModal() {
 		if (!audioStore.currentTrack) return;
 		bookmarkNote = '';
+		bookmarkStart = Math.floor(audioStore.currentTime);
 		bookmarkEnd = null;
+		hasBookmarkEnd = false;
 		isBookmarkSaved = false;
 		isBookmarkModalOpen = true;
 	}
@@ -72,8 +77,8 @@
 					typeof audioStore.currentTrack.versionId === 'string'
 						? audioStore.currentTrack.versionId
 						: 'default',
-				timestampSeconds: audioStore.currentTime,
-				endTimestampSeconds: bookmarkEnd,
+				timestampSeconds: bookmarkStart,
+				endTimestampSeconds: hasBookmarkEnd ? bookmarkEnd : null,
 				note: bookmarkNote
 			});
 			isBookmarkSaved = true;
@@ -176,7 +181,7 @@
 
 {#if audioStore.queue.length > 0}
 	<AudioPlayer.Root
-		class="global-audio-player sticky bottom-0 z-50 w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
+		class="global-audio-player sticky bottom-0 z-[70] w-full rounded-none border-t bg-background p-0 shadow-[0_0px_6px_0px] shadow-muted/40"
 	>
 		<!-- Undo seek floating badge -->
 		{#if audioStore.undoSeekAvailable && audioStore.lastSeekFrom !== null}
@@ -208,7 +213,7 @@
 
 		<!-- Seek bar sits above the bar on all breakpoints -->
 		<div class="absolute top-0 left-0 z-50 w-full -translate-y-1/2">
-			<AudioPlayer.SeekBar class="overflow-x-clip" markers={bookmarkMarkers} />
+			<AudioPlayer.SeekBar class="relative z-[80]" markers={bookmarkMarkers} />
 		</div>
 
 		<!-- ── Desktop ── -->
@@ -372,26 +377,39 @@
 						{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 					</p>
 				</div>
-				<span class="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
-					{formatDuration(audioStore.currentTime)}
-				</span>
 			</div>
-			<div class="space-y-1.5">
-				<label for="bookmark-end" class="text-xs font-medium text-muted-foreground">
-					Конец фрагмента, сек (необязательно)
-				</label>
-				<Input
-					id="bookmark-end"
-					type="number"
-					min={Math.floor(audioStore.currentTime) + 1}
-					step="1"
-					value={bookmarkEnd ?? ''}
-					oninput={(event) => {
-						const value = Number(event.currentTarget.value);
-						bookmarkEnd = Number.isFinite(value) && value > audioStore.currentTime ? value : null;
+
+			<div class="grid grid-cols-2 gap-3">
+				<TimecodeInput
+					label="Начало"
+					value={bookmarkStart}
+					onchange={(value) => {
+						bookmarkStart = value;
+						if (bookmarkEnd !== null && bookmarkEnd <= value) bookmarkEnd = null;
 					}}
-					placeholder="До конца фрагмента"
 				/>
+				<div class="space-y-1.5">
+					<label class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+						<input
+							type="checkbox"
+							checked={hasBookmarkEnd}
+							onchange={(event) => {
+								hasBookmarkEnd = event.currentTarget.checked;
+								if (hasBookmarkEnd && bookmarkEnd === null) bookmarkEnd = bookmarkStart + 30;
+							}}
+						/>
+						Конец фрагмента
+					</label>
+					{#if hasBookmarkEnd}
+						<TimecodeInput
+							value={bookmarkEnd ?? bookmarkStart + 30}
+							min={bookmarkStart + 1}
+							onchange={(value) => (bookmarkEnd = value)}
+						/>
+					{:else}
+						<p class="px-1 py-2 text-xs text-muted-foreground">До конца главы</p>
+					{/if}
+				</div>
 			</div>
 
 			<div class="space-y-1.5">

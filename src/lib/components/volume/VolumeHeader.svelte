@@ -118,6 +118,15 @@
 		isDownloadModalOpen = false;
 	}
 
+	function openDownloadManager() {
+		if (!volume) return;
+		if (availableVersions.length <= 1) {
+			downloadVersion('default');
+			return;
+		}
+		isDownloadModalOpen = true;
+	}
+
 	function downloadAllVersions() {
 		if (!volume) return;
 		void manager.enqueueVolume(volume.id, chapters);
@@ -296,7 +305,7 @@
 						variant="outline"
 						size="sm"
 						class="gap-1.5 shadow-sm"
-						onclick={() => (isDownloadModalOpen = true)}
+						onclick={openDownloadManager}
 					>
 						{#if isFullyDownloaded}
 							<Check class="h-4 w-4 text-green-600" />
@@ -394,13 +403,14 @@
 		<Dialog.Footer class="flex flex-wrap justify-end gap-2">
 			<Button variant="outline" onclick={() => (isDownloadModalOpen = false)}>Закрыть</Button>
 			<Button variant="outline" onclick={downloadAllVersions}>Скачать всё</Button>
-			<Button
-				variant="destructive"
-				disabled={manager.downloads.filter((item) => item.volumeId === volume?.id).length === 0}
-				onclick={() => volume && void manager.deleteVolume(volume.id)}
-			>
-				Удалить всё
-			</Button>
+			{#if manager.downloads.some((item) => item.volumeId === volume?.id && item.status === 'downloaded')}
+				<Button
+					variant="destructive"
+					onclick={() => volume && void manager.deleteVolume(volume.id)}
+				>
+					Удалить всё
+				</Button>
+			{/if}
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

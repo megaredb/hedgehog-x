@@ -19,6 +19,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
 	import { Input } from '$lib/components/ui/input';
+	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
 	import { strings } from '$lib/constants/strings';
 	import { Bookmark, Clock, Pencil, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
 	import { formatDuration } from '$lib/utils/time';
@@ -306,11 +307,15 @@
 											{formatDate(item.createdAt)}
 										</span>
 									{/if}
-									<span class="text-xxs text-muted-foreground/70">
-										{item.versionId === 'default' || !item.versionId
+									<span
+										class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
+											'default' || !item.versionId
+											? 'border-primary/30 bg-primary/10 text-primary'
+											: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+										>{item.versionId === 'default' || !item.versionId
 											? 'Новая версия'
-											: 'Старая версия'}
-									</span>
+											: 'Старая версия'}</span
+									>
 								</div>
 
 								<h3 class="truncate text-base font-semibold text-foreground">
@@ -339,10 +344,10 @@
 
 								{#if item.note}
 									<div
-										class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
+										class="mt-1.5 flex w-fit max-w-full items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
 									>
 										<Quote class="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-										<span class="line-clamp-2 italic">{item.note}</span>
+										<span class="break-words whitespace-pre-wrap italic">{item.note}</span>
 									</div>
 								{/if}
 							</div>
@@ -397,29 +402,37 @@
 			<Dialog.Description>Измените таймкод, конец фрагмента или заметку.</Dialog.Description>
 		</Dialog.Header>
 		<div class="space-y-4 py-2">
-			<label class="block space-y-1.5 text-sm">
-				<span class="font-medium">Начало, секунд</span>
-				<Input
-					type="number"
-					min="0"
-					step="1"
+			<div class="grid grid-cols-2 gap-3">
+				<TimecodeInput
+					label="Начало"
 					value={editStart}
-					oninput={(event) => (editStart = Math.max(0, Number(event.currentTarget.value) || 0))}
-				/>
-			</label>
-			<label class="block space-y-1.5 text-sm">
-				<span class="font-medium">Конец фрагмента, секунд (необязательно)</span>
-				<Input
-					type="number"
-					min={editStart + 1}
-					step="1"
-					value={editEnd ?? ''}
-					oninput={(event) => {
-						const value = Number(event.currentTarget.value);
-						editEnd = Number.isFinite(value) && value > editStart ? value : null;
+					onchange={(value) => {
+						editStart = value;
+						if (editEnd !== null && editEnd <= value) editEnd = null;
 					}}
 				/>
-			</label>
+				<div>
+					<label class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+						<input
+							type="checkbox"
+							checked={editEnd !== null}
+							onchange={(event) => {
+								editEnd = event.currentTarget.checked ? editStart + 30 : null;
+							}}
+						/>
+						Конец фрагмента
+					</label>
+					{#if editEnd !== null}
+						<TimecodeInput
+							value={editEnd}
+							min={editStart + 1}
+							onchange={(value) => (editEnd = value)}
+						/>
+					{:else}
+						<p class="px-1 py-2 text-xs text-muted-foreground">До конца главы</p>
+					{/if}
+				</div>
+			</div>
 			<label class="block space-y-1.5 text-sm">
 				<span class="font-medium">{strings.bookmarks.noteLabel}</span>
 				<Input bind:value={editNote} maxlength={500} />

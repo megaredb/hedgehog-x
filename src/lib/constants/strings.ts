@@ -71,7 +71,7 @@ export const strings = {
 		deleteConfirmTitle: 'Удалить закладку?',
 		deleteConfirmDescription:
 			'Вы уверены, что хотите удалить эту закладку? Это действие необратимо.',
-		jumpToBookmark: 'Перейти к фрагменту'
+		jumpToBookmark: 'Слушать фрагмент'
 	},
 	history: {
 		title: 'История прослушиваний',

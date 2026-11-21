@@ -247,56 +247,67 @@
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List
-			class="mx-auto mb-6 grid w-full max-w-lg grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1 sm:grid-cols-4"
-		>
-			<Tabs.Trigger value="chapters" class="gap-1.5 text-xs sm:text-sm">
-				<Headphones class="h-4 w-4" />
-				<span>{strings.volume.chaptersTab} ({chapters.length})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="bookmarks" class="gap-1.5 text-xs sm:text-sm">
-				<BookmarkIcon class="h-4 w-4" />
-				<span>{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="illustrations" class="gap-1.5 text-xs sm:text-sm">
-				<ImageIcon class="h-4 w-4" />
-				<span>{strings.volume.illustrationsTab}</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="comments" class="gap-1.5 text-xs sm:text-sm">
-				<MessageSquare class="h-4 w-4" />
-				<span>{strings.volume.commentsTab}</span>
-			</Tabs.Trigger>
-		</Tabs.List>
+		<div class="mb-5 flex flex-col gap-2.5 lg:flex-row lg:items-center">
+			<Tabs.List
+				class="order-2 grid w-full grid-cols-2 gap-1 rounded-xl bg-muted/60 p-1 sm:grid-cols-4 lg:order-1 lg:flex-1"
+			>
+				<Tabs.Trigger
+					value="chapters"
+					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+				>
+					<Headphones class="h-4 w-4 shrink-0" />
+					<span class="truncate">{strings.volume.chaptersTab} ({chapters.length})</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="bookmarks"
+					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+				>
+					<BookmarkIcon class="h-4 w-4 shrink-0" />
+					<span class="truncate">{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="illustrations"
+					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+				>
+					<ImageIcon class="h-4 w-4 shrink-0" />
+					<span class="truncate">{strings.volume.illustrationsTab}</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="comments"
+					class="h-9 w-full justify-center gap-1.5 px-2 text-[11px] sm:text-sm"
+				>
+					<MessageSquare class="h-4 w-4 shrink-0" />
+					<span class="truncate">{strings.volume.commentsTab}</span>
+				</Tabs.Trigger>
+			</Tabs.List>
+
+			{#if versionOptions.length > 1}
+				<div
+					class="order-1 flex w-full items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1 lg:order-2 lg:w-auto lg:shrink-0"
+					role="radiogroup"
+					aria-label="Версия озвучки"
+				>
+					{#each versionOptions as version (version.id)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={selectedVersionId === version.id}
+							class="h-8 flex-1 rounded-lg px-3 text-xs font-semibold whitespace-nowrap transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden lg:flex-none {selectedVersionId ===
+							version.id
+								? 'bg-primary text-primary-foreground'
+								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+							onclick={() => handleVersionChange(version.id)}
+							title={version.description}
+						>
+							{version.label}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
 
 		<!-- Tab 1: Chapters -->
 		<Tabs.Content value="chapters" class="outline-none">
-			{#if versionOptions.length > 1}
-				<div
-					class="mb-4 flex flex-col gap-3 rounded-2xl border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between"
-				>
-					<div>
-						<p class="text-sm font-semibold text-foreground">Слушать в исполнении</p>
-						<p class="text-xs text-muted-foreground">Версия озвучки для всех глав этого тома</p>
-					</div>
-					<div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Версия озвучки">
-						{#each versionOptions as version (version.id)}
-							<button
-								type="button"
-								role="radio"
-								aria-checked={selectedVersionId === version.id}
-								class="rounded-full border px-4 py-2 text-xs font-semibold transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden {selectedVersionId ===
-								version.id
-									? 'border-primary bg-primary text-primary-foreground'
-									: 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'}"
-								onclick={() => handleVersionChange(version.id)}
-								title={version.description}
-							>
-								{version.label}
-							</button>
-						{/each}
-					</div>
-				</div>
-			{/if}
 			<VolumeChaptersTab
 				{volume}
 				{chapters}
