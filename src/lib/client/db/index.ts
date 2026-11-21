@@ -74,6 +74,7 @@ export interface OfflineBookmark {
 	chapterId: string;
 	versionId?: string;
 	timestampSeconds: number;
+	endTimestampSeconds?: number | null;
 	note: string;
 	createdAt: number;
 }
@@ -103,7 +104,12 @@ export interface SyncItem {
 
 export interface OfflineDownload {
 	chapterId: string;
+	baseChapterId?: string;
 	versionId?: string;
+	title?: string;
+	audioUrl?: string;
+	durationSeconds?: number;
+	volumeId?: string;
 	status: 'queued' | 'downloading' | 'downloaded' | 'error';
 	progress?: number;
 	totalBytes?: number;

@@ -53,6 +53,7 @@
 				: 'default';
 
 		if (audioStore.currentTrack?.id === bookmark.chapterId && currentVersion === versionId) {
+			audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 			audioStore.seek(bookmark.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
 			return;
@@ -82,6 +83,7 @@
 				],
 				0
 			);
+			audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 			return;
 		}
 
@@ -100,6 +102,7 @@
 		}));
 
 		audioStore.setQueueAndPlay(tracks, index);
+		audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 	}
 
 	function openDeleteModal(bookmark: OfflineBookmark) {
@@ -161,7 +164,12 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatDuration(bookmark.timestampSeconds)}</span>
+										<span>
+											{formatDuration(bookmark.timestampSeconds)}
+											{#if bookmark.endTimestampSeconds}
+												– {formatDuration(bookmark.endTimestampSeconds)}
+											{/if}
+										</span>
 									</span>
 									{#if bookmark.createdAt}
 										<span class="text-xs text-muted-foreground/70">

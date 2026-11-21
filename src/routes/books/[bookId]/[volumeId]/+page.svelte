@@ -107,10 +107,31 @@
 
 	function handleVersionChange(versionId: string) {
 		if (versionId === selectedVersionId) return;
-		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
-		if (audioStore.isPlaying && currentVersion !== versionId) audioStore.pause();
 		selectedVersionId = versionId;
 	}
+
+	// Handle deep links from bookmarks/history/downloads: ?chapter=...&version=...
+	let handledChapterAnchor = '';
+	$effect(() => {
+		if (chaptersQuery.isLoading || chapters.length === 0) return;
+		const chapterId =
+			page.url.searchParams.get('chapter') || page.url.hash.replace(/^#chapter-/, '');
+		const versionId = page.url.searchParams.get('version');
+		if (!chapterId) return;
+		if (versionId && versionOptions.some((version) => version.id === versionId)) {
+			selectedVersionId = versionId;
+		}
+		const key = `${chapterId}:${versionId ?? selectedVersionId}`;
+		if (handledChapterAnchor === key) return;
+		handledChapterAnchor = key;
+		activeTab = 'chapters';
+		setTimeout(() => {
+			document.getElementById(`chapter-${chapterId}`)?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center'
+			});
+		}, 100);
+	});
 
 	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
 	let handledUrlParamsForVolumeId: string | null = null;
@@ -215,7 +236,14 @@
 
 <main class="layout-content mx-auto max-w-5xl py-4 md:py-8">
 	<!-- Volume header -->
-	<VolumeHeader {volume} {chapters} {book} bookId={data.bookId} isLoading={volumeQuery.isLoading} />
+	<VolumeHeader
+		{volume}
+		{chapters}
+		{book}
+		bookId={data.bookId}
+		isLoading={volumeQuery.isLoading}
+		{chapterVersions}
+	/>
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">

@@ -18,7 +18,7 @@
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Play, Pause, MessageSquare, Check, Heart } from '@lucide/svelte';
+	import { Play, Pause, Loader2, MessageSquare, Check, Heart } from '@lucide/svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	interface ChapterAudioVersion {
@@ -140,6 +140,11 @@
 	let isCommentsDrawerOpen = $state(false);
 	let seekingChapterId = $state<string | null>(null);
 
+	function savedStartTime(chapterId: string): number {
+		const saved = progressMap.get(audioVersionKey(chapterId, activeVersionId));
+		return saved && !saved.isCompleted && saved.progressSeconds > 0 ? saved.progressSeconds : 0;
+	}
+
 	function buildSelectedVersionTracks(): Track[] {
 		if (isDefaultVersion) {
 			return chapters.map((chapter) => ({
@@ -152,7 +157,7 @@
 				album: volume?.title,
 				volumeId: volume?.id,
 				bookId,
-				startTime: 0
+				startTime: savedStartTime(chapter.id)
 			}));
 		}
 
@@ -170,7 +175,7 @@
 					album: volume?.title,
 					volumeId: volume?.id,
 					bookId,
-					startTime: 0
+					startTime: savedStartTime(chapter.id)
 				}
 			];
 		});
@@ -299,6 +304,7 @@
 				{@const isCurrent =
 					audioStore.currentTrack?.id === chapter.id && currentVersion === activeVersionId}
 				{@const isPlaying = isCurrent && audioStore.isPlaying}
+				{@const isLoading = isCurrent && (audioStore.isLoading || audioStore.isBuffering)}
 				{@const saved = progressMap.get(audioVersionKey(chapter.id, activeVersionId))}
 				{@const currentTrackTime = isCurrent
 					? audioStore.currentTime
@@ -312,7 +318,7 @@
 						? Math.min(100, Math.max(0, (currentTrackTime / effectiveDuration) * 100))
 						: 0}
 
-				<li class="relative">
+				<li class="relative" id={`chapter-${chapter.id}`}>
 					<div
 						role="button"
 						tabindex={isAvailable ? 0 : -1}
@@ -334,10 +340,12 @@
 								? 'cursor-pointer hover:bg-muted/30'
 								: 'cursor-not-allowed opacity-50 grayscale'}"
 					>
-						<!-- Interactive background progress for active chapter -->
-						{#if isCurrent}
+						<!-- Row fill is the chapter progress; the whole row remains the seek target. -->
+						{#if isAvailable && progressPercent > 0}
 							<div
-								class="pointer-events-none absolute inset-y-0 left-0 bg-primary/10 transition-all duration-150"
+								class="pointer-events-none absolute inset-y-0 left-0 transition-all duration-150 {isCurrent
+									? 'bg-primary/10'
+									: 'bg-primary/5'}"
 								style="width: {progressPercent}%;"
 							></div>
 						{/if}
@@ -361,7 +369,14 @@
 									? `Пауза: ${chapter.chapterNumber}. ${chapter.title}`
 									: `Воспроизвести: ${chapter.chapterNumber}. ${chapter.title}`}
 							>
-								{#if isPlaying}
+								{#if isLoading}
+									<Loader2 class="h-4 w-4 animate-spin group-hover:hidden" />
+									{#if isPlaying}
+										<Pause class="hidden h-4 w-4 fill-current group-hover:block" />
+									{:else}
+										<Play class="ml-0.5 hidden h-4 w-4 fill-current group-hover:block" />
+									{/if}
+								{:else if isPlaying}
 									<Pause class="h-4 w-4 fill-current" />
 								{:else if isCurrent}
 									<Play class="ml-0.5 h-4 w-4 fill-current" />
@@ -409,16 +424,6 @@
 									{:else}
 										<span class="font-mono">{formatDuration(effectiveDuration)}</span>
 									{/if}
-
-									<!-- Progress bar for non-active chapters -->
-									{#if isAvailable && !isCurrent && saved && !saved.isCompleted && saved.progressSeconds > 0}
-										<div class="h-1 w-12 overflow-hidden rounded-full bg-muted">
-											<div
-												class="h-full rounded-full bg-primary/60"
-												style="width: {progressPercent}%;"
-											></div>
-										</div>
-									{/if}
 								</div>
 							</div>
 						</div>
@@ -463,9 +468,20 @@
 								<MessageSquare class="h-4 w-4" />
 							</Button>
 
-							<!-- Chapter download button: downloads are currently bound to the default audio file. -->
-							{#if isDefaultVersion}
-								<DownloadButton {chapter} class="h-8 w-8" />
+							<!-- Chapter download button for the selected audio version. -->
+							{#if isAvailable}
+								<DownloadButton
+									{chapter}
+									version={versionTrack
+										? {
+												versionId: activeVersionId,
+												title: versionTrack.title,
+												audioUrl: versionTrack.audioUrl,
+												durationSeconds: versionTrack.durationSeconds
+											}
+										: undefined}
+									class="h-8 w-8"
+								/>
 							{/if}
 						</div>
 					</div>

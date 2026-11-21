@@ -4,10 +4,17 @@
 	import Button, { type ButtonSize, type ButtonVariant } from '../ui/button/button.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import type { OfflineChapter } from '$lib/client/db';
+	import { audioVersionKey } from '$lib/audio-version';
 	import { cn } from '$lib/utils.js';
 
 	interface Props {
 		chapter: OfflineChapter;
+		version?: {
+			versionId: string;
+			title: string;
+			audioUrl: string;
+			durationSeconds: number;
+		};
 		class?: string;
 		size?: ButtonSize;
 		variant?: ButtonVariant;
@@ -16,6 +23,7 @@
 
 	let {
 		chapter,
+		version,
 		class: className = '',
 		size = 'icon',
 		variant = 'ghost',
@@ -24,15 +32,18 @@
 
 	let downloadManager = useDownloads();
 
-	const isDownloaded = $derived(downloadManager.isDownloaded(chapter.id));
-	const isDownloading = $derived(downloadManager.isDownloading(chapter.id));
-	const isQueued = $derived(downloadManager.isQueued(chapter.id));
-	const stats = $derived(downloadManager.getProgress(chapter.id));
+	const key = $derived(audioVersionKey(chapter.id, version?.versionId ?? 'default'));
+	const isDownloaded = $derived(downloadManager.isDownloaded(key));
+	const isDownloading = $derived(downloadManager.isDownloading(key));
+	const isQueued = $derived(downloadManager.isQueued(key));
+	const stats = $derived(downloadManager.getProgress(key));
 
 	function toggleDownload(e: MouseEvent) {
 		e.stopPropagation();
 		if (isDownloaded || isDownloading || isQueued) {
-			downloadManager.deleteDownload(chapter.id, chapter.audioUrl);
+			downloadManager.deleteDownload(key, version?.audioUrl ?? chapter.audioUrl);
+		} else if (version) {
+			downloadManager.enqueueVersionDownload(chapter, version);
 		} else {
 			downloadManager.enqueueDownload(chapter);
 		}

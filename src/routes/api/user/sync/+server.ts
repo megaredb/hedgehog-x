@@ -85,6 +85,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 				chapterId: bookmark.chapterId,
 				versionId: bookmark.versionId,
 				timestampSeconds: bookmark.timestampSeconds,
+				endTimestampSeconds: bookmark.endTimestampSeconds ?? null,
 				note: bookmark.note || '',
 				createdAt: bookmark.createdAt?.getTime() || 0
 			}))
@@ -169,6 +170,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		chapterId: string;
 		versionId: string;
 		timestampSeconds: number;
+		endTimestampSeconds: number | null;
 		note: string;
 		action: 'upsert' | 'delete';
 	}> = [];
@@ -177,10 +179,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const id = text(item?.id);
 		const chapterId = text(item?.chapterId);
 		const timestampSeconds = time(item?.timestampSeconds);
+		const endTimestampSeconds =
+			item?.endTimestampSeconds === null || item?.endTimestampSeconds === undefined
+				? null
+				: time(item.endTimestampSeconds);
 		const note = typeof item?.note === 'string' ? item.note.slice(0, 500) : '';
 		const action = item?.action === 'delete' ? 'delete' : 'upsert';
 		if (!id || !chapterId || (action === 'upsert' && timestampSeconds === null)) {
 			if (errors.length < 5) errors.push('Invalid bookmark update');
+			continue;
+		}
+		if (endTimestampSeconds !== null && endTimestampSeconds <= (timestampSeconds ?? 0)) {
+			if (errors.length < 5) errors.push('Bookmark end must be after start');
 			continue;
 		}
 		bookmarkUpdates.push({
@@ -188,6 +198,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			chapterId,
 			versionId: normalizeVersionId(item?.versionId),
 			timestampSeconds: timestampSeconds ?? 0,
+			endTimestampSeconds,
 			note,
 			action
 		});
@@ -302,6 +313,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						.set({
 							versionId: item.versionId,
 							timestampSeconds: item.timestampSeconds,
+							endTimestampSeconds: item.endTimestampSeconds,
 							note: item.note
 						})
 						.where(and(eq(bookmarks.id, item.id), eq(bookmarks.userId, user.id)));
@@ -312,6 +324,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						chapterId: item.chapterId,
 						versionId: item.versionId,
 						timestampSeconds: item.timestampSeconds,
+						endTimestampSeconds: item.endTimestampSeconds,
 						note: item.note,
 						createdAt: new Date()
 					});

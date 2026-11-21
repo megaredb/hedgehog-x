@@ -27,7 +27,7 @@
 	let errorRetryCount = 0;
 	let lastSeekTime = 0;
 	let lastUpdateTime = 0;
-	let prevTrackId: string | number | undefined = undefined;
+	let prevTrackKey: string | null = null;
 	let lastProgressSaveTime = 0;
 	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
 	let wakeLock: WakeLockSentinel | null = null;
@@ -101,7 +101,10 @@
 	function forceTimeUpdate() {
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
-		audioStore.syncTime(audio.currentTime, audio.duration || 0);
+		audioStore.syncTime(
+			audio.currentTime,
+			audio.duration > 0 ? audio.duration : audioStore.duration
+		);
 		lastUpdateTime = Date.now();
 	}
 
@@ -111,8 +114,19 @@
 		lastUpdateTime = now;
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
+		if (audioStore.clipEnd !== null && audio.currentTime >= audioStore.clipEnd) {
+			const end = audioStore.clipEnd;
+			const start = audioStore.clipStart;
+			audioStore.clearClipRange();
+			audioStore.pause();
+			audioStore.seek(start ?? end ?? 0, false);
+			return;
+		}
 		if (Math.abs(audioStore.currentTime - audio.currentTime) > MIN_UPDATE_THRESHOLD) {
-			audioStore.syncTime(audio.currentTime, audio.duration || 0);
+			audioStore.syncTime(
+				audio.currentTime,
+				audio.duration > 0 ? audio.duration : audioStore.duration
+			);
 		}
 		// Save progress to Dexie every PROGRESS_SAVE_INTERVAL ms
 		if (
@@ -375,7 +389,7 @@
 		const handleCanPlay = () => {
 			audioStore.isLoading = false;
 			audioStore.isBuffering = false;
-			audioStore.duration = audio.duration || 0;
+			if (audio.duration > 0) audioStore.duration = audio.duration;
 			audioStore.isError = false;
 			audioStore.errorMessage = null;
 		};
@@ -390,7 +404,7 @@
 			audioStore.isPlaying = true;
 		};
 		const handleDuration = () => {
-			audioStore.duration = audio.duration || 0;
+			if (audio.duration > 0) audioStore.duration = audio.duration;
 		};
 		const handleVolume = () => {
 			audioStore.volume = audio.volume;
@@ -425,7 +439,7 @@
 			const audioDur = audio.duration || audioStore.duration || 0;
 			const isLive = htmlAudio.isLive(audioDur);
 			const startTime = isLive ? 0 : audioStore.currentTime;
-			prevTrackId = track.id; // suppress the track-change effect on restore
+			prevTrackKey = `${track.id}::${typeof track.versionId === 'string' ? track.versionId : 'default'}`; // suppress the track-change effect on restore
 			try {
 				audioStore.isLoading = true;
 				await htmlAudio.load({ url: track.url, id: track.id, startTime, isLiveStream: isLive });
@@ -464,10 +478,12 @@
 	/** Load new track and play when currentTrack changes */
 	$effect(() => {
 		const track = audioStore.currentTrack;
-		const trackId = track?.id;
-		if (!track || trackId === prevTrackId) return;
+		const trackKey = track
+			? `${track.id}::${typeof track.versionId === 'string' ? track.versionId : 'default'}`
+			: null;
+		if (!track || trackKey === prevTrackKey) return;
 		listeningTracker.flush();
-		prevTrackId = trackId;
+		prevTrackKey = trackKey;
 
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;

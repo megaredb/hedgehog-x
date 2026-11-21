@@ -42,7 +42,7 @@
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
 ├── server.js                  # compression + immutable cache headers + adapter-node handler
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
-├── drizzle/                   # 12 SQL-миграций 0000–0011 + meta (актуальны)
+├── drizzle/                   # 13 SQL-миграций 0000–0012 + meta (актуальны)
 ├── e2e/                       # 9 файлов Playwright
 ├── dynamic/dev.yaml           # Traefik file-provider для dev
 ├── docker/init-umami-db.sh
@@ -305,7 +305,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `listening_progress`     | `user_id` text NN FK, `chapter_id` varchar128 NN FK, `progress_seconds` int NN def 0, `is_completed` bool def false, `updated_at`                                                                        | PK(user,chapter); FK cascade                              | user/chapter                        |
 | `volume_likes`           | `user_id` NN FK, `volume_id` NN FK, `created_at`                                                                                                                                                         | PK(user,volume); FK cascade                               | user/volume                         |
 | `chapter_likes`          | `user_id` NN FK, `chapter_id` NN FK, `created_at`                                                                                                                                                        | PK(user,chapter); FK cascade                              | user/chapter                        |
-| `bookmarks`              | `id` varchar36 PK, `user_id` NN FK, `chapter_id` NN FK, `timestamp_seconds` int NN, `note` 500, `created_at`                                                                                             | PK; FK cascade                                            | user/chapter                        |
+| `bookmarks`              | `id` varchar36 PK, `user_id` NN FK, `chapter_id` NN FK, `timestamp_seconds` int NN, `end_timestamp_seconds` int, `note` 500, `created_at`                                                                | PK; FK cascade                                            | user/chapter                        |
 | `listening_sessions`     | `id` varchar36 PK (UUID default), `user_id` FK nullable, `book_id` FK nullable, `volume_id` FK nullable, `chapter_id` NN FK, `listened_seconds` int NN, `started_at` NN def now, `created_at` NN def now | indexes: user, chapter, started_at; FK cascade            | user/book/volume/chapter            |
 | `daily_listening_stats`  | `id` varchar128 PK, `date` varchar10 NN, `user_id` FK nullable, `book_id` FK nullable, `chapter_id` FK nullable, `total_seconds` int NN def 0, `sessions_count` int NN def 1, `updated_at` NN            | indexes: date, book, user; unique(date,book,chapter,user) | user/book/chapter                   |
 
@@ -388,7 +388,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |
-| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0011)            |
+| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0012)            |
 | `auth:schema`                     | better-auth generate                          | может перезаписать ручные поля      |
 
 ### 8.3. Конфиги

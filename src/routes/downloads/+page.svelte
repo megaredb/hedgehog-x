@@ -1,4 +1,6 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { useDownloads } from '$lib/client/downloads/downloadManager.svelte';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
@@ -21,42 +23,55 @@
 		() => []
 	);
 	const volumesMap = $derived(new SvelteMap(volumesQuery.data.map((v) => [v.id, v])));
+	const booksQuery = useDexie(
+		() => db.books.toArray(),
+		() => [],
+		() => []
+	);
+	const booksMap = $derived(new SvelteMap(booksQuery.data.map((book) => [book.id, book])));
 
 	const activeGroups = $derived.by(() => {
-		const groups = new SvelteMap<string, typeof manager.queuedChapters>();
+		const groups = new SvelteMap<
+			string,
+			{ volumeId: string; versionId: string; items: typeof manager.queuedChapters }
+		>();
 
 		// Add active downloads first
-		for (const ch of manager.downloadingChapters) {
-			if (!groups.has(ch.chapter.volumeId)) groups.set(ch.chapter.volumeId, []);
-			groups.get(ch.chapter.volumeId)!.push(ch);
-		}
+		const add = (ch: (typeof manager.queuedChapters)[number]) => {
+			const volumeId = ch.download.volumeId || ch.chapter.volumeId;
+			const versionId = ch.download.versionId ?? 'default';
+			const key = volumeId + ':' + versionId;
+			if (!groups.has(key)) groups.set(key, { volumeId, versionId, items: [] });
+			groups.get(key)!.items.push(ch);
+		};
 
-		// Then append queued downloads
-		for (const ch of manager.queuedChapters) {
-			if (!groups.has(ch.chapter.volumeId)) groups.set(ch.chapter.volumeId, []);
-			groups.get(ch.chapter.volumeId)!.push(ch);
-		}
+		for (const ch of manager.downloadingChapters) add(ch);
+		for (const ch of manager.queuedChapters) add(ch);
 
-		return Array.from(groups.entries()).map(([volumeId, items]) => ({
-			volumeId,
-			volume: volumesMap.get(volumeId),
-			items
-		}));
+		return Array.from(groups.values()).map((group) => {
+			const volume = volumesMap.get(group.volumeId);
+			return { ...group, volume, book: volume ? booksMap.get(volume.bookId) : undefined };
+		});
 	});
 
 	const downloadedGroups = $derived.by(() => {
-		const groups = new SvelteMap<string, typeof manager.downloadedChapters>();
+		const groups = new SvelteMap<
+			string,
+			{ volumeId: string; versionId: string; items: typeof manager.downloadedChapters }
+		>();
 
 		for (const ch of manager.downloadedChapters) {
-			if (!groups.has(ch.chapter.volumeId)) groups.set(ch.chapter.volumeId, []);
-			groups.get(ch.chapter.volumeId)!.push(ch);
+			const volumeId = ch.download.volumeId || ch.chapter.volumeId;
+			const versionId = ch.download.versionId ?? 'default';
+			const key = volumeId + ':' + versionId;
+			if (!groups.has(key)) groups.set(key, { volumeId, versionId, items: [] });
+			groups.get(key)!.items.push(ch);
 		}
 
-		return Array.from(groups.entries()).map(([volumeId, items]) => ({
-			volumeId,
-			volume: volumesMap.get(volumeId),
-			items
-		}));
+		return Array.from(groups.values()).map((group) => {
+			const volume = volumesMap.get(group.volumeId);
+			return { ...group, volume, book: volume ? booksMap.get(volume.bookId) : undefined };
+		});
 	});
 
 	let downloadedPage = $state(1);
@@ -109,16 +124,21 @@
 			</Empty>
 		{:else}
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
-				{#each activeGroups as group (group.volumeId)}
+				{#each activeGroups as group (group.volumeId + ':' + group.versionId)}
 					<Accordion.Item value={group.volumeId}>
 						<Accordion.Trigger class="px-4 transition-colors hover:bg-muted/30 hover:no-underline">
 							<div class="flex w-full items-center gap-4">
 								{#if group.volume?.coverUrl}
-									<img
-										src={group.volume.coverUrl}
-										alt="Cover"
-										class="h-10 w-10 rounded-md object-cover shadow-sm"
-									/>
+									<a
+										href={`/books/${group.volume.bookId}/${group.volume.id}`}
+										aria-label="Перейти к тому"
+									>
+										<img
+											src={group.volume.coverUrl}
+											alt="Cover"
+											class="h-10 w-10 rounded-md object-cover shadow-sm"
+										/>
+									</a>
 								{/if}
 								<div class="min-w-0 flex-1 text-left">
 									<a
@@ -130,9 +150,18 @@
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
 									</a>
+									{#if group.book}
+										<a
+											href={`/books/${group.book.id}#volumes`}
+											class="block truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+										>
+											{group.book.title}
+										</a>
+									{/if}
 									<p class="mt-0.5 text-xs text-muted-foreground">
 										{group.items.length}
-										{group.items.length === 1 ? 'глава' : 'глав'} в очереди
+										{group.items.length === 1 ? 'глава' : 'глав'} в очереди ·
+										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
 									</p>
 								</div>
 								<Button
@@ -141,7 +170,7 @@
 									class="hover:text-destructive-foreground mr-2 shrink-0 text-destructive transition-colors hover:bg-destructive"
 									onclick={(e) => {
 										e.stopPropagation();
-										manager.cancelVolumeQueue(group.volumeId);
+										manager.cancelVolumeVersion(group.volumeId, group.versionId);
 									}}
 								>
 									Отменить том
@@ -150,14 +179,18 @@
 						</Accordion.Trigger>
 						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
 							<div class="mt-2 flex flex-col gap-2">
-								{#each group.items as { chapter, download } (chapter.id)}
+								{#each group.items as { chapter, download } (download.chapterId)}
 									<Item
 										class="flex items-center justify-between rounded-lg border bg-background p-3 transition-colors hover:bg-muted/10"
 									>
 										<div class="min-w-0 flex-1 pr-4">
-											<p class="truncate text-sm font-medium">{chapter.title}</p>
+											<a
+												href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
+												class="block truncate text-sm font-medium hover:text-primary hover:underline"
+												>{download.title || chapter.title}</a
+											>
 											{#if download.status === 'downloading'}
-												{@const stats = manager.getProgress(chapter.id)}
+												{@const stats = manager.getProgress(download.chapterId)}
 												<div class="mt-1.5 flex items-center gap-3">
 													<Progress value={stats.percentage} class="h-1.5 flex-1" />
 													<span class="w-12 text-right font-mono text-xs text-primary">
@@ -175,7 +208,7 @@
 											size="icon"
 											class="shrink-0 text-muted-foreground hover:text-destructive"
 											title="Отменить главу"
-											onclick={() => manager.cancelDownload(chapter.id)}
+											onclick={() => manager.cancelDownload(download.chapterId)}
 										>
 											<XCircle class="h-4.5 w-4.5" />
 										</Button>
@@ -200,16 +233,21 @@
 			</Empty>
 		{:else}
 			<Accordion.Root type="multiple" class="w-full rounded-xl border bg-card shadow-sm">
-				{#each paginatedDownloadedGroups as group (group.volumeId)}
+				{#each paginatedDownloadedGroups as group (group.volumeId + ':' + group.versionId)}
 					<Accordion.Item value={group.volumeId}>
 						<Accordion.Trigger class="px-4 transition-colors hover:bg-muted/30 hover:no-underline">
 							<div class="flex w-full items-center gap-4">
 								{#if group.volume?.coverUrl}
-									<img
-										src={group.volume.coverUrl}
-										alt="Cover"
-										class="h-10 w-10 rounded-md object-cover shadow-sm"
-									/>
+									<a
+										href={`/books/${group.volume.bookId}/${group.volume.id}`}
+										aria-label="Перейти к тому"
+									>
+										<img
+											src={group.volume.coverUrl}
+											alt="Cover"
+											class="h-10 w-10 rounded-md object-cover shadow-sm"
+										/>
+									</a>
 								{/if}
 								<div class="min-w-0 flex-1 text-left">
 									<a
@@ -221,9 +259,18 @@
 									>
 										{group.volume?.title || 'Том ' + group.volumeId}
 									</a>
+									{#if group.book}
+										<a
+											href={`/books/${group.book.id}#volumes`}
+											class="block truncate text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+										>
+											{group.book.title}
+										</a>
+									{/if}
 									<p class="mt-0.5 text-xs font-medium text-green-600">
 										Доступно оффлайн: {group.items.length}
-										{group.items.length === 1 ? 'глава' : 'глав'}
+										{group.items.length === 1 ? 'глава' : 'глав'} ·
+										{group.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
 									</p>
 								</div>
 								<Button
@@ -233,24 +280,28 @@
 									onclick={(e) => {
 										e.stopPropagation();
 										// Cancel and remove all downloaded chapters for volume
-										group.items.forEach(({ chapter }) => {
-											manager.deleteDownload(chapter.id);
+										group.items.forEach(({ download }) => {
+											manager.deleteDownload(download.chapterId);
 										});
 									}}
 								>
-									Удалить том
+									Удалить версию
 								</Button>
 							</div>
 						</Accordion.Trigger>
 						<Accordion.Content class="border-t bg-muted/5 p-4 pt-1">
 							<div class="mt-2 flex flex-col gap-2">
-								{#each group.items as { chapter } (chapter.id)}
-									{@const stats = manager.getProgress(chapter.id)}
+								{#each group.items as { chapter, download } (download.chapterId)}
+									{@const stats = manager.getProgress(download.chapterId)}
 									<Item
 										class="flex items-center justify-between rounded-lg border bg-background p-3 transition-colors hover:bg-muted/10"
 									>
 										<div class="min-w-0 flex-1 pr-4">
-											<p class="truncate text-sm font-medium">{chapter.title}</p>
+											<a
+												href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
+												class="block truncate text-sm font-medium hover:text-primary hover:underline"
+												>{download.title || chapter.title}</a
+											>
 											<p class="mt-1 text-xs text-muted-foreground">
 												Размер: {stats.totalBytes > 0
 													? formatBytes(stats.totalBytes)
@@ -262,7 +313,7 @@
 											size="icon"
 											class="shrink-0 text-muted-foreground hover:text-destructive"
 											title="Удалить главу"
-											onclick={() => manager.deleteDownload(chapter.id)}
+											onclick={() => manager.deleteDownload(download.chapterId)}
 										>
 											<Trash2 class="h-4.5 w-4.5" />
 										</Button>

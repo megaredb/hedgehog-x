@@ -1,4 +1,6 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
@@ -171,6 +173,22 @@
 	let isClearingHistory = $state(false);
 	let clearHistoryError = $state<string | null>(null);
 
+	function chapterHref(item: EnrichedHistoryItem): string {
+		if (!item.book || !item.volume || !item.chapter) return '#';
+		return (
+			resolve(`/books/${item.book.id}/${item.volume.id}`) +
+			`?chapter=${encodeURIComponent(item.chapter.id)}&version=${encodeURIComponent(item.versionId ?? 'default')}`
+		);
+	}
+
+	function volumeHref(item: EnrichedHistoryItem): string {
+		return item.book && item.volume ? resolve(`/books/${item.book.id}/${item.volume.id}`) : '#';
+	}
+
+	function bookHref(item: EnrichedHistoryItem): string {
+		return item.book ? resolve(`/books/${item.book.id}`) + '#volumes' : '#';
+	}
+
 	async function confirmClearHistory() {
 		isClearingHistory = true;
 		clearHistoryError = null;
@@ -260,14 +278,16 @@
 					<div class="flex items-start gap-3.5 p-4 sm:gap-4">
 						<!-- Book & Chapter cover -->
 						{#if item.volume?.coverUrl || item.book?.coverUrl}
-							<img
-								src={item.volume?.coverUrl || item.book?.coverUrl}
-								alt={item.volume?.title || item.chapter?.title || 'Cover'}
-								width={56}
-								height={96}
-								loading={i < 2 ? 'eager' : 'lazy'}
-								class="h-20 w-14 shrink-0 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
-							/>
+							<a href={chapterHref(item)} aria-label="Перейти к главе" class="shrink-0">
+								<img
+									src={item.volume?.coverUrl || item.book?.coverUrl}
+									alt={item.volume?.title || item.chapter?.title || 'Cover'}
+									width={56}
+									height={96}
+									loading={i < 2 ? 'eager' : 'lazy'}
+									class="h-20 w-14 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
+								/>
+							</a>
 						{:else}
 							<div
 								class="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-24 sm:w-16"
@@ -311,16 +331,25 @@
 
 									<div>
 										<h3 class="truncate text-base font-semibold text-foreground">
-											{item.chapter?.title ?? strings.player.chapterFallback}
+											<a href={chapterHref(item)} class="hover:underline">
+												{item.chapter?.title ?? strings.player.chapterFallback}
+											</a>
 										</h3>
 										<p class="truncate text-xs text-muted-foreground">
 											{#if item.book?.title}
-												<span>{item.book.title}</span>
+												<a href={bookHref(item)} class="hover:text-foreground hover:underline">
+													{item.book.title}
+												</a>
 												{#if item.volume?.title}
-													<span> &bull; {item.volume.title}</span>
+													<span> &bull; </span>
+													<a href={volumeHref(item)} class="hover:text-foreground hover:underline">
+														{item.volume.title}
+													</a>
 												{/if}
 											{:else if item.volume?.title}
-												<span>{item.volume.title}</span>
+												<a href={volumeHref(item)} class="hover:text-foreground hover:underline">
+													{item.volume.title}
+												</a>
 											{/if}
 										</p>
 									</div>

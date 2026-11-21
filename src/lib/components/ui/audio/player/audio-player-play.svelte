@@ -21,8 +21,10 @@
 	let { class: className = '', size = 'icon', variant = 'ghost', ...rest }: Props = $props();
 
 	const showSpinner = $derived(audioStore.isLoading || audioStore.isBuffering);
-	const isDisabled = $derived(showSpinner || !audioStore.currentTrack);
-	const tooltipLabel = $derived(audioStore.isPlaying ? 'Пауза' : 'Играть');
+	const isDisabled = $derived(!audioStore.currentTrack);
+	const tooltipLabel = $derived(
+		showSpinner ? 'Загрузка…' : audioStore.isPlaying ? 'Пауза' : 'Играть'
+	);
 
 	function handleClick(e: MouseEvent) {
 		void e;
@@ -62,7 +64,7 @@
 		{#snippet child({ props })}
 			<Button
 				aria-label={tooltipLabel}
-				class={cn(className)}
+				class={cn('group/play', className)}
 				data-slot="audio-play-button"
 				disabled={isDisabled}
 				{size}
@@ -75,7 +77,12 @@
 				}}
 			>
 				{#if showSpinner}
-					<Loader2 class="animate-spin" />
+					<Loader2 class="animate-spin group-hover/play:hidden" />
+					{#if audioStore.isPlaying}
+						<Pause class="hidden group-hover/play:block" fill="currentColor" />
+					{:else}
+						<Play class="hidden group-hover/play:block" fill="currentColor" />
+					{/if}
 				{:else if audioStore.isPlaying}
 					<Pause fill="currentColor" />
 				{:else}

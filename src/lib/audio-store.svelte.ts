@@ -1,6 +1,8 @@
 import { htmlAudio, type Track } from '$lib/html-audio.js';
 import { resolveMediaUrl } from '$lib/utils/mirror.js';
 import { calculateNextIndex, calculatePreviousIndex, type RepeatMode } from '$lib/audio-queue.js';
+import { db } from '$lib/client/db';
+import { audioVersionKey } from '$lib/audio-version';
 
 export type { RepeatMode } from '$lib/audio-queue.js';
 export { calculateNextIndex, calculatePreviousIndex } from '$lib/audio-queue.js';
@@ -56,6 +58,9 @@ class AudioStore {
 	sleepTimerEndsAt: number | null = $state(null);
 	sleepTimerEndOnTrack = $state(false);
 	sleepTimerRemainingSec = $state(0);
+	/** Bookmark fragment bounds; playback pauses when clipEnd is reached. */
+	clipStart: number | null = $state(null);
+	clipEnd: number | null = $state(null);
 
 	// ── User preferences ────────────────────────────────────────────────────
 	seekStep = $state(10);
@@ -165,6 +170,16 @@ class AudioStore {
 		}
 	}
 
+	setClipRange(start: number, end?: number | null): void {
+		this.clipStart = end != null && end > start ? start : null;
+		this.clipEnd = end != null && end > start ? end : null;
+	}
+
+	clearClipRange(): void {
+		this.clipStart = null;
+		this.clipEnd = null;
+	}
+
 	seek(time: number, isInteractive = true): void {
 		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
 		if (isInteractive && Math.abs(valid - this.currentTime) > 10) {
@@ -195,6 +210,14 @@ class AudioStore {
 		this.undoSeekAvailable = false;
 	}
 
+	private async withSavedStart(track: Track): Promise<Track> {
+		if (track.startTime && track.startTime > 0) return track;
+		const versionId = typeof track.versionId === 'string' ? track.versionId : 'default';
+		const saved = await db.progress.get(audioVersionKey(String(track.id), versionId));
+		if (!saved || saved.isCompleted || saved.progressSeconds <= 0) return track;
+		return { ...track, startTime: saved.progressSeconds };
+	}
+
 	next(): void {
 		const idx = calculateNextIndex({
 			queue: this.queue,
@@ -209,7 +232,7 @@ class AudioStore {
 			this.isBuffering = false;
 			return;
 		}
-		this.loadAndPlayTrack(track, idx);
+		void this.withSavedStart(track).then((resolved) => this.loadAndPlayTrack(resolved, idx));
 	}
 
 	previous(): void {
@@ -237,7 +260,7 @@ class AudioStore {
 			this.isBuffering = false;
 			return;
 		}
-		this.loadAndPlayTrack(track, idx);
+		void this.withSavedStart(track).then((resolved) => this.loadAndPlayTrack(resolved, idx));
 	}
 
 	setQueueAndPlay(songs: Track[], startIndex: number): void {
@@ -250,8 +273,12 @@ class AudioStore {
 			this.currentQueueIndex = -1;
 			return;
 		}
+		const currentVersion = this.currentTrack?.versionId ?? 'default';
+		const targetVersion = target.versionId ?? 'default';
 		const wasSameTrack =
-			this.currentTrack?.id === target.id && Boolean(htmlAudio.getAudioElement()?.src);
+			this.currentTrack?.id === target.id &&
+			currentVersion === targetVersion &&
+			Boolean(htmlAudio.getAudioElement()?.src);
 		this.setQueue(songs, startIndex);
 		if (wasSameTrack) {
 			if (target.startTime !== undefined) {
@@ -283,6 +310,7 @@ class AudioStore {
 	setQueue(tracks: Track[], startIndex = 0): void {
 		const resolvedTracks = tracks.map((t) => ({ ...t, url: resolveMediaUrl(t.url) }));
 		const current = resolvedTracks[startIndex] ?? null;
+		this.clearClipRange();
 		this.queue = resolvedTracks;
 		this.currentQueueIndex = current ? startIndex : -1;
 		this.currentTrack = current;
@@ -454,6 +482,10 @@ class AudioStore {
 
 		this.currentTrack = resolvedTrack;
 		this.currentQueueIndex = queueIndex;
+		this.clearClipRange();
+		this.duration = resolvedTrack.duration ?? 0;
+		this.currentTime = resolvedTrack.startTime ?? 0;
+		this.progress = this.duration > 0 ? (this.currentTime / this.duration) * 100 : 0;
 		this.isError = false;
 		this.errorMessage = null;
 

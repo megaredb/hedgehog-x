@@ -196,6 +196,7 @@ export const bookmarks = pgTable(
 			.notNull(),
 		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		timestampSeconds: integer('timestamp_seconds').notNull(),
+		endTimestampSeconds: integer('end_timestamp_seconds'),
 		note: varchar('note', { length: 500 }),
 		createdAt: timestamp('created_at').defaultNow()
 	},

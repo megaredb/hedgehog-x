@@ -64,6 +64,7 @@ type UserSyncPayload = {
 		chapterId: string;
 		versionId?: string;
 		timestampSeconds: number;
+		endTimestampSeconds?: number | null;
 		note?: string;
 		createdAt?: number;
 	}>;
@@ -116,6 +117,7 @@ async function pushLocalUserData(fetchFn: typeof fetch): Promise<void> {
 					chapterId: b.chapterId,
 					versionId: b.versionId ?? 'default',
 					timestampSeconds: b.timestampSeconds,
+					endTimestampSeconds: b.endTimestampSeconds ?? null,
 					note: b.note,
 					action: 'upsert'
 				})),
@@ -258,6 +260,7 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 					chapterId: bookmark.chapterId,
 					versionId: bookmark.versionId ?? 'default',
 					timestampSeconds: bookmark.timestampSeconds,
+					endTimestampSeconds: bookmark.endTimestampSeconds ?? null,
 					note: bookmark.note ?? '',
 					createdAt: bookmark.createdAt ?? 0
 				})),

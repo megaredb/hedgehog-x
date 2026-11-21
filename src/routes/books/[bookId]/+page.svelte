@@ -99,6 +99,7 @@
 		</div>
 	{:else}
 		<div
+			id="volumes"
 			class={viewMode === 'grid'
 				? 'grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 lg:grid-cols-5'
 				: 'flex flex-col gap-4'}

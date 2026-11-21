@@ -8,6 +8,8 @@
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
+	import { db } from '$lib/client/db';
+	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { strings } from '$lib/constants/strings';
 	import { cn } from '$lib/utils';
@@ -18,12 +20,44 @@
 	let isDrawerOpen = $state(false);
 	let isBookmarkModalOpen = $state(false);
 	let bookmarkNote = $state('');
+	let bookmarkEnd = $state<number | null>(null);
 	let isSavingBookmark = $state(false);
 	let isBookmarkSaved = $state(false);
+
+	const playerBookmarksQuery = useDexie(
+		() => {
+			const chapterId = audioStore.currentTrack?.id;
+			if (chapterId === undefined || chapterId === null) return Promise.resolve([]);
+			return db.bookmarks.where('chapterId').equals(String(chapterId)).toArray();
+		},
+		() => [],
+		() => [
+			String(audioStore.currentTrack?.id ?? ''),
+			audioStore.currentTrack?.versionId ?? 'default'
+		]
+	);
+	const bookmarkMarkers = $derived.by(() => {
+		const versionId = audioStore.currentTrack?.versionId ?? 'default';
+		if (!audioStore.duration) return [];
+		return playerBookmarksQuery.data
+			.filter((bookmark) => (bookmark.versionId ?? 'default') === versionId)
+			.map((bookmark) => ({
+				id: bookmark.id,
+				percent: Math.max(
+					0,
+					Math.min(100, (bookmark.timestampSeconds / audioStore.duration) * 100)
+				),
+				endPercent: bookmark.endTimestampSeconds
+					? Math.max(0, Math.min(100, (bookmark.endTimestampSeconds / audioStore.duration) * 100))
+					: undefined,
+				note: bookmark.note || formatDuration(bookmark.timestampSeconds)
+			}));
+	});
 
 	function openBookmarkModal() {
 		if (!audioStore.currentTrack) return;
 		bookmarkNote = '';
+		bookmarkEnd = null;
 		isBookmarkSaved = false;
 		isBookmarkModalOpen = true;
 	}
@@ -39,6 +73,7 @@
 						? audioStore.currentTrack.versionId
 						: 'default',
 				timestampSeconds: audioStore.currentTime,
+				endTimestampSeconds: bookmarkEnd,
 				note: bookmarkNote
 			});
 			isBookmarkSaved = true;
@@ -173,7 +208,7 @@
 
 		<!-- Seek bar sits above the bar on all breakpoints -->
 		<div class="absolute top-0 left-0 z-50 w-full -translate-y-1/2">
-			<AudioPlayer.SeekBar class="overflow-x-clip" />
+			<AudioPlayer.SeekBar class="overflow-x-clip" markers={bookmarkMarkers} />
 		</div>
 
 		<!-- ── Desktop ── -->
@@ -291,7 +326,7 @@
 						{/if}
 
 						<!-- SeekBar in drawer -->
-						<AudioPlayer.SeekBar class="w-full" />
+						<AudioPlayer.SeekBar class="w-full" markers={bookmarkMarkers} />
 
 						<!-- Main playback controls — mobile-optimized sizing -->
 						{@render drawerControls()}
@@ -341,6 +376,24 @@
 					{formatDuration(audioStore.currentTime)}
 				</span>
 			</div>
+			<div class="space-y-1.5">
+				<label for="bookmark-end" class="text-xs font-medium text-muted-foreground">
+					Конец фрагмента, сек (необязательно)
+				</label>
+				<Input
+					id="bookmark-end"
+					type="number"
+					min={Math.floor(audioStore.currentTime) + 1}
+					step="1"
+					value={bookmarkEnd ?? ''}
+					oninput={(event) => {
+						const value = Number(event.currentTarget.value);
+						bookmarkEnd = Number.isFinite(value) && value > audioStore.currentTime ? value : null;
+					}}
+					placeholder="До конца фрагмента"
+				/>
+			</div>
+
 			<div class="space-y-1.5">
 				<label for="bookmark-note" class="text-xs font-medium text-muted-foreground">
 					{strings.bookmarks.noteLabel}

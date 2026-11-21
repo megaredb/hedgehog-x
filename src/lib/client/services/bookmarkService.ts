@@ -39,6 +39,7 @@ export const bookmarkService = {
 		chapterId: string;
 		versionId?: string;
 		timestampSeconds: number;
+		endTimestampSeconds?: number | null;
 		note?: string;
 	}): Promise<OfflineBookmark> {
 		const bookmark: OfflineBookmark = {
@@ -46,6 +47,8 @@ export const bookmarkService = {
 			chapterId: params.chapterId,
 			versionId: params.versionId ?? 'default',
 			timestampSeconds: Math.floor(params.timestampSeconds),
+			endTimestampSeconds:
+				params.endTimestampSeconds != null ? Math.floor(params.endTimestampSeconds) : null,
 			note: params.note?.trim() || '',
 			createdAt: Date.now()
 		};
@@ -64,6 +67,38 @@ export const bookmarkService = {
 		await enqueue('ADD_BOOKMARK', bookmark);
 		void flushBookmarkQueue();
 		return bookmark;
+	},
+
+	/**
+	 * Updates an existing bookmark locally and syncs the change with the server.
+	 */
+	async updateBookmark(
+		id: string,
+		params: { timestampSeconds: number; endTimestampSeconds?: number | null; note?: string }
+	): Promise<OfflineBookmark | null> {
+		const existing = await db.bookmarks.get(id);
+		if (!existing) return null;
+		const updated: OfflineBookmark = {
+			...existing,
+			timestampSeconds: Math.floor(params.timestampSeconds),
+			endTimestampSeconds:
+				params.endTimestampSeconds != null ? Math.floor(params.endTimestampSeconds) : null,
+			note: params.note?.trim() || ''
+		};
+		await db.bookmarks.put(updated);
+
+		if (typeof navigator !== 'undefined' && navigator.onLine) {
+			try {
+				await postBookmarkUpdates([{ ...updated, action: 'upsert' }]);
+				return updated;
+			} catch (err) {
+				log.warn('Failed to sync bookmark update, queueing retry:', err);
+			}
+		}
+
+		await enqueue('ADD_BOOKMARK', updated);
+		void flushBookmarkQueue();
+		return updated;
 	},
 
 	/**

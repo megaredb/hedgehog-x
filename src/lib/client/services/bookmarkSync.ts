@@ -14,6 +14,7 @@ type BookmarkUpdate =
 			chapterId: string;
 			versionId: string;
 			timestampSeconds: number;
+			endTimestampSeconds: number | null;
 			note: string;
 			action: 'upsert';
 	  }
@@ -32,6 +33,7 @@ function toUpdate(item: SyncItem): BookmarkUpdate | null {
 				chapterId?: string;
 				versionId?: string;
 				timestampSeconds?: number;
+				endTimestampSeconds?: number | null;
 				note?: string;
 		  }
 		| undefined;
@@ -44,6 +46,7 @@ function toUpdate(item: SyncItem): BookmarkUpdate | null {
 			chapterId: payload.chapterId,
 			versionId: payload.versionId ?? 'default',
 			timestampSeconds: payload.timestampSeconds,
+			endTimestampSeconds: payload.endTimestampSeconds ?? null,
 			note: payload.note ?? '',
 			action: 'upsert'
 		};

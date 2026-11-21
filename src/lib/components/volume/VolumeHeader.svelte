@@ -11,6 +11,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Badge } from '$lib/components/ui/badge';
 	import ImageLightbox from '$lib/components/ui/lightbox/ImageLightbox.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import {
 		Share2,
 		Check,
@@ -29,9 +30,16 @@
 		book?: OfflineBook;
 		bookId?: string;
 		isLoading?: boolean;
+		chapterVersions?: Array<{
+			chapterId: string;
+			versionId: string;
+			title: string;
+			audioUrl: string;
+			durationSeconds: number;
+		}>;
 	}
 
-	let { volume, chapters, book, bookId, isLoading = false }: Props = $props();
+	let { volume, chapters, book, bookId, isLoading = false, chapterVersions = [] }: Props = $props();
 
 	const session = useSession();
 	const manager = useDownloads();
@@ -39,6 +47,7 @@
 	let isLightboxOpen = $state(false);
 	let isGuestModalOpen = $state(false);
 	let isShareModalOpen = $state(false);
+	let isDownloadModalOpen = $state(false);
 	let accentColor = $state('59 130 246');
 
 	const targetBookId = $derived(book?.id || bookId || volume?.bookId);
@@ -76,17 +85,47 @@
 		audioStore.isPlaying && audioStore.currentTrack?.volumeId === volume?.id
 	);
 
-	const isVolumeDownloading = $derived(
-		chapters.some((c) => manager.isDownloading(c.id) || manager.isQueued(c.id))
-	);
 	const isFullyDownloaded = $derived(
 		chapters.length > 0 && chapters.every((c) => manager.isDownloaded(c.id))
 	);
-	const downloadProgress = $derived.by(() => {
-		const total = chapters.length;
-		const current = chapters.filter((c) => manager.isDownloaded(c.id)).length;
-		return { current, total };
+
+	const availableVersions = $derived.by(() => {
+		const versions = [{ id: 'default', label: 'Новая версия' }];
+		const old = chapterVersions.some((version) => version.versionId === 'old');
+		if (old) versions.push({ id: 'old', label: 'Старая версия' });
+		return versions;
 	});
+
+	function downloadsForVersion(versionId: string) {
+		return manager.downloads.filter(
+			(download) =>
+				download.volumeId === volume?.id && (download.versionId ?? 'default') === versionId
+		);
+	}
+
+	function downloadVersion(versionId: string) {
+		if (!volume) return;
+		if (versionId === 'default') {
+			void manager.enqueueVolume(volume.id, chapters);
+		} else {
+			void manager.enqueueVolume(
+				volume.id,
+				chapters,
+				versionId,
+				chapterVersions.filter((version) => version.versionId === versionId)
+			);
+		}
+		isDownloadModalOpen = false;
+	}
+
+	function downloadAllVersions() {
+		if (!volume) return;
+		void manager.enqueueVolume(volume.id, chapters);
+		for (const version of availableVersions) {
+			if (version.id !== 'default') downloadVersion(version.id);
+		}
+		isDownloadModalOpen = false;
+	}
 
 	$effect(() => {
 		if (volume?.coverUrl) {
@@ -252,35 +291,20 @@
 			<!-- Quick action panel -->
 			<div class="mt-6 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
 				<!-- Download all / Cancel button -->
-				{#if volume}
-					{#if isVolumeDownloading}
-						<Button
-							variant="destructive"
-							size="sm"
-							class="gap-1.5 shadow-sm"
-							onclick={() => manager.cancelVolumeQueue(volume.id)}
-						>
-							<XCircle class="h-4 w-4" />
-							<span>Отменить ({downloadProgress.current}/{downloadProgress.total})</span>
-						</Button>
-					{:else if isFullyDownloaded}
-						<div
-							class="flex items-center gap-1.5 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-600"
-						>
-							<Check class="h-4 w-4" />
-							<span>Все главы скачаны</span>
-						</div>
-					{:else if chapters.length > 0}
-						<Button
-							variant="outline"
-							size="sm"
-							class="gap-1.5 shadow-sm"
-							onclick={() => manager.enqueueVolume(volume.id, chapters)}
-						>
+				{#if volume && chapters.length > 0}
+					<Button
+						variant="outline"
+						size="sm"
+						class="gap-1.5 shadow-sm"
+						onclick={() => (isDownloadModalOpen = true)}
+					>
+						{#if isFullyDownloaded}
+							<Check class="h-4 w-4 text-green-600" />
+						{:else}
 							<DownloadIcon class="h-4 w-4" />
-							<span>Скачать весь том ({chapters.length})</span>
-						</Button>
-					{/if}
+						{/if}
+						<span>{isFullyDownloaded ? 'Управление загрузками' : 'Скачать весь том'}</span>
+					</Button>
 				{/if}
 
 				<!-- Share button -->
@@ -319,6 +343,67 @@
 		</div>
 	</div>
 </div>
+
+<!-- Volume download manager -->
+<Dialog.Root bind:open={isDownloadModalOpen}>
+	<Dialog.Content class="sm:max-w-lg">
+		<Dialog.Header>
+			<Dialog.Title>Загрузки тома</Dialog.Title>
+			<Dialog.Description>
+				Выберите версию для скачивания или удалите уже сохранённые версии с устройства.
+			</Dialog.Description>
+		</Dialog.Header>
+
+		<div class="space-y-3 py-2">
+			{#each availableVersions as version (version.id)}
+				{@const downloaded = downloadsForVersion(version.id)}
+				{@const total =
+					version.id === 'default'
+						? chapters.length
+						: chapterVersions.filter((item) => item.versionId === version.id).length}
+				<div class="rounded-xl border border-border/60 p-3">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<div>
+							<p class="text-sm font-semibold">{version.label}</p>
+							<p class="text-xs text-muted-foreground">
+								Скачано {downloaded.filter((item) => item.status === 'downloaded').length} из {total}
+							</p>
+						</div>
+						<div class="flex gap-2">
+							<Button size="sm" variant="outline" onclick={() => downloadVersion(version.id)}>
+								<DownloadIcon class="mr-1.5 h-3.5 w-3.5" />
+								Скачать
+							</Button>
+							{#if downloaded.length > 0}
+								<Button
+									size="sm"
+									variant="ghost"
+									class="text-muted-foreground hover:text-destructive"
+									onclick={() => void manager.deleteVolumeVersion(volume?.id ?? '', version.id)}
+								>
+									<XCircle class="mr-1.5 h-3.5 w-3.5" />
+									Удалить
+								</Button>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+
+		<Dialog.Footer class="flex flex-wrap justify-end gap-2">
+			<Button variant="outline" onclick={() => (isDownloadModalOpen = false)}>Закрыть</Button>
+			<Button variant="outline" onclick={downloadAllVersions}>Скачать всё</Button>
+			<Button
+				variant="destructive"
+				disabled={manager.downloads.filter((item) => item.volumeId === volume?.id).length === 0}
+				onclick={() => volume && void manager.deleteVolume(volume.id)}
+			>
+				Удалить всё
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
 <!-- Lightbox modal for enlarged volume cover -->
 {#if volume?.coverUrl}

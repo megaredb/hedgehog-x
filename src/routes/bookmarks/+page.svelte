@@ -1,4 +1,6 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { resolve } from '$app/paths';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import type { Track } from '$lib/html-audio.js';
@@ -16,8 +18,9 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
+	import { Input } from '$lib/components/ui/input';
 	import { strings } from '$lib/constants/strings';
-	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
+	import { Bookmark, Clock, Pencil, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
 	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedBookmark extends OfflineBookmark {
@@ -57,6 +60,12 @@
 
 	let bookmarkToDelete = $state<EnrichedBookmark | null>(null);
 	let isDeleteModalOpen = $state(false);
+	let bookmarkToEdit = $state<EnrichedBookmark | null>(null);
+	let isEditModalOpen = $state(false);
+	let editStart = $state(0);
+	let editEnd = $state<number | null>(null);
+	let editNote = $state('');
+	let isSavingEdit = $state(false);
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
@@ -86,6 +95,7 @@
 				? audioStore.currentTrack.versionId
 				: 'default';
 		if (audioStore.currentTrack?.id === item.chapterId && currentVersion === versionId) {
+			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 			audioStore.seek(item.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
 			return;
@@ -118,6 +128,7 @@
 				],
 				0
 			);
+			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 			return;
 		}
 
@@ -144,6 +155,31 @@
 		if (startIndex !== -1) {
 			tracks[startIndex] = { ...tracks[startIndex], startTime: item.timestampSeconds };
 			audioStore.setQueueAndPlay(tracks, startIndex);
+			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
+		}
+	}
+
+	function openEditModal(item: EnrichedBookmark) {
+		bookmarkToEdit = item;
+		editStart = item.timestampSeconds;
+		editEnd = item.endTimestampSeconds ?? null;
+		editNote = item.note;
+		isEditModalOpen = true;
+	}
+
+	async function saveEdit() {
+		if (!bookmarkToEdit || isSavingEdit) return;
+		isSavingEdit = true;
+		try {
+			await bookmarkService.updateBookmark(bookmarkToEdit.id, {
+				timestampSeconds: editStart,
+				endTimestampSeconds: editEnd,
+				note: editNote
+			});
+			isEditModalOpen = false;
+			bookmarkToEdit = null;
+		} finally {
+			isSavingEdit = false;
 		}
 	}
 
@@ -157,6 +193,22 @@
 		await bookmarkService.deleteBookmark(bookmarkToDelete.id);
 		isDeleteModalOpen = false;
 		bookmarkToDelete = null;
+	}
+
+	function chapterHref(item: EnrichedBookmark): string {
+		if (!item.book || !item.volume || !item.chapter) return '#';
+		return (
+			resolve(`/books/${item.book.id}/${item.volume.id}`) +
+			`?chapter=${encodeURIComponent(item.chapter.id)}&version=${encodeURIComponent(item.versionId ?? 'default')}`
+		);
+	}
+
+	function volumeHref(item: EnrichedBookmark): string {
+		return item.book && item.volume ? resolve(`/books/${item.book.id}/${item.volume.id}`) : '#';
+	}
+
+	function bookHref(item: EnrichedBookmark): string {
+		return item.book ? resolve(`/books/${item.book.id}`) + '#volumes' : '#';
 	}
 </script>
 
@@ -218,14 +270,16 @@
 						<!-- Book & Chapter info -->
 						<div class="flex min-w-0 items-start gap-3 sm:items-center">
 							{#if item.volume?.coverUrl || item.book?.coverUrl}
-								<img
-									src={item.volume?.coverUrl || item.book?.coverUrl}
-									alt={item.volume?.title || item.chapter?.title || 'Cover'}
-									width={56}
-									height={80}
-									loading={i < 2 ? 'eager' : 'lazy'}
-									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
-								/>
+								<a href={chapterHref(item)} aria-label="Перейти к главе" class="shrink-0">
+									<img
+										src={item.volume?.coverUrl || item.book?.coverUrl}
+										alt={item.volume?.title || item.chapter?.title || 'Cover'}
+										width={56}
+										height={80}
+										loading={i < 2 ? 'eager' : 'lazy'}
+										class="h-16 w-12 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
+									/>
+								</a>
 							{:else}
 								<div
 									class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-20 sm:w-14"
@@ -240,7 +294,12 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatDuration(item.timestampSeconds)}</span>
+										<span>
+											{formatDuration(item.timestampSeconds)}
+											{#if item.endTimestampSeconds}
+												– {formatDuration(item.endTimestampSeconds)}
+											{/if}
+										</span>
 									</span>
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">
@@ -255,17 +314,26 @@
 								</div>
 
 								<h3 class="truncate text-base font-semibold text-foreground">
-									{item.chapter?.title ?? strings.player.chapterFallback}
+									<a href={chapterHref(item)} class="hover:underline">
+										{item.chapter?.title ?? strings.player.chapterFallback}
+									</a>
 								</h3>
 
 								<p class="truncate text-xs text-muted-foreground">
 									{#if item.book?.title}
-										<span>{item.book.title}</span>
+										<a href={bookHref(item)} class="hover:text-foreground hover:underline"
+											>{item.book.title}</a
+										>
 										{#if item.volume?.title}
-											<span> &bull; {item.volume.title}</span>
+											<span> &bull; </span>
+											<a href={volumeHref(item)} class="hover:text-foreground hover:underline"
+												>{item.volume.title}</a
+											>
 										{/if}
 									{:else if item.volume?.title}
-										<span>{item.volume.title}</span>
+										<a href={volumeHref(item)} class="hover:text-foreground hover:underline"
+											>{item.volume.title}</a
+										>
 									{/if}
 								</p>
 
@@ -293,6 +361,16 @@
 							<Button
 								variant="ghost"
 								size="icon"
+								class="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted"
+								onclick={() => openEditModal(item)}
+								title="Редактировать закладку"
+								aria-label="Редактировать закладку"
+							>
+								<Pencil class="h-4 w-4" />
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
 								class="h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
 								onclick={() => openDeleteModal(item)}
 								title={strings.bookmarks.deleteBookmark}
@@ -310,6 +388,56 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Edit Bookmark Dialog -->
+<Dialog.Root bind:open={isEditModalOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Редактировать закладку</Dialog.Title>
+			<Dialog.Description>Измените таймкод, конец фрагмента или заметку.</Dialog.Description>
+		</Dialog.Header>
+		<div class="space-y-4 py-2">
+			<label class="block space-y-1.5 text-sm">
+				<span class="font-medium">Начало, секунд</span>
+				<Input
+					type="number"
+					min="0"
+					step="1"
+					value={editStart}
+					oninput={(event) => (editStart = Math.max(0, Number(event.currentTarget.value) || 0))}
+				/>
+			</label>
+			<label class="block space-y-1.5 text-sm">
+				<span class="font-medium">Конец фрагмента, секунд (необязательно)</span>
+				<Input
+					type="number"
+					min={editStart + 1}
+					step="1"
+					value={editEnd ?? ''}
+					oninput={(event) => {
+						const value = Number(event.currentTarget.value);
+						editEnd = Number.isFinite(value) && value > editStart ? value : null;
+					}}
+				/>
+			</label>
+			<label class="block space-y-1.5 text-sm">
+				<span class="font-medium">{strings.bookmarks.noteLabel}</span>
+				<Input bind:value={editNote} maxlength={500} />
+			</label>
+		</div>
+		<Dialog.Footer class="flex gap-2 sm:justify-end">
+			<Button variant="outline" onclick={() => (isEditModalOpen = false)}>
+				{strings.common.cancel}
+			</Button>
+			<Button
+				onclick={saveEdit}
+				disabled={isSavingEdit || (editEnd !== null && editEnd <= editStart)}
+			>
+				{isSavingEdit ? 'Сохранение…' : 'Сохранить'}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
 <!-- Delete Bookmark Confirm Dialog -->
 <Dialog.Root bind:open={isDeleteModalOpen}>
