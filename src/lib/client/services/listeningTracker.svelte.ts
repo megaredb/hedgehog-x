@@ -17,6 +17,7 @@ const MAX_SINGLE_SESSION_SECONDS = 300; // Endpoint constraint: max 300s per pin
 
 interface ActiveSession {
 	chapterId: string;
+	versionId: string;
 	bookId?: string;
 	volumeId?: string;
 	startedAt: number;
@@ -57,14 +58,19 @@ export class ListeningTrackerService {
 	 * Ticks listening playback progress during active playback.
 	 * Automatically rotates and emits when HEARTBEAT_INTERVAL_MS is reached.
 	 */
-	tick(chapterId: string, bookId?: string, volumeId?: string) {
+	tick(chapterId: string, bookId?: string, volumeId?: string, versionId = 'default') {
 		const now = Date.now();
 
-		if (!this.currentSession || this.currentSession.chapterId !== chapterId) {
-			// Flush previous session if switching tracks
+		if (
+			!this.currentSession ||
+			this.currentSession.chapterId !== chapterId ||
+			this.currentSession.versionId !== versionId
+		) {
+			// Flush previous session if switching tracks or versions
 			this.flush();
 			this.currentSession = {
 				chapterId,
+				versionId,
 				bookId,
 				volumeId,
 				startedAt: now,
@@ -88,6 +94,7 @@ export class ListeningTrackerService {
 
 			const payload: ListenHeartbeatPayload = {
 				chapterId: this.currentSession.chapterId,
+				versionId: this.currentSession.versionId,
 				bookId: this.currentSession.bookId,
 				volumeId: this.currentSession.volumeId,
 				listenedSeconds: Math.min(secondsToEmit, MAX_SINGLE_SESSION_SECONDS),
@@ -108,6 +115,7 @@ export class ListeningTrackerService {
 
 		const seconds = Math.floor(this.currentSession.accumulatedMs / 1000);
 		const chapterId = this.currentSession.chapterId;
+		const versionId = this.currentSession.versionId;
 		const bookId = this.currentSession.bookId;
 		const volumeId = this.currentSession.volumeId;
 		const startedAt = new SvelteDate(this.currentSession.startedAt).toISOString();
@@ -117,6 +125,7 @@ export class ListeningTrackerService {
 		if (seconds >= MIN_FLUSH_SECONDS) {
 			const payload: ListenHeartbeatPayload = {
 				chapterId,
+				versionId,
 				bookId,
 				volumeId,
 				listenedSeconds: Math.min(seconds, MAX_SINGLE_SESSION_SECONDS),

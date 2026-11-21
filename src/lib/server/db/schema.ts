@@ -136,13 +136,15 @@ export const listeningProgress = pgTable(
 		chapterId: varchar('chapter_id', { length: 128 })
 			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 			.notNull(),
+		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		progressSeconds: integer('progress_seconds').notNull().default(0),
 		isCompleted: boolean('is_completed').default(false),
 		updatedAt: timestamp('updated_at').defaultNow()
 	},
 	(t) => [
-		primaryKey({ columns: [t.userId, t.chapterId] }),
-		index('progress_chapter_idx').on(t.chapterId)
+		primaryKey({ columns: [t.userId, t.chapterId, t.versionId] }),
+		index('progress_chapter_idx').on(t.chapterId),
+		index('progress_version_idx').on(t.versionId)
 	]
 );
 
@@ -172,11 +174,13 @@ export const chapterLikes = pgTable(
 		chapterId: varchar('chapter_id', { length: 128 })
 			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 			.notNull(),
+		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		createdAt: timestamp('created_at').defaultNow()
 	},
 	(t) => [
-		primaryKey({ columns: [t.userId, t.chapterId] }),
-		index('chapter_likes_chapter_idx').on(t.chapterId)
+		primaryKey({ columns: [t.userId, t.chapterId, t.versionId] }),
+		index('chapter_likes_chapter_idx').on(t.chapterId),
+		index('chapter_likes_version_idx').on(t.versionId)
 	]
 );
 
@@ -190,11 +194,16 @@ export const bookmarks = pgTable(
 		chapterId: varchar('chapter_id', { length: 128 })
 			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 			.notNull(),
+		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		timestampSeconds: integer('timestamp_seconds').notNull(),
 		note: varchar('note', { length: 500 }),
 		createdAt: timestamp('created_at').defaultNow()
 	},
-	(t) => [index('bookmarks_user_idx').on(t.userId), index('bookmarks_chapter_idx').on(t.chapterId)]
+	(t) => [
+		index('bookmarks_user_idx').on(t.userId),
+		index('bookmarks_chapter_idx').on(t.chapterId),
+		index('bookmarks_version_idx').on(t.versionId)
+	]
 );
 
 export const illustrations = pgTable(
@@ -273,6 +282,7 @@ export const listeningSessions = pgTable(
 		chapterId: varchar('chapter_id', { length: 128 })
 			.references(() => chapters.id, { onDelete: 'cascade', onUpdate: 'cascade' })
 			.notNull(),
+		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		listenedSeconds: integer('listened_seconds').notNull(),
 		startedAt: timestamp('started_at').defaultNow().notNull(),
 		createdAt: timestamp('created_at').defaultNow().notNull()
@@ -294,6 +304,7 @@ export const dailyListeningStats = pgTable(
 		chapterId: varchar('chapter_id', { length: 128 }).references(() => chapters.id, {
 			onDelete: 'cascade'
 		}),
+		versionId: varchar('version_id', { length: 64 }).notNull().default('default'),
 		totalSeconds: integer('total_seconds').notNull().default(0),
 		sessionsCount: integer('sessions_count').notNull().default(1),
 		updatedAt: timestamp('updated_at')
@@ -309,8 +320,10 @@ export const dailyListeningStats = pgTable(
 			table.date,
 			table.bookId,
 			table.chapterId,
+			table.versionId,
 			table.userId
-		)
+		),
+		index('daily_stats_version_idx').on(table.versionId)
 	]
 );
 

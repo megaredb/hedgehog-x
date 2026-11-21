@@ -20,7 +20,8 @@
 		ArrowLeft,
 		ShieldCheck,
 		ChartColumn,
-		Users
+		Users,
+		AudioLines
 	} from '@lucide/svelte';
 
 	let { data, children } = $props();
@@ -31,6 +32,7 @@
 		{ href: '/admin/books', label: 'Книги', icon: BookOpen },
 		{ href: '/admin/volumes', label: 'Тома', icon: Layers },
 		{ href: '/admin/chapters', label: 'Главы', icon: Disc3 },
+		{ href: '/admin/versions', label: 'Версии', icon: AudioLines },
 		{ href: '/admin/illustrations', label: 'Иллюстрации', icon: ImageIcon },
 		{ href: '/admin/users', label: 'Пользователи', icon: Users }
 	];

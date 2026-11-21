@@ -78,6 +78,13 @@
       "when": 1795264868925,
       "tag": "0010_flippant_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795266026334,
+      "tag": "0011_striped_moondragon",
+      "breakpoints": true
     }
   ]
 }

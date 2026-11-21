@@ -30,6 +30,7 @@ export function trackEvent(eventName: string, eventData?: Record<string, unknown
 
 export interface ListenHeartbeatPayload {
 	chapterId: string;
+	versionId?: string;
 	bookId?: string;
 	volumeId?: string;
 	listenedSeconds: number;

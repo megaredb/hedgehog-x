@@ -7,15 +7,24 @@
 	import { formatDuration } from '$lib/utils/time';
 	import { Bookmark, BookOpen, Clock, Play, Quote, Trash2 } from '@lucide/svelte';
 
+	interface ChapterAudioVersion {
+		chapterId: string;
+		versionId: string;
+		title: string;
+		audioUrl: string;
+		durationSeconds: number;
+	}
+
 	interface Props {
 		bookmarks: OfflineBookmark[];
 		chapters: OfflineChapter[];
 		volume: OfflineVolume | undefined;
 		book?: OfflineBook;
 		bookId: string;
+		chapterVersions?: ChapterAudioVersion[];
 	}
 
-	let { bookmarks, chapters, volume, book, bookId }: Props = $props();
+	let { bookmarks, chapters, volume, book, bookId, chapterVersions = [] }: Props = $props();
 
 	let bookmarkToDelete = $state<OfflineBookmark | null>(null);
 	let isDeleteModalOpen = $state(false);
@@ -37,10 +46,42 @@
 	function handlePlayBookmark(bookmark: OfflineBookmark) {
 		const index = chapters.findIndex((chapter) => chapter.id === bookmark.chapterId);
 		if (index === -1) return;
+		const versionId = bookmark.versionId ?? 'default';
+		const currentVersion =
+			typeof audioStore.currentTrack?.versionId === 'string'
+				? audioStore.currentTrack.versionId
+				: 'default';
 
-		if (audioStore.currentTrack?.id === bookmark.chapterId) {
+		if (audioStore.currentTrack?.id === bookmark.chapterId && currentVersion === versionId) {
 			audioStore.seek(bookmark.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
+		if (versionId !== 'default') {
+			const version = chapterVersions.find(
+				(item) => item.chapterId === bookmark.chapterId && item.versionId === versionId
+			);
+			const chapter = chapters[index];
+			if (!version) return;
+			audioStore.setQueueAndPlay(
+				[
+					{
+						id: chapter.id,
+						title: version.title,
+						url: version.audioUrl,
+						duration: version.durationSeconds,
+						versionId,
+						artwork: volume?.coverUrl,
+						album: volume?.title,
+						artist: book?.title || 'Hedgehog X',
+						volumeId: volume?.id,
+						bookId,
+						startTime: bookmark.timestampSeconds
+					}
+				],
+				0
+			);
 			return;
 		}
 
@@ -49,6 +90,7 @@
 			url: chapter.audioUrl,
 			title: chapter.title,
 			duration: chapter.durationSeconds,
+			versionId: 'default',
 			artwork: volume?.coverUrl,
 			album: volume?.title,
 			artist: book?.title || 'Hedgehog X',
@@ -126,6 +168,11 @@
 											{formatDate(bookmark.createdAt)}
 										</span>
 									{/if}
+									<span class="text-xs text-muted-foreground/70">
+										{bookmark.versionId === 'default' || !bookmark.versionId
+											? 'Новая версия'
+											: 'Старая версия'}
+									</span>
 								</div>
 
 								<h3 class="truncate text-sm font-semibold text-foreground sm:text-base">

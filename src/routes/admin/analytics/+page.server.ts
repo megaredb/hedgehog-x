@@ -118,6 +118,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			chapterId: chapters.id,
 			chapterTitle: chapters.title,
 			chapterNumber: chapters.chapterNumber,
+			versionId: dailyListeningStats.versionId,
 			volumeTitle: volumes.title,
 			bookTitle: books.title,
 			totalSeconds: sum(dailyListeningStats.totalSeconds),
@@ -127,7 +128,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.innerJoin(chapters, eq(dailyListeningStats.chapterId, chapters.id))
 		.leftJoin(volumes, eq(chapters.volumeId, volumes.id))
 		.leftJoin(books, eq(volumes.bookId, books.id))
-		.groupBy(chapters.id, chapters.title, chapters.chapterNumber, volumes.title, books.title)
+		.groupBy(
+			chapters.id,
+			chapters.title,
+			chapters.chapterNumber,
+			dailyListeningStats.versionId,
+			volumes.title,
+			books.title
+		)
 		.orderBy(desc(sum(dailyListeningStats.totalSeconds)))
 		.limit(5);
 
@@ -137,6 +145,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			chapterId: ch.chapterId,
 			chapterTitle: ch.chapterTitle,
 			chapterNumber: ch.chapterNumber,
+			versionId: ch.versionId,
 			volumeTitle: ch.volumeTitle,
 			bookTitle: ch.bookTitle,
 			totalSeconds: secs,
@@ -152,6 +161,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			listenedSeconds: listeningSessions.listenedSeconds,
 			startedAt: listeningSessions.startedAt,
 			chapterTitle: chapters.title,
+			versionId: listeningSessions.versionId,
 			bookTitle: books.title,
 			userName: userTable.name,
 			userEmail: userTable.email
@@ -169,6 +179,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		formattedDuration: formatListeningDuration(s.listenedSeconds).formatted,
 		startedAt: s.startedAt?.toISOString() ?? new Date().toISOString(),
 		chapterTitle: s.chapterTitle ?? 'Неизвестная глава',
+		versionId: s.versionId,
 		bookTitle: s.bookTitle ?? 'Неизвестная книга',
 		user: s.userName || s.userEmail || 'Гость'
 	}));

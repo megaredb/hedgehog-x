@@ -34,6 +34,10 @@
 		try {
 			await bookmarkService.addBookmark({
 				chapterId: String(audioStore.currentTrack.id),
+				versionId:
+					typeof audioStore.currentTrack.versionId === 'string'
+						? audioStore.currentTrack.versionId
+						: 'default',
 				timestampSeconds: audioStore.currentTime,
 				note: bookmarkNote
 			});

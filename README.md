@@ -40,7 +40,7 @@
 cp .env.example .env          # заполнить BETTER_AUTH_SECRET и провайдеров
 pnpm install
 docker compose up -d db       # или pnpm dev:all
-pnpm db:migrate               # собрать схему из миграций (0000–0010)
+pnpm db:migrate               # собрать схему из миграций (0000–0011)
 pnpm db:seed                  # опционально; сервер выполняет seed сам при старте
 pnpm dev
 ```
@@ -66,7 +66,7 @@ pnpm dev
 | pnpm test:docker                                                 | e2e в Docker (tmpfs Postgres)         |
 | pnpm db:push                                                     | dev-shortcut (может удалять колонки)  |
 | pnpm db:seed / db:studio                                         | сид / Drizzle Studio                  |
-| pnpm db:migrate                                                  | применить миграции 0000–0010          |
+| pnpm db:migrate                                                  | применить миграции 0000–0011          |
 | docker build -t hedgehog-x:prod .                                | production-образ                      |
 | docker compose -f compose.yaml -f compose.prod.yml up -d --build | production-стек                       |
 
@@ -81,7 +81,7 @@ src/
     components/      UI (shadcn) + плеер + контент
     audio-store...   глобальный store плеера
     html-audio.ts    HTMLAudioElement + OPFS
-drizzle/             миграции 0000–0010 (0005 — no-op, 0006 — catch-up)
+drizzle/             миграции 0000–0011 (0005 — no-op, 0006 — catch-up)
 e2e/                 Playwright
 static/              медиа и PWA-ассеты
 docs/                архитектура, карта, аудит, операции

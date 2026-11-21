@@ -6,6 +6,7 @@
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
 	import { progressSync } from '$lib/client/services/progressSync.svelte.js';
+	import { audioVersionKey } from '$lib/audio-version';
 	import { listeningTracker } from '$lib/client/services/listeningTracker.svelte.js';
 
 	interface Props {
@@ -122,15 +123,21 @@
 			lastProgressSaveTime = now;
 			const chapterId = String(audioStore.currentTrack.id);
 			const progressSeconds = Math.floor(audio.currentTime);
+			const versionId =
+				typeof audioStore.currentTrack?.versionId === 'string'
+					? audioStore.currentTrack.versionId
+					: 'default';
 			db.progress
 				.put({
-					chapterId,
+					chapterId: audioVersionKey(chapterId, versionId),
+					baseChapterId: chapterId,
+					versionId,
 					progressSeconds,
 					isCompleted: false,
 					updatedAt: now
 				})
 				.catch(() => {});
-			progressSync.recordProgress(chapterId, progressSeconds, false);
+			progressSync.recordProgress(chapterId, progressSeconds, false, versionId);
 		}
 
 		// Track listening duration during active playback
@@ -139,7 +146,8 @@
 			listeningTracker.tick(
 				String(track.id),
 				typeof track.bookId === 'string' ? track.bookId : undefined,
-				typeof track.volumeId === 'string' ? track.volumeId : undefined
+				typeof track.volumeId === 'string' ? track.volumeId : undefined,
+				typeof track.versionId === 'string' ? track.versionId : 'default'
 			);
 		}
 	}
@@ -307,15 +315,21 @@
 				const chapterId = String(audioStore.currentTrack.id);
 				audioStore.lastCompletedTrackId = chapterId;
 				audioStore.lastCompletedTrackAt = Date.now();
+				const versionId =
+					typeof audioStore.currentTrack?.versionId === 'string'
+						? audioStore.currentTrack.versionId
+						: 'default';
 				db.progress
 					.put({
-						chapterId,
+						chapterId: audioVersionKey(chapterId, versionId),
+						baseChapterId: chapterId,
+						versionId,
 						progressSeconds: Math.floor(audioDuration),
 						isCompleted: true,
 						updatedAt: Date.now()
 					})
 					.catch(() => {});
-				progressSync.recordProgress(chapterId, Math.floor(audioDuration), true);
+				progressSync.recordProgress(chapterId, Math.floor(audioDuration), true, versionId);
 				progressSync.flushImmediately();
 			}
 

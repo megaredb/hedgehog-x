@@ -210,7 +210,7 @@ describe('likeService (Offline-first likes & sync)', () => {
 			const queue = await mockDb.syncQueue.toArray();
 			assert.equal(queue.length, 1);
 			assert.equal(queue[0].action, 'LIKE_CHAPTER');
-			assert.deepEqual(queue[0].payload, { id: 'ch-1', chapterId: 'ch-1' });
+			assert.deepEqual(queue[0].payload, { id: 'ch-1', chapterId: 'ch-1', versionId: 'default' });
 		});
 
 		it('optimistically unlikes a liked chapter and enqueues UNLIKE_CHAPTER', async () => {
@@ -292,7 +292,13 @@ describe('likeService (Offline-first likes & sync)', () => {
 				{ id: 'vol-1', volumeId: 'vol-1', action: 'like', timestamp: 1000 }
 			]);
 			assert.deepEqual(sentBody.chapterLikeUpdates, [
-				{ id: 'ch-2', chapterId: 'ch-2', action: 'unlike', timestamp: 2000 }
+				{
+					id: 'ch-2',
+					chapterId: 'ch-2',
+					versionId: 'default',
+					action: 'unlike',
+					timestamp: 2000
+				}
 			]);
 
 			// Queue should be cleared

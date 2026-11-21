@@ -31,6 +31,16 @@ export interface OfflineChapter {
 	telegramPostUrl?: string | null;
 	likesCount: number;
 }
+export interface OfflineChapterAudioVersion {
+	id: string;
+	chapterId: string;
+	versionId: string;
+	title: string;
+	audioUrl: string;
+	durationSeconds: number;
+	chapterStart: number;
+	chapterEnd: number;
+}
 export interface OfflineIllustration {
 	id: string;
 	volumeId: string;
@@ -42,6 +52,9 @@ export interface OfflineIllustration {
 
 export interface OfflineProgress {
 	chapterId: string;
+	/** Actual chapter ID when chapterId is a version-qualified local key. */
+	baseChapterId?: string;
+	versionId?: string;
 	progressSeconds: number;
 	isCompleted: boolean;
 	updatedAt: number;
@@ -52,11 +65,14 @@ export interface OfflineVolumeLike {
 }
 export interface OfflineChapterLike {
 	chapterId: string;
+	baseChapterId?: string;
+	versionId?: string;
 	createdAt: number;
 }
 export interface OfflineBookmark {
 	id: string;
 	chapterId: string;
+	versionId?: string;
 	timestampSeconds: number;
 	note: string;
 	createdAt: number;
@@ -87,6 +103,7 @@ export interface SyncItem {
 
 export interface OfflineDownload {
 	chapterId: string;
+	versionId?: string;
 	status: 'queued' | 'downloading' | 'downloaded' | 'error';
 	progress?: number;
 	totalBytes?: number;
@@ -98,6 +115,7 @@ const db = new Dexie('HedgehogDB') as Dexie & {
 	books: EntityTable<OfflineBook, 'id'>;
 	volumes: EntityTable<OfflineVolume, 'id'>;
 	chapters: EntityTable<OfflineChapter, 'id'>;
+	chapterAudioVersions: EntityTable<OfflineChapterAudioVersion, 'id'>;
 	illustrations: EntityTable<OfflineIllustration, 'id'>;
 
 	progress: EntityTable<OfflineProgress, 'chapterId'>;
@@ -148,6 +166,11 @@ db.version(2)
 // treated as guest data, never as the next logged-in account.
 db.version(3).stores({
 	syncQueue: '++id, action, timestamp, ownerUserId'
+});
+
+// v4: per-chapter audio versions (OLD VERSION tracks).
+db.version(4).stores({
+	chapterAudioVersions: 'id, chapterId, versionId'
 });
 
 export { db };

@@ -117,13 +117,20 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 			bookId: resolvedBookId,
 			volumeId: resolvedVolumeId,
 			chapterId: session.chapterId,
+			versionId: session.versionId,
 			listenedSeconds: session.listenedSeconds,
 			startedAt: session.startedAt,
 			createdAt: new Date()
 		});
 
 		const dateKey = session.dateKey || formatDateKey(session.startedAt);
-		const statId = buildDailyStatId(dateKey, resolvedBookId, session.chapterId, userId);
+		const statId = buildDailyStatId(
+			dateKey,
+			resolvedBookId,
+			session.chapterId,
+			userId,
+			session.versionId
+		);
 
 		await db
 			.insert(dailyListeningStats)
@@ -133,6 +140,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 				userId,
 				bookId: resolvedBookId,
 				chapterId: session.chapterId,
+				versionId: session.versionId,
 				totalSeconds: session.listenedSeconds,
 				sessionsCount: 1,
 				updatedAt: new Date()

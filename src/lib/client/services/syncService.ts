@@ -11,6 +11,7 @@ import {
 	setSyncOwner
 } from '$lib/client/db/syncState';
 import { createLogger } from '$lib/logger';
+import { audioVersionKey } from '$lib/audio-version';
 import { flushBookmarkQueue } from './bookmarkSync';
 import { guestAdoption } from './guestAdoption.svelte';
 import { decideSyncAction, type SyncAction } from './syncPolicy';
@@ -27,12 +28,17 @@ const MAX_SYNC_BATCH = 100;
 type ServerVolume = typeof import('$lib/server/db/schema').volumes.$inferSelect;
 type ServerChapter = typeof import('$lib/server/db/schema').chapters.$inferSelect;
 type ServerIllustration = typeof import('$lib/server/db/schema').illustrations.$inferSelect;
+type ServerChapterAudioVersion =
+	typeof import('$lib/server/db/schema').chapterAudioVersions.$inferSelect;
+type ServerAudioVersion = typeof import('$lib/server/db/schema').audioVersions.$inferSelect;
 
 type ServerBookWithRelations = typeof import('$lib/server/db/schema').books.$inferSelect & {
 	volumes: (ServerVolume & {
 		chapters: ServerChapter[];
 		illustrations: ServerIllustration[];
 	})[];
+	audioVersions?: ServerAudioVersion[];
+	chapterAudioVersions?: ServerChapterAudioVersion[];
 };
 
 export type UserSyncResult =
@@ -44,10 +50,11 @@ type UserSyncPayload = {
 	userId?: string;
 	userName?: string;
 	isNewUser?: boolean;
-	chapterLikes?: Array<{ chapterId: string; createdAt?: number }>;
+	chapterLikes?: Array<{ chapterId: string; versionId?: string; createdAt?: number }>;
 	volumeLikes?: Array<{ volumeId: string; createdAt?: number }>;
 	listeningProgress?: Array<{
 		chapterId: string;
+		versionId?: string;
 		progressSeconds: number;
 		isCompleted?: boolean;
 		updatedAt?: number;
@@ -55,6 +62,7 @@ type UserSyncPayload = {
 	bookmarks?: Array<{
 		id: string;
 		chapterId: string;
+		versionId?: string;
 		timestampSeconds: number;
 		note?: string;
 		createdAt?: number;
@@ -98,13 +106,15 @@ async function pushLocalUserData(fetchFn: typeof fetch): Promise<void> {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				progressUpdates: progress.slice(start, end).map((p) => ({
-					chapterId: p.chapterId,
+					chapterId: p.baseChapterId ?? p.chapterId,
+					versionId: p.versionId ?? 'default',
 					progressSeconds: p.progressSeconds,
 					isCompleted: p.isCompleted
 				})),
 				bookmarkUpdates: bookmarks.slice(start, end).map((b) => ({
 					id: b.id,
 					chapterId: b.chapterId,
+					versionId: b.versionId ?? 'default',
 					timestampSeconds: b.timestampSeconds,
 					note: b.note,
 					action: 'upsert'
@@ -116,7 +126,8 @@ async function pushLocalUserData(fetchFn: typeof fetch): Promise<void> {
 				})),
 				chapterLikeUpdates: chapterLikes.slice(start, end).map((l) => ({
 					id: l.chapterId,
-					chapterId: l.chapterId,
+					chapterId: l.baseChapterId ?? l.chapterId,
+					versionId: l.versionId ?? 'default',
 					action: 'like'
 				}))
 			})
@@ -210,7 +221,9 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 			hydrate(
 				'chapterLikes',
 				(payload.chapterLikes ?? []).map((like) => ({
-					chapterId: like.chapterId,
+					chapterId: audioVersionKey(like.chapterId, like.versionId ?? 'default'),
+					baseChapterId: like.chapterId,
+					versionId: like.versionId ?? 'default',
 					createdAt: like.createdAt ?? 0
 				})),
 				purgeScope,
@@ -228,7 +241,9 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 			hydrate(
 				'progress',
 				(payload.listeningProgress ?? []).map((progress) => ({
-					chapterId: progress.chapterId,
+					chapterId: audioVersionKey(progress.chapterId, progress.versionId ?? 'default'),
+					baseChapterId: progress.chapterId,
+					versionId: progress.versionId ?? 'default',
 					progressSeconds: progress.progressSeconds,
 					isCompleted: !!progress.isCompleted,
 					updatedAt: progress.updatedAt ?? 0
@@ -241,6 +256,7 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 				(payload.bookmarks ?? []).map((bookmark) => ({
 					id: bookmark.id,
 					chapterId: bookmark.chapterId,
+					versionId: bookmark.versionId ?? 'default',
 					timestampSeconds: bookmark.timestampSeconds,
 					note: bookmark.note ?? '',
 					createdAt: bookmark.createdAt ?? 0
@@ -297,6 +313,16 @@ export const syncService = {
 			const offlineIllustrations = bookData.volumes.flatMap((v) =>
 				v.illustrations.map(mapServerIllustrationToOfflineIllustration)
 			);
+			const offlineChapterVersions = (bookData.chapterAudioVersions ?? []).map((version) => ({
+				id: version.id,
+				chapterId: version.chapterId,
+				versionId: version.versionId,
+				title: version.title,
+				audioUrl: version.audioUrl,
+				durationSeconds: version.durationSeconds,
+				chapterStart: version.chapterStart,
+				chapterEnd: version.chapterEnd
+			}));
 
 			const existingVolumes = await db.volumes.where('bookId').equals(bookId).toArray();
 			const allVolumeIds = Array.from(
@@ -307,6 +333,10 @@ export const syncService = {
 				hydrate('books', offlineBook),
 				hydrate('volumes', offlineVolumes, { index: 'bookId', values: [bookId] }),
 				hydrate('chapters', offlineChapters, { index: 'volumeId', values: allVolumeIds }),
+				hydrate('chapterAudioVersions', offlineChapterVersions, {
+					index: 'chapterId',
+					values: offlineChapters.map((chapter) => chapter.id)
+				}),
 				hydrate('illustrations', offlineIllustrations, { index: 'volumeId', values: allVolumeIds })
 			]);
 

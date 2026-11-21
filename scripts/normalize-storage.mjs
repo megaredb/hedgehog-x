@@ -232,7 +232,7 @@ await sql.begin(async (tx) => {
 		insert into audio_versions (id, label, description, sort_order)
 		values
 			('default', 'Новая версия', 'Текущая озвучка', 0),
-			('old', 'OLD VERSION', 'Архивная озвучка', 1)
+			('old', 'Старая версия', 'OLD VERSION', 1)
 		on conflict (id) do update set
 			label = excluded.label,
 			description = excluded.description,

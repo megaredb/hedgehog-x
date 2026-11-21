@@ -4,6 +4,7 @@
 
 export interface RawListenSession {
 	chapterId: string;
+	versionId?: string | null;
 	bookId?: string | null;
 	volumeId?: string | null;
 	listenedSeconds: number;
@@ -13,6 +14,7 @@ export interface RawListenSession {
 
 export interface ValidatedListenSession {
 	chapterId: string;
+	versionId: string;
 	bookId?: string | null;
 	volumeId?: string | null;
 	listenedSeconds: number;
@@ -56,10 +58,11 @@ export function buildDailyStatId(
 	date: string,
 	bookId: string | null | undefined,
 	chapterId: string | null | undefined,
-	userId: string | null | undefined
+	userId: string | null | undefined,
+	versionId: string | null | undefined = 'default'
 ): string {
 	const safeDate = date || formatDateKey();
-	return `${safeDate}_${hashPart(bookId || 'nobook')}_${hashPart(chapterId || 'nochapter')}_${hashPart(userId || 'anon')}`;
+	return `${safeDate}_${hashPart(bookId || 'nobook')}_${hashPart(chapterId || 'nochapter')}_${hashPart(versionId || 'default')}_${hashPart(userId || 'anon')}`;
 }
 
 /**
@@ -120,6 +123,10 @@ export function validateListenSession(input: unknown): {
 		valid: true,
 		session: {
 			chapterId: data.chapterId.trim(),
+			versionId:
+				typeof data.versionId === 'string' && data.versionId.trim()
+					? data.versionId.trim()
+					: 'default',
 			bookId: typeof data.bookId === 'string' ? data.bookId.trim() : null,
 			volumeId: typeof data.volumeId === 'string' ? data.volumeId.trim() : null,
 			listenedSeconds: seconds,

@@ -1,5 +1,6 @@
 import { db, type SyncItem } from '$lib/client/db';
 import { isMutationOwnedBy } from '$lib/client/db/syncState';
+import { audioVersionKey } from '$lib/audio-version';
 import { createLogger } from '$lib/logger';
 
 const log = createLogger('LikeService');
@@ -91,20 +92,24 @@ export function createLikeService(database = db) {
 		async toggleChapterLike(
 			chapterId: string,
 			currentCount?: number,
+			versionId = 'default',
 			fetchFn: typeof fetch = fetch
 		): Promise<LikeToggleResult> {
-			const existing = await database.chapterLikes.get(chapterId);
+			const key = audioVersionKey(chapterId, versionId);
+			const existing = await database.chapterLikes.get(key);
 			const isCurrentlyLiked = !!existing;
 			const targetLiked = !isCurrentlyLiked;
 			const ownerUserId = await resolveOwner();
 
-			const ch = await database.chapters.get(chapterId);
-			const baseCount = ch?.likesCount ?? currentCount ?? (isCurrentlyLiked ? 1 : 0);
+			const ch = versionId === 'default' ? await database.chapters.get(chapterId) : undefined;
+			const baseCount = currentCount ?? ch?.likesCount ?? (isCurrentlyLiked ? 1 : 0);
 			const newLikesCount = targetLiked ? baseCount + 1 : Math.max(0, baseCount - 1);
 
 			if (targetLiked) {
 				await database.chapterLikes.put({
-					chapterId,
+					chapterId: key,
+					baseChapterId: chapterId,
+					versionId,
 					createdAt: Date.now()
 				});
 				if (ch) {
@@ -112,18 +117,18 @@ export function createLikeService(database = db) {
 				}
 				await database.syncQueue.add({
 					action: 'LIKE_CHAPTER',
-					payload: { id: chapterId, chapterId },
+					payload: { id: key, chapterId, versionId },
 					timestamp: Date.now(),
 					ownerUserId
 				} as SyncItem);
 			} else {
-				await database.chapterLikes.delete(chapterId);
+				await database.chapterLikes.delete(key);
 				if (ch) {
 					await database.chapters.update(chapterId, { likesCount: newLikesCount });
 				}
 				await database.syncQueue.add({
 					action: 'UNLIKE_CHAPTER',
-					payload: { id: chapterId, chapterId },
+					payload: { id: key, chapterId, versionId },
 					timestamp: Date.now(),
 					ownerUserId
 				} as SyncItem);
@@ -171,6 +176,7 @@ export function createLikeService(database = db) {
 				const chapterLikeUpdates: Array<{
 					id: string;
 					chapterId: string;
+					versionId: string;
 					action: 'like' | 'unlike';
 					timestamp: number;
 				}> = [];
@@ -181,6 +187,7 @@ export function createLikeService(database = db) {
 						id?: string;
 						volumeId?: string;
 						chapterId?: string;
+						versionId?: string;
 					};
 					const targetId = payload.volumeId || payload.chapterId || payload.id;
 					if (!targetId) {
@@ -207,7 +214,8 @@ export function createLikeService(database = db) {
 					} else if (item.action === 'LIKE_CHAPTER') {
 						chapterLikeUpdates.push({
 							id: targetId,
-							chapterId: targetId,
+							chapterId: payload.chapterId || targetId,
+							versionId: payload.versionId ?? 'default',
 							action: 'like',
 							timestamp: item.timestamp
 						});
@@ -215,7 +223,8 @@ export function createLikeService(database = db) {
 					} else if (item.action === 'UNLIKE_CHAPTER') {
 						chapterLikeUpdates.push({
 							id: targetId,
-							chapterId: targetId,
+							chapterId: payload.chapterId || targetId,
+							versionId: payload.versionId ?? 'default',
 							action: 'unlike',
 							timestamp: item.timestamp
 						});
@@ -269,8 +278,8 @@ export function createLikeService(database = db) {
 		/**
 		 * Checks whether a chapter is currently liked locally.
 		 */
-		async isChapterLiked(chapterId: string): Promise<boolean> {
-			const record = await database.chapterLikes.get(chapterId);
+		async isChapterLiked(chapterId: string, versionId = 'default'): Promise<boolean> {
+			const record = await database.chapterLikes.get(audioVersionKey(chapterId, versionId));
 			return !!record;
 		},
 
@@ -285,7 +294,8 @@ export function createLikeService(database = db) {
 		/**
 		 * Returns the cached likes count for a chapter.
 		 */
-		async getChapterLikesCount(chapterId: string): Promise<number> {
+		async getChapterLikesCount(chapterId: string, versionId = 'default'): Promise<number> {
+			if (versionId !== 'default') return 0;
 			const ch = await database.chapters.get(chapterId);
 			return ch?.likesCount ?? 0;
 		}

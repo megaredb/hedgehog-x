@@ -11,6 +11,7 @@
 	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
+	import { syncService } from '$lib/client/services/syncService';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -23,6 +24,7 @@
 		chapter?: OfflineChapter;
 		volume?: OfflineVolume;
 		book?: OfflineBook;
+		version?: import('$lib/client/db').OfflineChapterAudioVersion;
 	}
 
 	const bookmarksQuery = useDexie(
@@ -30,16 +32,21 @@
 			const bms = await db.bookmarks.toArray();
 			bms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+			const versionRows = await db.chapterAudioVersions.toArray();
 			const enriched: EnrichedBookmark[] = await Promise.all(
 				bms.map(async (bm) => {
 					const chapter = await db.chapters.get(bm.chapterId);
 					const volume = chapter ? await db.volumes.get(chapter.volumeId) : undefined;
 					const book = volume ? await db.books.get(volume.bookId) : undefined;
+					const version = versionRows.find(
+						(v) => v.chapterId === bm.chapterId && v.versionId === (bm.versionId ?? 'default')
+					);
 					return {
 						...bm,
 						chapter,
 						volume,
-						book
+						book,
+						version
 					};
 				})
 			);
@@ -73,9 +80,44 @@
 
 	async function handlePlayBookmark(item: EnrichedBookmark) {
 		if (!item.chapter) return;
-		if (audioStore.currentTrack?.id === item.chapterId) {
+		const versionId = item.versionId ?? 'default';
+		const currentVersion =
+			typeof audioStore.currentTrack?.versionId === 'string'
+				? audioStore.currentTrack.versionId
+				: 'default';
+		if (audioStore.currentTrack?.id === item.chapterId && currentVersion === versionId) {
 			audioStore.seek(item.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
+		if (versionId !== 'default') {
+			let version = item.version;
+			if (!version && item.book?.id) {
+				await syncService.syncBookDetails(item.book.id);
+				version = await db.chapterAudioVersions
+					.where({ chapterId: item.chapterId, versionId })
+					.first();
+			}
+			if (!version) return;
+			audioStore.setQueueAndPlay(
+				[
+					{
+						id: item.chapter.id,
+						title: version.title,
+						url: version.audioUrl,
+						duration: version.durationSeconds,
+						versionId,
+						album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
+						artist: item.book?.title || 'Hedgehog',
+						artwork: item.volume?.coverUrl || item.book?.coverUrl,
+						bookId: item.book?.id,
+						volumeId: item.volume?.id,
+						startTime: item.timestampSeconds
+					}
+				],
+				0
+			);
 			return;
 		}
 
@@ -90,6 +132,7 @@
 			title: ch.title,
 			url: ch.audioUrl,
 			duration: ch.durationSeconds,
+			versionId: 'default',
 			album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 			artist: item.book?.title || 'Hedgehog',
 			artwork: item.volume?.coverUrl || item.book?.coverUrl,
@@ -204,6 +247,11 @@
 											{formatDate(item.createdAt)}
 										</span>
 									{/if}
+									<span class="text-xxs text-muted-foreground/70">
+										{item.versionId === 'default' || !item.versionId
+											? 'Новая версия'
+											: 'Старая версия'}
+									</span>
 								</div>
 
 								<h3 class="truncate text-base font-semibold text-foreground">

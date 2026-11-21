@@ -1,11 +1,13 @@
 import { db } from '$lib/client/db';
 import { getCurrentOwnerId } from '$lib/client/db/syncState';
+import { audioVersionKey } from '$lib/audio-version';
 import { createLogger } from '$lib/logger';
 
 const log = createLogger('ProgressSync');
 
 interface ProgressUpdate {
 	chapterId: string;
+	versionId: string;
 	progressSeconds: number;
 	isCompleted: boolean;
 }
@@ -34,9 +36,15 @@ class ProgressSyncService {
 	 * The owner is captured when the first update is recorded: a guest's
 	 * progress must not suddenly become account-owned after login.
 	 */
-	recordProgress(chapterId: string, progressSeconds: number, isCompleted = false) {
-		this.pendingUpdates.set(chapterId, {
+	recordProgress(
+		chapterId: string,
+		progressSeconds: number,
+		isCompleted = false,
+		versionId = 'default'
+	) {
+		this.pendingUpdates.set(audioVersionKey(chapterId, versionId), {
 			chapterId,
+			versionId,
 			progressSeconds,
 			isCompleted
 		});

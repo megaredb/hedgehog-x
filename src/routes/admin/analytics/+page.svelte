@@ -236,7 +236,7 @@
 					<p class="py-6 text-center text-xs text-muted-foreground">Нет данных по главам</p>
 				{:else}
 					<div class="space-y-3">
-						{#each data.topChapters as ch, i (ch.chapterId)}
+						{#each data.topChapters as ch, i (`${ch.chapterId}:${ch.versionId}`)}
 							<div
 								class="flex items-center justify-between rounded-lg border border-border/40 bg-card/40 p-3"
 							>
@@ -251,7 +251,10 @@
 											{ch.chapterTitle}
 										</p>
 										<p class="mt-1 text-xs text-muted-foreground">
-											{ch.bookTitle ?? ''} • {ch.sessionsCount} прослушиваний
+											{ch.bookTitle ?? ''} • {ch.sessionsCount} прослушиваний • {ch.versionId ===
+											'default'
+												? 'Новая версия'
+												: 'Старая версия'}
 										</p>
 									</div>
 								</div>
@@ -294,7 +297,10 @@
 								<tr>
 									<td class="py-2.5 font-medium">
 										<div>{session.chapterTitle}</div>
-										<div class="text-[11px] text-muted-foreground">{session.bookTitle}</div>
+										<div class="text-[11px] text-muted-foreground">
+											{session.bookTitle} •
+											{session.versionId === 'default' ? 'Новая версия' : 'Старая версия'}
+										</div>
 									</td>
 									<td class="py-2.5 text-muted-foreground">{session.user}</td>
 									<td class="py-2.5">

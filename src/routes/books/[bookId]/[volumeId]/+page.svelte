@@ -88,15 +88,21 @@
 	const volumeBookmarks = $derived(volumeBookmarksQuery.data);
 	const audioVersions = $derived(data.audioVersions ?? []);
 	const chapterVersions = $derived(data.chapterVersions ?? []);
+	const chapterVersionLikes = $derived(data.chapterVersionLikes ?? []);
+	const hasAlternativeVersions = $derived(
+		chapterVersions.some((version) => version.versionId !== 'default')
+	);
 	const versionOptions = $derived([
 		{ id: 'default', label: 'Новая версия', description: 'Текущая озвучка' },
-		...audioVersions
-			.filter((version) => version.id !== 'default')
-			.map((version) => ({
-				id: version.id,
-				label: version.label,
-				description: version.description ?? ''
-			}))
+		...(hasAlternativeVersions
+			? audioVersions
+					.filter((version) => version.id !== 'default')
+					.map((version) => ({
+						id: version.id,
+						label: version.id === 'old' ? 'Старая версия' : version.label,
+						description: version.description ?? ''
+					}))
+			: [])
 	]);
 
 	function handleVersionChange(versionId: string) {
@@ -270,6 +276,7 @@
 				isLoading={chaptersQuery.isLoading}
 				{selectedVersionId}
 				{chapterVersions}
+				{chapterVersionLikes}
 			/>
 		</Tabs.Content>
 
@@ -281,6 +288,7 @@
 				{volume}
 				{book}
 				bookId={data.bookId}
+				{chapterVersions}
 			/>
 		</Tabs.Content>
 

@@ -42,7 +42,7 @@
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
 ├── server.js                  # compression + immutable cache headers + adapter-node handler
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
-├── drizzle/                   # 11 SQL-миграций 0000–0010 + meta (актуальны)
+├── drizzle/                   # 12 SQL-миграций 0000–0011 + meta (актуальны)
 ├── e2e/                       # 9 файлов Playwright
 ├── dynamic/dev.yaml           # Traefik file-provider для dev
 ├── docker/init-umami-db.sh
@@ -388,7 +388,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |
-| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0010)            |
+| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0011)            |
 | `auth:schema`                     | better-auth generate                          | может перезаписать ручные поля      |
 
 ### 8.3. Конфиги

@@ -48,14 +48,14 @@ keyboard; metrics endpoint; 197 unit и 46 e2e; чистка мёртвого к
 | ------------------ | --------------------------------------------------------- | --------------------------------------------------------- |
 | Production build   | vite build                                                | exit 0                                                    |
 | Production image   | docker build -t hedgehog-x:prod .                         | ✅ build 0; runtime-only deps                             |
-| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 11 миграций, seed 2 книги, non-root, health 200        |
+| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 12 миграций, seed 2 книги, non-root, health 200        |
 | Graceful shutdown  | docker stop -t 20                                         | ✅ exit 0 (DB pool закрывается)                           |
 | Compose config     | docker compose -f compose.yaml -f compose.prod.yml config | ✅ app + Traefik labels; ошибок нет                       |
 | Dual domain        | Host headers `hedgehog-inc.one` / `ru.hedgehog-inc.one`   | ✅ 200; Telegram redirect_uri на каждом хосте             |
 | SSR/404/OG         | curl /books/* + volume                                    | ✅ title/H1/OG из БД; unknown = 404                       |
 | History clear      | POST /api/user/progress/clear                             | ✅ 401 guest; auth deletes server+queue                   |
 | Analytics batch    | valid+invalid POST                                        | ✅ 200 accepted=1 rejected=1                              |
-| P1 migration       | drizzle 0010 + schema parity                              | ✅ 11 migrations; unique/indexes; generate no-op          |
+| P1 migration       | drizzle 0010 + schema parity                              | ✅ 12 migrations; unique/indexes; generate no-op          |
 | CI                 | .github/workflows/ci.yml                                  | ✅ lint/check/unit/build/migrate/generate-drift/e2e       |
 | Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                          |
 | Prettier           | prettier --check .                                        | OK                                                        |
@@ -579,7 +579,7 @@ UPDATE role='admin' админка недоступна.
    частичная заготовка, не i18n.
 8. **«Индексы на FK, enum/check, notNull timestamps»** из исторического
    ARCHITECTURE.md не реализованы: контентные FK без индексов, status/theme — текст.
-9. **«Миграции обязаны накатываться на чистую БД»** — ✅ исправлено: 0000–0010
+9. **«Миграции обязаны накатываться на чистую БД»** — ✅ исправлено: 0000–0011
    проходят на чистой БД; `0005` no-op, `0006` catch-up; `generate` — no-op.
 10. **«R2 + fallback»** — fallback работает только в dev; в prod тихо ломается;
     удаление объектов не реализовано.

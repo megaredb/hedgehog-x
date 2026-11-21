@@ -13,6 +13,7 @@
 	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
 	import { formatDuration } from '$lib/utils/time';
+	import { audioVersionKey } from '$lib/audio-version';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -38,6 +39,7 @@
 		isLoading?: boolean;
 		selectedVersionId?: string;
 		chapterVersions?: ChapterAudioVersion[];
+		chapterVersionLikes?: Array<{ chapterId: string; versionId: string; count: number }>;
 	}
 
 	let {
@@ -46,7 +48,8 @@
 		bookId,
 		isLoading = false,
 		selectedVersionId = 'default',
-		chapterVersions = []
+		chapterVersions = [],
+		chapterVersionLikes = []
 	}: Props = $props();
 
 	const activeVersionId = $derived(selectedVersionId || 'default');
@@ -65,6 +68,16 @@
 	function isChapterAvailable(chapter: OfflineChapter): boolean {
 		return isDefaultVersion || !!versionTrackFor(chapter.id);
 	}
+
+	const versionLikesMap = $derived(
+		new Map(
+			chapterVersionLikes.map((item) => [
+				audioVersionKey(item.chapterId, item.versionId),
+				item.count
+			])
+		)
+	);
+	let likeCountOverrides = $state<Record<string, number>>({});
 
 	const session = useSession();
 	let isGuestModalOpen = $state(false);
@@ -105,7 +118,22 @@
 			isGuestModalOpen = true;
 			return;
 		}
-		await likeService.toggleChapterLike(chapter.id, chapter.likesCount);
+		const key = audioVersionKey(chapter.id, activeVersionId);
+		const baseCount =
+			likeCountOverrides[key] ??
+			versionLikesMap.get(key) ??
+			(activeVersionId === 'default' ? chapter.likesCount : 0);
+		const result = await likeService.toggleChapterLike(chapter.id, baseCount, activeVersionId);
+		likeCountOverrides[key] = result.likesCount;
+	}
+
+	function likesFor(chapter: OfflineChapter): number {
+		const key = audioVersionKey(chapter.id, activeVersionId);
+		return (
+			likeCountOverrides[key] ??
+			versionLikesMap.get(key) ??
+			(activeVersionId === 'default' ? chapter.likesCount : 0)
+		);
 	}
 
 	let selectedChapterForComments = $state<OfflineChapter | null>(null);
@@ -161,7 +189,7 @@
 			return;
 		}
 
-		const savedProgress = progressMap.get(chapter.id);
+		const savedProgress = progressMap.get(audioVersionKey(chapter.id, activeVersionId));
 		const startTime =
 			savedProgress && !savedProgress.isCompleted && savedProgress.progressSeconds > 0
 				? savedProgress.progressSeconds
@@ -271,7 +299,7 @@
 				{@const isCurrent =
 					audioStore.currentTrack?.id === chapter.id && currentVersion === activeVersionId}
 				{@const isPlaying = isCurrent && audioStore.isPlaying}
-				{@const saved = progressMap.get(chapter.id)}
+				{@const saved = progressMap.get(audioVersionKey(chapter.id, activeVersionId))}
 				{@const currentTrackTime = isCurrent
 					? audioStore.currentTime
 					: (saved?.progressSeconds ?? 0)}
@@ -401,23 +429,27 @@
 							<Button
 								variant="ghost"
 								size="sm"
-								class="h-8 gap-1 px-2 text-xs transition-colors {likedChapterIds.has(chapter.id)
+								class="h-8 gap-1 px-2 text-xs transition-colors {likedChapterIds.has(
+									audioVersionKey(chapter.id, activeVersionId)
+								)
 									? 'text-rose-500 hover:text-rose-600'
 									: 'text-muted-foreground hover:text-foreground'}"
 								onclick={(e) => handleToggleChapterLike(e, chapter)}
-								title={likedChapterIds.has(chapter.id) ? 'Убрать лайк' : 'Поставить лайк'}
-								aria-label={(likedChapterIds.has(chapter.id)
+								title={likedChapterIds.has(audioVersionKey(chapter.id, activeVersionId))
+									? 'Убрать лайк'
+									: 'Поставить лайк'}
+								aria-label={(likedChapterIds.has(audioVersionKey(chapter.id, activeVersionId))
 									? `Убрать лайк с ${chapter.title}`
-									: `Лайкнуть ${chapter.title}`) + ` ${chapter.likesCount || 0}`}
+									: `Лайкнуть ${chapter.title}`) + ` ${likesFor(chapter)}`}
 							>
 								<Heart
 									class="h-3.5 w-3.5 transition-transform active:scale-125 {likedChapterIds.has(
-										chapter.id
+										audioVersionKey(chapter.id, activeVersionId)
 									)
 										? 'fill-rose-500 text-rose-500'
 										: ''}"
 								/>
-								<span class="font-medium">{chapter.likesCount || 0}</span>
+								<span class="font-medium">{likesFor(chapter)}</span>
 							</Button>
 
 							<!-- Comments button for chapter -->
@@ -431,8 +463,10 @@
 								<MessageSquare class="h-4 w-4" />
 							</Button>
 
-							<!-- Chapter download button -->
-							<DownloadButton {chapter} class="h-8 w-8" />
+							<!-- Chapter download button: downloads are currently bound to the default audio file. -->
+							{#if isDefaultVersion}
+								<DownloadButton {chapter} class="h-8 w-8" />
+							{/if}
 						</div>
 					</div>
 				</li>

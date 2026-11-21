@@ -1,11 +1,12 @@
 import { error } from '@sveltejs/kit';
-import { asc, eq } from 'drizzle-orm';
+import { asc, count, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	audioVersions,
 	books,
 	chapters,
 	chapterAudioVersions,
+	chapterLikes,
 	illustrations,
 	volumes
 } from '$lib/server/db/schema';
@@ -40,6 +41,22 @@ export const load: PageServerLoad = async ({ params }) => {
 			.where(eq(chapters.volumeId, volume.id))
 			.orderBy(asc(chapterAudioVersions.chapterStart))
 	]);
+	const chapterVersionLikes = chapterRows.length
+		? await db
+				.select({
+					chapterId: chapterLikes.chapterId,
+					versionId: chapterLikes.versionId,
+					count: count()
+				})
+				.from(chapterLikes)
+				.where(
+					inArray(
+						chapterLikes.chapterId,
+						chapterRows.map((chapter) => chapter.id)
+					)
+				)
+				.groupBy(chapterLikes.chapterId, chapterLikes.versionId)
+		: [];
 	return {
 		bookId: params.bookId,
 		volumeId: params.volumeId,
@@ -49,6 +66,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		chapters: chapterRows,
 		illustrations: illustrationRows,
 		audioVersions: versionRows,
-		chapterVersions: chapterVersionRows.map(({ chapter_audio_versions }) => chapter_audio_versions)
+		chapterVersions: chapterVersionRows.map(({ chapter_audio_versions }) => chapter_audio_versions),
+		chapterVersionLikes
 	};
 };

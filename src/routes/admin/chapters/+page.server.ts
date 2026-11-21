@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { isUniqueViolation } from '$lib/server/db/errors';
-import { books, volumes, chapters } from '$lib/server/db/schema';
+import { books, volumes, chapters, chapterAudioVersions } from '$lib/server/db/schema';
 import { eq, desc, asc } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
 import {
@@ -216,7 +216,12 @@ export const actions: Actions = {
 
 			await db.update(chapters).set(updateData).where(eq(chapters.id, id));
 			if (updateData.audioUrl && old?.audioUrl && old.audioUrl !== updateData.audioUrl) {
-				await deleteFromStorage(old.audioUrl);
+				const [archived] = await db
+					.select({ id: chapterAudioVersions.id })
+					.from(chapterAudioVersions)
+					.where(eq(chapterAudioVersions.audioUrl, old.audioUrl))
+					.limit(1);
+				if (!archived) await deleteFromStorage(old.audioUrl);
 			}
 			return { success: true };
 		} catch (e) {

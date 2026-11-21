@@ -12,6 +12,7 @@ type BookmarkUpdate =
 	| {
 			id: string;
 			chapterId: string;
+			versionId: string;
 			timestampSeconds: number;
 			note: string;
 			action: 'upsert';
@@ -26,7 +27,14 @@ function canSync(): boolean {
 
 function toUpdate(item: SyncItem): BookmarkUpdate | null {
 	const payload = item.payload as
-		{ id?: string; chapterId?: string; timestampSeconds?: number; note?: string } | undefined;
+		| {
+				id?: string;
+				chapterId?: string;
+				versionId?: string;
+				timestampSeconds?: number;
+				note?: string;
+		  }
+		| undefined;
 	if (!payload?.id) return null;
 
 	if (item.action === 'ADD_BOOKMARK') {
@@ -34,6 +42,7 @@ function toUpdate(item: SyncItem): BookmarkUpdate | null {
 		return {
 			id: payload.id,
 			chapterId: payload.chapterId,
+			versionId: payload.versionId ?? 'default',
 			timestampSeconds: payload.timestampSeconds,
 			note: payload.note ?? '',
 			action: 'upsert'
