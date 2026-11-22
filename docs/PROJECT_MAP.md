@@ -78,6 +78,7 @@
 | `/admin/books`               | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | `books`                                  | CRUD + обложка                                                                                |
 | `/admin/volumes`             | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | `volumes` + `books`                      | CRUD + обложка                                                                                |
 | `/admin/chapters`            | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | `chapters` + фильтр                      | CRUD + аудио + Telegram                                                                       |
+| `/admin/versions`            | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | `chapters` + версии озвучки              | мастер-детейл: текущая/архивные версии, promote/delete, поиск                                 |
 | `/admin/illustrations`       | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | `illustrations` + фильтр                 | CRUD + image + sortOrder                                                                      |
 
 **Нет** файлов `+error.svelte` (ни в `src/routes`, ни в `src`), `hooks.client.ts`,

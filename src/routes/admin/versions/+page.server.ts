@@ -17,10 +17,21 @@ import {
 } from '$lib/server/storage/r2';
 import type { PageServerLoad } from './$types';
 
+const VERSION_ID_PATTERN = /^[a-z0-9_-]{1,64}$/i;
+const MAX_TITLE_LENGTH = 255;
+
+/** Built-in version kinds that are created lazily when the archive uses them. */
+const BUILTIN_VERSION_PRESETS: Record<
+	string,
+	{ label: string; description: string; sortOrder: number }
+> = {
+	old: { label: 'Старая версия', description: 'OLD VERSION', sortOrder: 1 }
+};
+
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
-	const [chaptersRows, versions, tracks] = await Promise.all([
+	const [chapterRows, versions, tracks] = await Promise.all([
 		db
 			.select({
 				id: chapters.id,
@@ -29,6 +40,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				volumeId: chapters.volumeId,
 				volumeTitle: volumes.title,
 				volumeNumber: volumes.volumeNumber,
+				bookId: books.id,
 				bookTitle: books.title,
 				audioUrl: chapters.audioUrl,
 				telegramPostUrl: chapters.telegramPostUrl,
@@ -38,7 +50,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.innerJoin(volumes, eq(chapters.volumeId, volumes.id))
 			.innerJoin(books, eq(volumes.bookId, books.id))
 			.orderBy(asc(books.title), asc(volumes.volumeNumber), asc(chapters.chapterNumber)),
-		db.select().from(audioVersions).orderBy(asc(audioVersions.sortOrder)),
+		db.select().from(audioVersions).orderBy(asc(audioVersions.sortOrder), asc(audioVersions.id)),
 		db
 			.select({
 				id: chapterAudioVersions.id,
@@ -49,23 +61,119 @@ export const load: PageServerLoad = async ({ locals }) => {
 				durationSeconds: chapterAudioVersions.durationSeconds,
 				chapterStart: chapterAudioVersions.chapterStart,
 				chapterEnd: chapterAudioVersions.chapterEnd,
+				createdAt: chapterAudioVersions.createdAt,
 				chapterTitle: chapters.title,
 				chapterNumber: chapters.chapterNumber,
+				chapterAudioUrl: chapters.audioUrl,
+				volumeId: volumes.id,
 				volumeTitle: volumes.title,
+				volumeNumber: volumes.volumeNumber,
+				bookId: books.id,
 				bookTitle: books.title
 			})
 			.from(chapterAudioVersions)
 			.innerJoin(chapters, eq(chapterAudioVersions.chapterId, chapters.id))
 			.innerJoin(volumes, eq(chapters.volumeId, volumes.id))
 			.innerJoin(books, eq(volumes.bookId, books.id))
-			.orderBy(asc(books.title), asc(volumes.volumeNumber), asc(chapters.chapterNumber))
+			.orderBy(
+				asc(books.title),
+				asc(volumes.volumeNumber),
+				asc(chapters.chapterNumber),
+				asc(chapterAudioVersions.createdAt)
+			)
 	]);
 
-	return { chapters: chaptersRows, versions, tracks };
+	return { chapters: chapterRows, versions, tracks };
 };
 
-function parseNumber(value: FormDataEntryValue | null): number {
-	return Number.parseInt(String(value ?? ''), 10);
+function parseInteger(value: FormDataEntryValue | null): number {
+	const raw = String(value ?? '').trim();
+	return raw ? Number.parseInt(raw, 10) : Number.NaN;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'code' in error &&
+		(error as { code?: unknown }).code === '23505'
+	);
+}
+
+/** Creates the version kind on first use so fresh databases can still archive audio. */
+async function ensureAudioVersion(versionId: string): Promise<void> {
+	const [existing] = await db
+		.select({ id: audioVersions.id })
+		.from(audioVersions)
+		.where(eq(audioVersions.id, versionId))
+		.limit(1);
+	if (existing) return;
+
+	const preset = BUILTIN_VERSION_PRESETS[versionId];
+	await db
+		.insert(audioVersions)
+		.values({
+			id: versionId,
+			label: preset?.label ?? versionId,
+			description: preset?.description ?? null,
+			sortOrder: preset?.sortOrder ?? 10
+		})
+		.onConflictDoNothing();
+}
+
+async function isAudioReferenced(audioUrl: string): Promise<boolean> {
+	if (!audioUrl) return false;
+
+	const [chapterRef] = await db
+		.select({ id: chapters.id })
+		.from(chapters)
+		.where(eq(chapters.audioUrl, audioUrl))
+		.limit(1);
+	if (chapterRef) return true;
+
+	const [versionRef] = await db
+		.select({ id: chapterAudioVersions.id })
+		.from(chapterAudioVersions)
+		.where(eq(chapterAudioVersions.audioUrl, audioUrl))
+		.limit(1);
+	return Boolean(versionRef);
+}
+
+/** Removes a track from storage only when no chapter or archive entry points at it. */
+async function removeAudioIfUnreferenced(audioUrl: string): Promise<void> {
+	try {
+		if (await isAudioReferenced(audioUrl)) return;
+		await deleteFromStorage(audioUrl);
+	} catch {
+		// Best-effort cleanup: the database change already succeeded.
+	}
+}
+
+type UploadResult =
+	| { url: string; error?: never; status?: never }
+	| {
+			url?: never;
+			error: string;
+			status: number;
+	  };
+
+async function uploadAudioFile(file: FormDataEntryValue | null): Promise<UploadResult> {
+	if (!file || !(file instanceof File) || file.size === 0) return { url: '' };
+	if (file.size > MAX_AUDIO_BYTES) return { error: 'Аудиофайл больше 500 МБ', status: 400 };
+
+	try {
+		const uploaded = await uploadAudio(Buffer.from(await file.arrayBuffer()), {
+			originalFilename: file.name,
+			contentType: file.type,
+			folder: 'chapters'
+		});
+		return { url: uploaded.url };
+	} catch (e) {
+		return {
+			error: `Ошибка загрузки: ${e instanceof Error ? e.message : String(e)}`,
+			status: e instanceof StorageValidationError ? 400 : 500
+		};
+	}
 }
 
 export const actions: Actions = {
@@ -75,65 +183,63 @@ export const actions: Actions = {
 		const chapterId = String(form.get('chapterId') ?? '').trim();
 		const versionId = String(form.get('versionId') ?? 'old').trim() || 'old';
 		const title = String(form.get('title') ?? '').trim();
-		const chapterStart = parseNumber(form.get('chapterStart'));
-		const chapterEnd = parseNumber(form.get('chapterEnd'));
-		const durationSeconds = parseNumber(form.get('durationSeconds'));
+		const chapterStart = parseInteger(form.get('chapterStart'));
+		const chapterEnd = parseInteger(form.get('chapterEnd'));
+		const durationSeconds = parseInteger(form.get('durationSeconds'));
 		const audioFile = form.get('audioFile');
 		const audioUrlInput = String(form.get('audioUrl') ?? '').trim();
 
 		if (!chapterId) return fail(400, { error: 'Выберите главу' });
+		if (!VERSION_ID_PATTERN.test(versionId) || versionId === 'default') {
+			return fail(400, { error: 'Некорректный вид версии' });
+		}
+		if (!title) return fail(400, { error: 'Название версии обязательно' });
+		if (title.length > MAX_TITLE_LENGTH) {
+			return fail(400, { error: 'Название версии длиннее 255 символов' });
+		}
+
 		const [chapter] = await db.select().from(chapters).where(eq(chapters.id, chapterId)).limit(1);
 		if (!chapter) return fail(400, { error: 'Глава не найдена' });
-		if (!title) return fail(400, { error: 'Название версии обязательно' });
+
 		if (
 			!Number.isInteger(chapterStart) ||
 			!Number.isInteger(chapterEnd) ||
-			chapterStart > chapterEnd
+			chapterStart < 0 ||
+			chapterEnd < chapterStart
 		) {
 			return fail(400, { error: 'Некорректный диапазон глав' });
 		}
 
-		let uploadedUrl: string | null = null;
-		let audioUrl = audioUrlInput;
-		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
-			if (audioFile.size > MAX_AUDIO_BYTES) return fail(400, { error: 'Аудиофайл больше 500 МБ' });
-			try {
-				const uploaded = await uploadAudio(Buffer.from(await audioFile.arrayBuffer()), {
-					originalFilename: audioFile.name,
-					contentType: audioFile.type,
-					folder: 'chapters'
-				});
-				uploadedUrl = uploaded.url;
-				audioUrl = uploaded.url;
-			} catch (e) {
-				return fail(e instanceof StorageValidationError ? 400 : 500, {
-					error: `Ошибка загрузки: ${e instanceof Error ? e.message : String(e)}`
-				});
-			}
-		}
-		if (!audioUrl) {
-			// Snapshot: keep a reference to the current default audio. The chapter
-			// update action must not delete a file referenced by an archive track.
-			audioUrl = chapter.audioUrl;
-		}
+		const uploaded = await uploadAudioFile(audioFile);
+		if (uploaded.error) return fail(uploaded.status, { error: uploaded.error });
+
+		// Without a file or URL the archive entry references the current chapter audio.
+		const audioUrl = uploaded.url || audioUrlInput || chapter.audioUrl;
+		const duration =
+			Number.isFinite(durationSeconds) && durationSeconds > 0
+				? durationSeconds
+				: chapter.durationSeconds;
 
 		try {
+			await ensureAudioVersion(versionId);
 			await db.insert(chapterAudioVersions).values({
 				id: `${chapter.id}:${versionId}`,
 				chapterId: chapter.id,
 				versionId,
 				title,
 				audioUrl,
-				durationSeconds:
-					Number.isFinite(durationSeconds) && durationSeconds > 0
-						? durationSeconds
-						: chapter.durationSeconds,
+				durationSeconds: duration,
 				chapterStart,
 				chapterEnd
 			});
 			return { success: true };
 		} catch (e) {
-			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			if (uploaded.url) await deleteFromStorage(uploaded.url).catch(() => {});
+			if (isUniqueViolation(e)) {
+				return fail(400, {
+					error: 'У этой главы уже есть версия такого вида. Выберите другой вид версии.'
+				});
+			}
 			return fail(500, {
 				error: `Не удалось сохранить версию: ${e instanceof Error ? e.message : String(e)}`
 			});
@@ -152,28 +258,14 @@ export const actions: Actions = {
 		const audioFile = form.get('audioFile');
 		const audioUrlInput = String(form.get('audioUrl') ?? '').trim();
 		const telegramPostUrl = String(form.get('telegramPostUrl') ?? '').trim() || null;
-		const durationInput = parseNumber(form.get('durationSeconds'));
+		const durationInput = parseInteger(form.get('durationSeconds'));
 
-		let uploadedUrl: string | null = null;
+		const uploaded = await uploadAudioFile(audioFile);
+		if (uploaded.error) return fail(uploaded.status, { error: uploaded.error });
+
 		let audioUrl = chapter.audioUrl;
-		if (audioFile && audioFile instanceof File && audioFile.size > 0) {
-			if (audioFile.size > MAX_AUDIO_BYTES) return fail(400, { error: 'Аудиофайл больше 500 МБ' });
-			try {
-				const uploaded = await uploadAudio(Buffer.from(await audioFile.arrayBuffer()), {
-					originalFilename: audioFile.name,
-					contentType: audioFile.type,
-					folder: 'chapters'
-				});
-				uploadedUrl = uploaded.url;
-				audioUrl = uploaded.url;
-			} catch (e) {
-				return fail(e instanceof StorageValidationError ? 400 : 500, {
-					error: `Ошибка загрузки: ${e instanceof Error ? e.message : String(e)}`
-				});
-			}
-		} else if (audioUrlInput) {
-			audioUrl = audioUrlInput;
-		}
+		if (uploaded.url) audioUrl = uploaded.url;
+		else if (audioUrlInput) audioUrl = audioUrlInput;
 
 		const durationSeconds =
 			Number.isFinite(durationInput) && durationInput > 0 ? durationInput : chapter.durationSeconds;
@@ -183,22 +275,17 @@ export const actions: Actions = {
 				.update(chapters)
 				.set({ audioUrl, durationSeconds, telegramPostUrl })
 				.where(eq(chapters.id, chapterId));
-
-			if (audioUrl !== chapter.audioUrl) {
-				const [archived] = await db
-					.select({ id: chapterAudioVersions.id })
-					.from(chapterAudioVersions)
-					.where(eq(chapterAudioVersions.audioUrl, chapter.audioUrl))
-					.limit(1);
-				if (!archived) await deleteFromStorage(chapter.audioUrl).catch(() => {});
-			}
-			return { success: true };
 		} catch (e) {
-			if (uploadedUrl) await deleteFromStorage(uploadedUrl).catch(() => {});
+			if (uploaded.url) await deleteFromStorage(uploaded.url).catch(() => {});
 			return fail(500, {
 				error: `Не удалось обновить новую версию: ${e instanceof Error ? e.message : String(e)}`
 			});
 		}
+
+		if (audioUrl !== chapter.audioUrl) {
+			await removeAudioIfUnreferenced(chapter.audioUrl);
+		}
+		return { success: true };
 	},
 
 	promote: async ({ request, locals }) => {
@@ -218,6 +305,7 @@ export const actions: Actions = {
 				error: 'Нельзя сделать основной объединённую версию. Сначала разделите её на главы.'
 			});
 		}
+
 		const [chapter] = await db
 			.select()
 			.from(chapters)
@@ -235,7 +323,7 @@ export const actions: Actions = {
 				.set({
 					audioUrl: chapter.audioUrl,
 					durationSeconds: chapter.durationSeconds,
-					title: track.title,
+					title: chapter.title,
 					chapterStart: chapter.chapterNumber,
 					chapterEnd: chapter.chapterNumber
 				})
@@ -249,21 +337,16 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = String(form.get('id') ?? '').trim();
 		if (!id) return fail(400, { error: 'Не указана версия' });
+
 		const [track] = await db
 			.select()
 			.from(chapterAudioVersions)
 			.where(eq(chapterAudioVersions.id, id))
 			.limit(1);
 		if (!track) return fail(404, { error: 'Версия не найдена' });
-		const [chapter] = await db
-			.select({ audioUrl: chapters.audioUrl })
-			.from(chapters)
-			.where(eq(chapters.id, track.chapterId))
-			.limit(1);
+
 		await db.delete(chapterAudioVersions).where(eq(chapterAudioVersions.id, id));
-		if (track.audioUrl !== chapter?.audioUrl) {
-			await deleteFromStorage(track.audioUrl).catch(() => {});
-		}
+		await removeAudioIfUnreferenced(track.audioUrl);
 		return { success: true };
 	}
 };
