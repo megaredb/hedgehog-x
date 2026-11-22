@@ -99,6 +99,13 @@
       "when": 1795349149370,
       "tag": "0013_classy_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795351018158,
+      "tag": "0014_wealthy_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }

@@ -10,8 +10,8 @@ export const load: PageServerLoad = async () => {
 			id: books.id,
 			title: books.title,
 			description: books.description,
-			coverUrl: books.coverUrl,
-			videoUrl: books.videoUrl
+			homeImageUrl: books.homeImageUrl,
+			homeVideoUrl: books.homeVideoUrl
 		})
 		.from(books)
 		.orderBy(asc(books.sortOrder), asc(books.title));
@@ -20,8 +20,8 @@ export const load: PageServerLoad = async () => {
 		id: book.id,
 		title: book.title,
 		description: book.description ?? '',
-		bgImage: book.coverUrl,
-		bgVideo: book.videoUrl
+		bgImage: book.homeImageUrl,
+		bgVideo: book.homeVideoUrl
 	}));
 
 	return { books: showcaseBooks };

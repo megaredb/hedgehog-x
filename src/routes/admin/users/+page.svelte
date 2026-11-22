@@ -1,6 +1,8 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -50,6 +52,23 @@
 		target.form?.requestSubmit();
 	}
 
+	function handleFiltersSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		const form = event.currentTarget as HTMLFormElement;
+		const parts: string[] = [];
+		for (const [key, value] of new FormData(form).entries()) {
+			if (typeof value === 'string' && value) {
+				parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+			}
+		}
+		const query = parts.join('&');
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(resolve('/admin/users') + (query ? '?' + query : ''), {
+			noScroll: true,
+			keepFocus: true
+		});
+	}
+
 	function avatarFor(item: (typeof data.users)[number]): string | null {
 		return item.image || item.telegramAvatar || item.discordAvatar || null;
 	}
@@ -95,6 +114,7 @@
 		<CardContent>
 			<form
 				method="GET"
+				onsubmit={handleFiltersSubmit}
 				class="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_150px_170px_180px_auto_auto]"
 			>
 				<div class="relative">

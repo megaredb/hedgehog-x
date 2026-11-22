@@ -1,0 +1,1 @@
+ALTER TABLE "books" ADD COLUMN "home_image_url" varchar(2048);

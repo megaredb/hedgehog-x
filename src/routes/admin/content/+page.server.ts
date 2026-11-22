@@ -612,7 +612,11 @@ async function cleanupMedia(
 
 async function collectBookMedia(bookId: string) {
 	const [bookRow] = await db
-		.select({ coverUrl: books.coverUrl, videoUrl: books.videoUrl })
+		.select({
+			coverUrl: books.coverUrl,
+			homeImageUrl: books.homeImageUrl,
+			homeVideoUrl: books.homeVideoUrl
+		})
 		.from(books)
 		.where(eq(books.id, bookId))
 		.limit(1);
@@ -644,7 +648,8 @@ async function collectBookMedia(bookId: string) {
 	return {
 		images: [
 			bookRow?.coverUrl,
-			bookRow?.videoUrl,
+			bookRow?.homeImageUrl,
+			bookRow?.homeVideoUrl,
 			...bookVolumes.map((volume) => volume.coverUrl),
 			...illustrationRows.map((row) => row.imageUrl)
 		],
@@ -729,7 +734,8 @@ export const actions: Actions = {
 		const status = text(form, 'status') || 'ongoing';
 		const rawTheme = text(form, 'themeColor').replace(/^#/, '') || null;
 		const suppliedCoverUrl = text(form, 'coverUrl') || null;
-		const suppliedVideoUrl = text(form, 'videoUrl') || null;
+		const suppliedHomeImageUrl = text(form, 'homeImageUrl') || null;
+		const suppliedHomeVideoUrl = text(form, 'homeVideoUrl') || null;
 
 		if (!title) return fail(400, { error: 'Название книги обязательно' });
 		if (title.length > 255) return fail(400, { error: 'Название книги длиннее 255 символов' });
@@ -741,29 +747,42 @@ export const actions: Actions = {
 		const isUpdate = Boolean(idInput);
 		const id = isUpdate ? idInput : slugify(title) || randomUUID().slice(0, 8);
 		let oldCoverUrl: string | null = null;
-		let oldVideoUrl: string | null = null;
+		let oldHomeImageUrl: string | null = null;
+		let oldHomeVideoUrl: string | null = null;
 		if (isUpdate) {
 			const [existing] = await db
-				.select({ coverUrl: books.coverUrl, videoUrl: books.videoUrl })
+				.select({
+					coverUrl: books.coverUrl,
+					homeImageUrl: books.homeImageUrl,
+					homeVideoUrl: books.homeVideoUrl
+				})
 				.from(books)
 				.where(eq(books.id, id))
 				.limit(1);
 			if (!existing) return fail(404, { error: 'Книга не найдена' });
 			oldCoverUrl = existing.coverUrl;
-			oldVideoUrl = existing.videoUrl;
+			oldHomeImageUrl = existing.homeImageUrl;
+			oldHomeVideoUrl = existing.homeVideoUrl;
 		}
 
 		const uploaded = await uploadImageFile(form.get('coverFile'), 'books', id);
 		if (isUploadFailure(uploaded)) return fail(uploaded.status, { error: uploaded.error });
-		const uploadedVideo = await uploadVideoFile(form.get('videoFile'));
-		if (isUploadFailure(uploadedVideo)) {
+		const uploadedHomeImage = await uploadImageFile(form.get('homeImageFile'), 'home', id);
+		if (isUploadFailure(uploadedHomeImage)) {
 			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
-			return fail(uploadedVideo.status, { error: uploadedVideo.error });
+			return fail(uploadedHomeImage.status, { error: uploadedHomeImage.error });
+		}
+		const uploadedHomeVideo = await uploadVideoFile(form.get('homeVideoFile'));
+		if (isUploadFailure(uploadedHomeVideo)) {
+			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
+			if (uploadedHomeImage) await deleteFromStorage(uploadedHomeImage.url).catch(() => {});
+			return fail(uploadedHomeVideo.status, { error: uploadedHomeVideo.error });
 		}
 		let themeColor = rawTheme;
 		if (!themeColor && uploaded?.themeColor) themeColor = uploaded.themeColor;
 		const coverUrl = uploaded ? uploaded.url : suppliedCoverUrl;
-		const videoUrl = uploadedVideo ? uploadedVideo.url : suppliedVideoUrl;
+		const homeImageUrl = uploadedHomeImage ? uploadedHomeImage.url : suppliedHomeImageUrl;
+		const homeVideoUrl = uploadedHomeVideo ? uploadedHomeVideo.url : suppliedHomeVideoUrl;
 		let sortOrder = 0;
 		if (!isUpdate) {
 			const [maxRow] = await db.select({ value: max(books.sortOrder) }).from(books);
@@ -791,14 +810,27 @@ export const actions: Actions = {
 						data.blurhash = null;
 					}
 				}
-				if (uploadedVideo) data.videoUrl = uploadedVideo.url;
-				else if (form.has('videoUrl')) data.videoUrl = suppliedVideoUrl;
+				if (uploadedHomeImage) data.homeImageUrl = uploadedHomeImage.url;
+				else if (form.has('homeImageUrl')) data.homeImageUrl = suppliedHomeImageUrl;
+				if (uploadedHomeVideo) data.homeVideoUrl = uploadedHomeVideo.url;
+				else if (form.has('homeVideoUrl')) data.homeVideoUrl = suppliedHomeVideoUrl;
 				await db.update(books).set(data).where(eq(books.id, id));
 				if (data.coverUrl !== undefined && oldCoverUrl && oldCoverUrl !== data.coverUrl) {
 					await deleteFromStorage(oldCoverUrl).catch(() => {});
 				}
-				if (data.videoUrl !== undefined && oldVideoUrl && oldVideoUrl !== data.videoUrl) {
-					await deleteFromStorage(oldVideoUrl).catch(() => {});
+				if (
+					data.homeImageUrl !== undefined &&
+					oldHomeImageUrl &&
+					oldHomeImageUrl !== data.homeImageUrl
+				) {
+					await deleteFromStorage(oldHomeImageUrl).catch(() => {});
+				}
+				if (
+					data.homeVideoUrl !== undefined &&
+					oldHomeVideoUrl &&
+					oldHomeVideoUrl !== data.homeVideoUrl
+				) {
+					await deleteFromStorage(oldHomeVideoUrl).catch(() => {});
 				}
 				return { success: true, bookId: id };
 			}
@@ -812,14 +844,16 @@ export const actions: Actions = {
 				coverWidth: uploaded?.width ?? null,
 				coverHeight: uploaded?.height ?? null,
 				blurhash: uploaded?.blurhash ?? null,
-				videoUrl,
+				homeImageUrl,
+				homeVideoUrl,
 				sortOrder,
 				themeColor: themeColor ? themeColor.slice(0, 6) : null
 			});
 			return { success: true, bookId: id };
 		} catch (e) {
 			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
-			if (uploadedVideo) await deleteFromStorage(uploadedVideo.url).catch(() => {});
+			if (uploadedHomeImage) await deleteFromStorage(uploadedHomeImage.url).catch(() => {});
+			if (uploadedHomeVideo) await deleteFromStorage(uploadedHomeVideo.url).catch(() => {});
 			if (isUniqueViolation(e)) {
 				return fail(400, { error: 'Книга с таким ID уже существует' });
 			}

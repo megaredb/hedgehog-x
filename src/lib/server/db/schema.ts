@@ -25,8 +25,10 @@ export const books = pgTable(
 		coverHeight: integer('cover_height'),
 		blurhash: varchar('blurhash', { length: 100 }),
 		themeColor: varchar('theme_color', { length: 6 }),
-		/** Optional background video for the home showcase (R2 URL). */
-		videoUrl: varchar('video_url', { length: 2048 }),
+		/** Optional background image for the home showcase, independent of the cover. */
+		homeImageUrl: varchar('home_image_url', { length: 2048 }),
+		/** Optional background video for the home showcase (R2 URL; legacy column name). */
+		homeVideoUrl: varchar('video_url', { length: 2048 }),
 		/** Manual order used on the home page and in the public catalog. */
 		sortOrder: integer('sort_order').notNull().default(0),
 		status: varchar('status', { length: 50 }).default('ongoing'),

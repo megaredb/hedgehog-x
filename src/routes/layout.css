@@ -173,9 +173,10 @@
 	view-transition-name: none;
 }
 
-/* Scoped transition for page content area */
+/* Query-only navigations must not crossfade/reload the page content. Keep the
+   layout container but exclude it from the document view transition. */
 .page-content-transition {
-	view-transition-name: page-content;
+	view-transition-name: none;
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 0%;
@@ -210,19 +211,4 @@
 	to {
 		opacity: 0;
 	}
-}
-
-/* The content plane can change height between routes. Animating the snapshot
-   group or translating the new page makes the layout visibly jump, so keep the
-   page transition to a short crossfade without size/position morphing. */
-::view-transition-group(page-content) {
-	animation: none;
-}
-
-::view-transition-old(page-content) {
-	animation: 90ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
-}
-
-::view-transition-new(page-content) {
-	animation: 150ms cubic-bezier(0, 0, 0.2, 1) both fade-in;
 }

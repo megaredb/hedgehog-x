@@ -762,8 +762,8 @@
 											{statusLabel(book.status)}
 										</Badge>
 										<Badge variant="outline" class="text-[10px]">Томов: {book.volumeCount}</Badge>
-										{#if book.videoUrl}
-											<Badge variant="secondary" class="text-[10px]">Видео</Badge>
+										{#if book.homeVideoUrl || book.homeImageUrl}
+											<Badge variant="secondary" class="text-[10px]">Главная</Badge>
 										{/if}
 									</div>
 								</div>

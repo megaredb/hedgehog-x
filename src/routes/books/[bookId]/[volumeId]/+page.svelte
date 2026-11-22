@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	/* eslint-disable svelte/no-navigation-without-resolve */
+	import { goto, replaceState as replaceShallowState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
@@ -122,23 +123,21 @@
 		}
 	});
 
+	let lastWrittenUrl = $state(page.url.pathname + page.url.search + page.url.hash);
+
 	$effect(() => {
-		const url = new URL(page.url);
-		if (activeTab === 'chapters') url.searchParams.delete('tab');
-		else url.searchParams.set('tab', activeTab);
-		if (selectedVersionId === 'default') url.searchParams.delete('version');
-		else url.searchParams.set('version', selectedVersionId);
-		if (url.search === page.url.search) return;
-		const path = resolve('/books/[bookId]/[volumeId]', {
-			bookId: data.bookId,
-			volumeId: data.volumeId
-		});
-		// eslint-disable-next-line svelte/no-navigation-without-resolve
-		void goto(`${path}${url.search}${url.hash}`, {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true
-		});
+		const current = new URL(window.location.href);
+		const next = new URL(current);
+		if (activeTab === 'chapters') next.searchParams.delete('tab');
+		else next.searchParams.set('tab', activeTab);
+		if (selectedVersionId === 'default') next.searchParams.delete('version');
+		else next.searchParams.set('version', selectedVersionId);
+		const target = next.pathname + next.search + next.hash;
+		if (target === lastWrittenUrl) return;
+		lastWrittenUrl = target;
+		// Tab/version changes are client state. Update the query shallowly instead
+		// of running a full SvelteKit navigation and reloading the page data.
+		replaceShallowState(target, page.state);
 	});
 
 	// Handle deep links from bookmarks/history/downloads: ?chapter=...&version=...
@@ -284,28 +283,28 @@
 			>
 				<Tabs.Trigger
 					value="chapters"
-					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
 					<Headphones class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.chaptersTab} ({chapters.length})</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="bookmarks"
-					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
 					<BookmarkIcon class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="illustrations"
-					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
 					<ImageIcon class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.illustrationsTab}</span>
 				</Tabs.Trigger>
 				<Tabs.Trigger
 					value="comments"
-					class="h-9 w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
 				>
 					<MessageSquare class="hidden h-4 w-4 shrink-0 sm:block" />
 					<span class="truncate">{strings.volume.commentsTab}</span>

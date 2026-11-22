@@ -149,13 +149,29 @@
 				hint="Загрузите обложку или укажите прямой URL"
 			/>
 
-			<VideoField
-				fileField="videoFile"
-				urlField="videoUrl"
-				value={book?.videoUrl ?? null}
-				label="Видеофон на главной"
-				hint="WebM или MP4, до 100 МБ. Используется в витрине на главной странице."
-			/>
+			<div class="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-3">
+				<div>
+					<p class="text-xs font-semibold">Главная страница</p>
+					<p class="mt-0.5 text-[11px] text-muted-foreground">
+						Отдельные изображение и видео для витрины. Не привязаны к обложке книги.
+					</p>
+				</div>
+				<ImageField
+					fileField="homeImageFile"
+					urlField="homeImageUrl"
+					value={book?.homeImageUrl ?? null}
+					label="Изображение на главной"
+					aspect="wide"
+					hint="Фон витрины. Загрузите отдельное изображение или укажите URL"
+				/>
+				<VideoField
+					fileField="homeVideoFile"
+					urlField="homeVideoUrl"
+					value={book?.homeVideoUrl ?? null}
+					label="Видео на главной"
+					hint="WebM или MP4, до 100 МБ. Проигрывается поверх изображения."
+				/>
+			</div>
 
 			<div class="flex items-center gap-2 pt-1">
 				<Button type="submit" class="flex-1" disabled={pending}>
