@@ -83,7 +83,10 @@
 
 	async function signOut() {
 		await session.signOut();
-		await goto(resolve('/'));
+		// Offline navigation to the SSR home page would land on the browser error
+		// page. Local state is already cleared, so staying on /auth is the safe
+		// logged-out fallback until connectivity returns.
+		if (navigator.onLine) await goto(resolve('/'));
 	}
 </script>
 

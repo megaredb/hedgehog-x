@@ -32,7 +32,7 @@
 
 	async function signOut() {
 		await session.signOut();
-		await goto(resolve('/'));
+		if (navigator.onLine) await goto(resolve('/'));
 	}
 </script>
 

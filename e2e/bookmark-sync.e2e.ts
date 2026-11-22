@@ -56,7 +56,7 @@ test.describe('P0-03: bookmark offline queue', () => {
 
 		const note = 'offline-sync-' + Date.now();
 		await context.setOffline(true);
-		await page.locator('button[title="Добавить закладку"]:visible').first().click();
+		await page.locator('button[aria-label="Добавить закладку"]:visible').first().click();
 		await page.getByText('Новая закладка').waitFor({ state: 'visible' });
 		await page.locator('#bookmark-note').fill(note);
 		await page.getByRole('button', { name: 'Сохранить закладку' }).click();

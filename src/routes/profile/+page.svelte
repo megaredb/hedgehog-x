@@ -146,7 +146,7 @@
 		deleteModalOpen = false;
 		deleting = false;
 		await session.signOut();
-		window.location.href = resolve('/');
+		if (navigator.onLine) window.location.href = resolve('/');
 	}
 </script>
 
