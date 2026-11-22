@@ -56,7 +56,7 @@
 		...(page.data.isAdmin === true
 			? [
 					{
-						title: 'Администрирование',
+						title: 'Админка',
 						links: [
 							{
 								href: resolve('/admin'),
