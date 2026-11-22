@@ -19,7 +19,7 @@ export const load: PageServerLoad = async () => {
 		.leftJoin(volumes, sql`${volumes.bookId} = ${books.id}`)
 		.leftJoin(chapters, sql`${chapters.volumeId} = ${volumes.id}`)
 		.groupBy(books.id)
-		.orderBy(books.title);
+		.orderBy(books.sortOrder, books.title);
 
 	return {
 		books: catalog.map((book) => ({

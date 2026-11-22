@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShowcaseBook } from '$lib/data/mockShowcase';
+	import type { ShowcaseBook } from '$lib/types/showcase';
 
 	let {
 		books,
@@ -31,7 +31,9 @@
 </script>
 
 <svelte:head>
-	<link rel="preload" as="image" href={books[0]?.bgImage} fetchpriority="high" />
+	{#if books[0]?.bgImage}
+		<link rel="preload" as="image" href={books[0].bgImage} fetchpriority="high" />
+	{/if}
 </svelte:head>
 
 <div class="absolute inset-0 -z-20 overflow-hidden bg-background">
@@ -43,28 +45,36 @@
 			class:opacity-0={currentIndex !== i}
 		>
 			<!-- Background image -->
-			<img
-				src={book.bgImage}
-				alt={book.title}
-				loading={i === 0 ? 'eager' : 'lazy'}
-				fetchpriority={i === 0 ? 'high' : 'auto'}
-				decoding="async"
-				class="absolute inset-0 h-full w-full object-cover"
-			/>
+			{#if book.bgImage}
+				<img
+					src={book.bgImage}
+					alt={book.title}
+					loading={i === 0 ? 'eager' : 'lazy'}
+					fetchpriority={i === 0 ? 'high' : 'auto'}
+					decoding="async"
+					class="absolute inset-0 h-full w-full object-cover"
+				/>
+			{:else if !book.bgVideo}
+				<div
+					class="absolute inset-0 bg-linear-to-br from-primary/30 via-background to-background"
+				></div>
+			{/if}
 
 			<!-- Background video -->
-			<video
-				bind:this={videoElements[i]}
-				src={book.bgVideo}
-				poster={book.bgImage}
-				preload="none"
-				loop
-				muted
-				playsinline
-				class="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
-				class:opacity-100={isVideoPlaying && currentIndex === i}
-				class:opacity-0={!(isVideoPlaying && currentIndex === i)}
-			></video>
+			{#if book.bgVideo}
+				<video
+					bind:this={videoElements[i]}
+					src={book.bgVideo}
+					poster={book.bgImage ?? undefined}
+					preload="none"
+					loop
+					muted
+					playsinline
+					class="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
+					class:opacity-100={isVideoPlaying && currentIndex === i}
+					class:opacity-0={!(isVideoPlaying && currentIndex === i)}
+				></video>
+			{/if}
 		</div>
 	{/each}
 

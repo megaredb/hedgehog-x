@@ -15,7 +15,7 @@
 но страницы читают контент и действия пользователя из **Dexie/IndexedDB**.
 Аудио можно скачивать в **OPFS** и слушать без сети. Авторизация — better-auth
 (Telegram OIDC, Discord OAuth2), без паролей. Админка — SSR-панель с загрузкой
-обложек/аудио в **Cloudflare R2**. PWA собирается через `vite-plugin-pwa` +
+обложек/аудио/видео в **Cloudflare R2**. PWA собирается через `vite-plugin-pwa` +
 собственный `src/service-worker.ts`.
 
 ## 1. Что читать (по задаче)
@@ -62,7 +62,7 @@ pnpm test:docker         # docker compose -f compose.test.yml up --build ...
 pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
 pnpm db:seed             # node --import tsx src/lib/server/db/seed.ts
 pnpm db:generate         # drizzle-kit generate (после изменения schema.ts)
-pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0012)
+pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0013)
 pnpm db:studio           # drizzle-kit studio
 pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 ```
@@ -90,7 +90,7 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
   в `+layout.ts` фоново вызывает `syncBookDetails` и `syncUserData`.
 - Личные данные (прогресс, лайки, закладки) — тоже Dexie; синхронизация через
   `/api/user/sync`.
-- Главная `/` — витрина на `src/lib/data/mockShowcase.ts`; полный каталог — `/books`.
+- Главная `/` — SSR-витрина из БД (обложки/видео, порядок книг); полный каталог — `/books`.
 - `/books` — SSR-каталог книг с поиском; доступен из навигации.
 - Аналитика прослушивания — отдельный поток `/api/analytics/listen` (не в user sync).
 - Админка `/admin/**` — единственные SSR-страницы с данными из БД; доступ по `locals.user.role === 'admin'`.
@@ -111,7 +111,7 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 5. **SSR книг/томов содержит данные.** `/books/[bookId]` и volume имеют серверные
    `+page.server.ts` (404/OG); не ломай их. Остальные страницы всё ещё могут быть
    клиентскими.
-6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0012;
+6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0013;
    `0005` — намеренный no-op, `0006` — catch-up из `schema.ts`). Не используй `db:push`
    как основной путь: он может удалять колонки. После изменения `schema.ts`:
    `db:generate` → проверь SQL → `db:migrate`. Не редактируй применённые миграции задним
@@ -166,12 +166,12 @@ src/
       ui/ (159 shadcn-примитивов)  audio/ (GlobalPlayer, Download)
       volume/ comments/ header/ layout/ overlay/ showcase/ support/ auth/ seo/ share/
       overlay/GuestDataAdoptionModal.svelte
-    data/mockShowcase.ts, constants/strings.ts, actions/inview.ts, utils/*
+    types/showcase.ts, constants/strings.ts, actions/inview.ts, utils/*
   routes/
     +layout.svelte, +page.svelte
     about/ admin/ auth/ bookmarks/ books/ community/ downloads/ history/
     profile/ settings/ support/ api/
-drizzle/                  # SQL-миграции 0000–0012 (актуальны; 0005 — no-op)
+drizzle/                  # SQL-миграции 0000–0013 (актуальны; 0005 — no-op)
 e2e/                      # 9 Playwright-файлов
 static/                   # аудио/картинки/видео/QR/PWA-иконки
 ```

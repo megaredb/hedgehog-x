@@ -28,9 +28,21 @@
 			: 0
 	);
 
-	const maxDailyHours = $derived(
-		data.dailyBreakdown.length > 0
-			? Math.max(...data.dailyBreakdown.map((d: { hours: number }) => d.hours), 0.1)
+	// For small libraries the daily activity is more readable in minutes. Switch
+	// the whole chart to hours only when there is at least an hour of listening.
+	const useMinutes = $derived(data.summary.totalSeconds < 3600);
+	const chartUnit = $derived(useMinutes ? 'мин' : 'ч');
+	const chartRows = $derived(
+		data.dailyBreakdown.map(
+			(day: { date: string; minutes: number; hours: number; sessionsCount: number }) => ({
+				...day,
+				value: useMinutes ? day.minutes : day.hours
+			})
+		)
+	);
+	const maxDailyValue = $derived(
+		chartRows.length > 0
+			? Math.max(...chartRows.map((day: { value: number }) => day.value), useMinutes ? 1 : 0.1)
 			: 1
 	);
 
@@ -128,7 +140,7 @@
 				Динамика активности по дням
 			</CardTitle>
 			<CardDescription>
-				Количество часов прослушивания за последние дни (daily_listening_stats).
+				Количество {useMinutes ? 'минут' : 'часов'} прослушивания за последние дни (daily_listening_stats).
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
@@ -145,14 +157,15 @@
 			{:else}
 				<div class="space-y-4">
 					<div class="flex h-48 items-end gap-1 overflow-x-auto pt-6 pb-2 sm:gap-2">
-						{#each data.dailyBreakdown as day (day.date)}
-							{@const heightPercent = Math.max(8, Math.round((day.hours / maxDailyHours) * 100))}
+						{#each chartRows as day (day.date)}
+							{@const heightPercent = Math.max(8, Math.round((day.value / maxDailyValue) * 100))}
 							<div class="group relative flex min-w-[20px] flex-1 flex-col items-center">
 								<!-- Tooltip on hover -->
 								<div
 									class="pointer-events-none absolute -top-12 z-20 hidden rounded-md bg-popover px-2 py-1 text-[11px] font-medium text-popover-foreground shadow-md group-hover:block"
 								>
-									{day.date}: {day.hours} ч ({day.sessionsCount} сессий)
+									{day.date}: {day.value}
+									{chartUnit} ({day.sessionsCount} сессий)
 								</div>
 
 								<!-- Bar -->
@@ -171,8 +184,8 @@
 					<div
 						class="flex justify-between border-t border-border/40 pt-2 text-xs text-muted-foreground"
 					>
-						<span>0 ч</span>
-						<span>Пик: {maxDailyHours} ч/день</span>
+						<span>0 {chartUnit}</span>
+						<span>Пик: {maxDailyValue} {chartUnit}/день</span>
 					</div>
 				</div>
 			{/if}

@@ -8,15 +8,17 @@ import {
 	illustrations,
 	volumes
 } from '$lib/server/db/schema';
-import { asc, count, eq, inArray } from 'drizzle-orm';
+import { asc, count, eq, ilike, inArray, max, or } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
 import {
 	deleteFromStorage,
 	MAX_AUDIO_BYTES,
 	MAX_IMAGE_BYTES,
+	MAX_VIDEO_BYTES,
 	StorageValidationError,
 	uploadAudio,
-	uploadImage
+	uploadImage,
+	uploadVideo
 } from '$lib/server/storage/r2';
 import { fail, type Actions } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
@@ -111,7 +113,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		: null;
 
 	const [bookRows, volumeCountRows] = await Promise.all([
-		db.select().from(books).orderBy(asc(books.title)),
+		db.select().from(books).orderBy(asc(books.sortOrder), asc(books.title)),
 		db.select({ bookId: volumes.bookId, total: count() }).from(volumes).groupBy(volumes.bookId)
 	]);
 	const volumeCountMap = new Map(
@@ -224,6 +226,165 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.from(audioVersions)
 		.orderBy(asc(audioVersions.sortOrder), asc(audioVersions.id));
 
+	const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
+	let search: {
+		q: string;
+		books: Array<{ id: string; title: string; coverUrl: string | null; status: string | null }>;
+		volumes: Array<{
+			id: string;
+			title: string;
+			volumeNumber: number;
+			bookId: string;
+			bookTitle: string;
+		}>;
+		chapters: Array<{
+			id: string;
+			title: string;
+			chapterNumber: number;
+			durationSeconds: number;
+			bookId: string;
+			bookTitle: string;
+			volumeId: string;
+			volumeTitle: string;
+			volumeNumber: number;
+		}>;
+		tracks: Array<{
+			id: string;
+			title: string;
+			versionId: string;
+			durationSeconds: number;
+			chapterId: string;
+			chapterTitle: string;
+			chapterNumber: number;
+			bookId: string;
+			bookTitle: string;
+			volumeId: string;
+			volumeTitle: string;
+			volumeNumber: number;
+		}>;
+		illustrations: Array<{
+			id: string;
+			caption: string | null;
+			imageUrl: string;
+			sortOrder: number;
+			bookId: string;
+			bookTitle: string;
+			volumeId: string;
+			volumeTitle: string;
+			volumeNumber: number;
+		}>;
+		total: number;
+	} | null = null;
+
+	if (q) {
+		const pattern = '%' + q + '%';
+		const [bookHits, volumeHits, chapterHits, trackHits, illustrationHits] = await Promise.all([
+			db
+				.select({
+					id: books.id,
+					title: books.title,
+					coverUrl: books.coverUrl,
+					status: books.status
+				})
+				.from(books)
+				.where(or(ilike(books.title, pattern), ilike(books.id, pattern)))
+				.orderBy(asc(books.sortOrder), asc(books.title))
+				.limit(20),
+			db
+				.select({
+					id: volumes.id,
+					title: volumes.title,
+					volumeNumber: volumes.volumeNumber,
+					bookId: volumes.bookId,
+					bookTitle: books.title
+				})
+				.from(volumes)
+				.innerJoin(books, eq(volumes.bookId, books.id))
+				.where(
+					or(ilike(volumes.title, pattern), ilike(volumes.id, pattern), ilike(books.title, pattern))
+				)
+				.orderBy(asc(books.sortOrder), asc(volumes.volumeNumber))
+				.limit(30),
+			db
+				.select({
+					id: chapters.id,
+					title: chapters.title,
+					chapterNumber: chapters.chapterNumber,
+					durationSeconds: chapters.durationSeconds,
+					bookId: books.id,
+					bookTitle: books.title,
+					volumeId: volumes.id,
+					volumeTitle: volumes.title,
+					volumeNumber: volumes.volumeNumber
+				})
+				.from(chapters)
+				.innerJoin(volumes, eq(chapters.volumeId, volumes.id))
+				.innerJoin(books, eq(volumes.bookId, books.id))
+				.where(or(ilike(chapters.title, pattern), ilike(chapters.id, pattern)))
+				.orderBy(asc(books.sortOrder), asc(volumes.volumeNumber), asc(chapters.chapterNumber))
+				.limit(30),
+			db
+				.select({
+					id: chapterAudioVersions.id,
+					title: chapterAudioVersions.title,
+					versionId: chapterAudioVersions.versionId,
+					durationSeconds: chapterAudioVersions.durationSeconds,
+					chapterId: chapters.id,
+					chapterTitle: chapters.title,
+					chapterNumber: chapters.chapterNumber,
+					bookId: books.id,
+					bookTitle: books.title,
+					volumeId: volumes.id,
+					volumeTitle: volumes.title,
+					volumeNumber: volumes.volumeNumber
+				})
+				.from(chapterAudioVersions)
+				.innerJoin(chapters, eq(chapterAudioVersions.chapterId, chapters.id))
+				.innerJoin(volumes, eq(chapters.volumeId, volumes.id))
+				.innerJoin(books, eq(volumes.bookId, books.id))
+				.where(
+					or(
+						ilike(chapterAudioVersions.title, pattern),
+						ilike(chapterAudioVersions.versionId, pattern)
+					)
+				)
+				.orderBy(asc(books.sortOrder), asc(volumes.volumeNumber), asc(chapters.chapterNumber))
+				.limit(30),
+			db
+				.select({
+					id: illustrations.id,
+					caption: illustrations.caption,
+					imageUrl: illustrations.imageUrl,
+					sortOrder: illustrations.sortOrder,
+					bookId: books.id,
+					bookTitle: books.title,
+					volumeId: volumes.id,
+					volumeTitle: volumes.title,
+					volumeNumber: volumes.volumeNumber
+				})
+				.from(illustrations)
+				.innerJoin(volumes, eq(illustrations.volumeId, volumes.id))
+				.innerJoin(books, eq(volumes.bookId, books.id))
+				.where(or(ilike(illustrations.caption, pattern), ilike(illustrations.id, pattern)))
+				.orderBy(asc(books.sortOrder), asc(volumes.volumeNumber), asc(illustrations.sortOrder))
+				.limit(20)
+		]);
+		search = {
+			q,
+			books: bookHits,
+			volumes: volumeHits,
+			chapters: chapterHits,
+			tracks: trackHits,
+			illustrations: illustrationHits,
+			total:
+				bookHits.length +
+				volumeHits.length +
+				chapterHits.length +
+				trackHits.length +
+				illustrationHits.length
+		};
+	}
+
 	let tab: ContentTab = 'chapters';
 	if (tabHint && VALID_TABS.includes(tabHint as ContentTab)) tab = tabHint as ContentTab;
 	if (!tabHint) {
@@ -244,7 +405,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		intent,
 		editBookId,
 		editIllustrationId,
-		openChapterId
+		openChapterId,
+		q,
+		search
 	};
 };
 
@@ -331,6 +494,7 @@ async function uploadImageFile(
 }
 
 type AudioUploadResult = { url: string } | UploadFailure;
+type VideoUploadResult = { url: string } | UploadFailure;
 
 async function uploadAudioFile(file: FormDataEntryValue | null): Promise<AudioUploadResult | null> {
 	if (!file || !(file instanceof File) || file.size === 0) return null;
@@ -352,6 +516,26 @@ async function uploadAudioFile(file: FormDataEntryValue | null): Promise<AudioUp
 	}
 }
 
+async function uploadVideoFile(file: FormDataEntryValue | null): Promise<VideoUploadResult | null> {
+	if (!file || !(file instanceof File) || file.size === 0) return null;
+	if (file.size > MAX_VIDEO_BYTES) {
+		return { error: 'Размер видео не должен превышать 100 МБ', status: 400 };
+	}
+	try {
+		const uploaded = await uploadVideo(Buffer.from(await file.arrayBuffer()), {
+			originalFilename: file.name,
+			contentType: file.type,
+			folder: 'video'
+		});
+		return { url: uploaded.url };
+	} catch (e) {
+		return {
+			error: 'Ошибка загрузки видео: ' + (e instanceof Error ? e.message : String(e)),
+			status: e instanceof StorageValidationError ? 400 : 500
+		};
+	}
+}
+
 function isUploadFailure(value: unknown): value is UploadFailure {
 	return Boolean(value && typeof value === 'object' && 'error' in value);
 }
@@ -359,6 +543,11 @@ function isUploadFailure(value: unknown): value is UploadFailure {
 function parseInteger(value: FormDataEntryValue | null): number {
 	const raw = String(value ?? '').trim();
 	return raw ? Number.parseInt(raw, 10) : Number.NaN;
+}
+
+function parseNumber(value: FormDataEntryValue | null): number {
+	const raw = String(value ?? '').trim();
+	return raw ? Number.parseFloat(raw) : Number.NaN;
 }
 
 function text(form: FormData, key: string): string {
@@ -423,7 +612,7 @@ async function cleanupMedia(
 
 async function collectBookMedia(bookId: string) {
 	const [bookRow] = await db
-		.select({ coverUrl: books.coverUrl })
+		.select({ coverUrl: books.coverUrl, videoUrl: books.videoUrl })
 		.from(books)
 		.where(eq(books.id, bookId))
 		.limit(1);
@@ -455,6 +644,7 @@ async function collectBookMedia(bookId: string) {
 	return {
 		images: [
 			bookRow?.coverUrl,
+			bookRow?.videoUrl,
 			...bookVolumes.map((volume) => volume.coverUrl),
 			...illustrationRows.map((row) => row.imageUrl)
 		],
@@ -506,6 +696,30 @@ async function collectChapterMedia(chapterId: string) {
 }
 
 export const actions: Actions = {
+	booksReorder: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		const ids = String(form.get('order') ?? '')
+			.split(',')
+			.map((id) => id.trim())
+			.filter(Boolean);
+		if (ids.length === 0) return fail(400, { error: 'Пустой порядок книг' });
+		if (new Set(ids).size !== ids.length) {
+			return fail(400, { error: 'Порядок содержит повторяющиеся книги' });
+		}
+		const existing = await db.select({ id: books.id }).from(books);
+		const existingIds = new Set(existing.map((row) => row.id));
+		if (ids.some((id) => !existingIds.has(id))) {
+			return fail(400, { error: 'Одна из книг не найдена' });
+		}
+		await db.transaction(async (tx) => {
+			for (let index = 0; index < ids.length; index += 1) {
+				await tx.update(books).set({ sortOrder: index }).where(eq(books.id, ids[index]));
+			}
+		});
+		return { success: true };
+	},
+
 	bookSave: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const form = await request.formData();
@@ -515,6 +729,7 @@ export const actions: Actions = {
 		const status = text(form, 'status') || 'ongoing';
 		const rawTheme = text(form, 'themeColor').replace(/^#/, '') || null;
 		const suppliedCoverUrl = text(form, 'coverUrl') || null;
+		const suppliedVideoUrl = text(form, 'videoUrl') || null;
 
 		if (!title) return fail(400, { error: 'Название книги обязательно' });
 		if (title.length > 255) return fail(400, { error: 'Название книги длиннее 255 символов' });
@@ -526,21 +741,34 @@ export const actions: Actions = {
 		const isUpdate = Boolean(idInput);
 		const id = isUpdate ? idInput : slugify(title) || randomUUID().slice(0, 8);
 		let oldCoverUrl: string | null = null;
+		let oldVideoUrl: string | null = null;
 		if (isUpdate) {
 			const [existing] = await db
-				.select({ coverUrl: books.coverUrl })
+				.select({ coverUrl: books.coverUrl, videoUrl: books.videoUrl })
 				.from(books)
 				.where(eq(books.id, id))
 				.limit(1);
 			if (!existing) return fail(404, { error: 'Книга не найдена' });
 			oldCoverUrl = existing.coverUrl;
+			oldVideoUrl = existing.videoUrl;
 		}
 
 		const uploaded = await uploadImageFile(form.get('coverFile'), 'books', id);
 		if (isUploadFailure(uploaded)) return fail(uploaded.status, { error: uploaded.error });
+		const uploadedVideo = await uploadVideoFile(form.get('videoFile'));
+		if (isUploadFailure(uploadedVideo)) {
+			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
+			return fail(uploadedVideo.status, { error: uploadedVideo.error });
+		}
 		let themeColor = rawTheme;
 		if (!themeColor && uploaded?.themeColor) themeColor = uploaded.themeColor;
 		const coverUrl = uploaded ? uploaded.url : suppliedCoverUrl;
+		const videoUrl = uploadedVideo ? uploadedVideo.url : suppliedVideoUrl;
+		let sortOrder = 0;
+		if (!isUpdate) {
+			const [maxRow] = await db.select({ value: max(books.sortOrder) }).from(books);
+			sortOrder = Number(maxRow?.value ?? -1) + 1;
+		}
 
 		try {
 			if (isUpdate) {
@@ -563,9 +791,14 @@ export const actions: Actions = {
 						data.blurhash = null;
 					}
 				}
+				if (uploadedVideo) data.videoUrl = uploadedVideo.url;
+				else if (form.has('videoUrl')) data.videoUrl = suppliedVideoUrl;
 				await db.update(books).set(data).where(eq(books.id, id));
 				if (data.coverUrl !== undefined && oldCoverUrl && oldCoverUrl !== data.coverUrl) {
 					await deleteFromStorage(oldCoverUrl).catch(() => {});
+				}
+				if (data.videoUrl !== undefined && oldVideoUrl && oldVideoUrl !== data.videoUrl) {
+					await deleteFromStorage(oldVideoUrl).catch(() => {});
 				}
 				return { success: true, bookId: id };
 			}
@@ -579,11 +812,14 @@ export const actions: Actions = {
 				coverWidth: uploaded?.width ?? null,
 				coverHeight: uploaded?.height ?? null,
 				blurhash: uploaded?.blurhash ?? null,
+				videoUrl,
+				sortOrder,
 				themeColor: themeColor ? themeColor.slice(0, 6) : null
 			});
 			return { success: true, bookId: id };
 		} catch (e) {
 			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
+			if (uploadedVideo) await deleteFromStorage(uploadedVideo.url).catch(() => {});
 			if (isUniqueViolation(e)) {
 				return fail(400, { error: 'Книга с таким ID уже существует' });
 			}
@@ -698,7 +934,7 @@ export const actions: Actions = {
 		const volumeId = text(form, 'volumeId');
 		const chapterNumber = parseInteger(form.get('chapterNumber'));
 		const title = text(form, 'title');
-		const durationInput = parseInteger(form.get('durationSeconds'));
+		const durationInput = parseNumber(form.get('durationSeconds'));
 		const telegramPostUrl = text(form, 'telegramPostUrl') || null;
 		const audioUrlInput = text(form, 'audioUrl');
 
@@ -791,7 +1027,7 @@ export const actions: Actions = {
 		const title = text(form, 'title');
 		const chapterStart = parseInteger(form.get('chapterStart'));
 		const chapterEnd = parseInteger(form.get('chapterEnd'));
-		const durationInput = parseInteger(form.get('durationSeconds'));
+		const durationInput = parseNumber(form.get('durationSeconds'));
 		const audioUrlInput = text(form, 'audioUrl');
 
 		if (!chapterId) return fail(400, { error: 'Выберите главу' });

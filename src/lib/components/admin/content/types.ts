@@ -11,6 +11,8 @@ export interface AdminBook {
 	coverHeight: number | null;
 	blurhash: string | null;
 	themeColor: string | null;
+	videoUrl: string | null;
+	sortOrder: number;
 	status: string | null;
 	createdAt: Date | string | null;
 	updatedAt: Date | string | null;

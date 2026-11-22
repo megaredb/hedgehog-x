@@ -74,7 +74,12 @@
 
 {#snippet navContent(onLinkClick: () => void)}
 	<!-- Brand logo and name -->
-	<div class="mb-8 flex items-center gap-3 px-2 select-none">
+	<a
+		href={resolve('/')}
+		onclick={onLinkClick}
+		class="mb-8 flex items-center gap-3 px-2 select-none"
+		aria-label={strings.common.appName}
+	>
 		<div
 			class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-primary/20 bg-primary/10 shadow-sm"
 		>
@@ -85,7 +90,7 @@
 		>
 			{strings.common.appName}
 		</span>
-	</div>
+	</a>
 
 	<!-- Main navigation -->
 	<nav class="flex flex-1 flex-col gap-6">

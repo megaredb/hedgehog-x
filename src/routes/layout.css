@@ -212,21 +212,17 @@
 	}
 }
 
+/* The content plane can change height between routes. Animating the snapshot
+   group or translating the new page makes the layout visibly jump, so keep the
+   page transition to a short crossfade without size/position morphing. */
+::view-transition-group(page-content) {
+	animation: none;
+}
+
 ::view-transition-old(page-content) {
-	animation: 100ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
+	animation: 90ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
 }
 
 ::view-transition-new(page-content) {
-	animation:
-		200ms cubic-bezier(0, 0, 0.2, 1) both fade-in,
-		200ms cubic-bezier(0.34, 1.56, 0.64, 1) both slide-up;
-}
-
-@keyframes slide-up {
-	from {
-		transform: translateY(16px);
-	}
-	to {
-		transform: translateY(0);
-	}
+	animation: 150ms cubic-bezier(0, 0, 0.2, 1) both fade-in;
 }

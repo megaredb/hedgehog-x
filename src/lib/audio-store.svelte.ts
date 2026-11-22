@@ -107,6 +107,15 @@ class AudioStore {
 			if (isValidPlaybackRate(d.playbackRate)) this.playbackRate = d.playbackRate;
 			if (d.currentTime !== undefined) this.currentTime = d.currentTime;
 			if (d.currentQueueIndex !== undefined) this.currentQueueIndex = d.currentQueueIndex;
+
+			// Restore the known duration too, otherwise the player shows 0:00 until
+			// the audio element loads its metadata on a fresh page load.
+			const restoredTrack = this.currentTrack ?? this.queue[this.currentQueueIndex] ?? null;
+			const restoredDuration = Number(restoredTrack?.duration);
+			if (Number.isFinite(restoredDuration) && restoredDuration > 0) {
+				this.duration = restoredDuration;
+				this.progress = Math.min(100, (this.currentTime / restoredDuration) * 100);
+			}
 		} catch {
 			/* ignore */
 		}
@@ -452,8 +461,10 @@ class AudioStore {
 	/** Called by AudioProvider to sync audio element time into state. */
 	syncTime(currentTime: number, duration: number): void {
 		this.currentTime = currentTime;
-		this.duration = duration;
-		this.progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+		// Audio elements report NaN/0 before metadata is available. Never let
+		// that erase the duration we already know from the database/local cache.
+		if (Number.isFinite(duration) && duration > 0) this.duration = duration;
+		this.progress = this.duration > 0 ? (currentTime / this.duration) * 100 : 0;
 	}
 
 	setError(message: string | null): void {

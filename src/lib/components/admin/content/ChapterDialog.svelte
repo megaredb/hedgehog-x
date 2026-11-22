@@ -122,7 +122,7 @@
 		const audio = new Audio(url);
 		audio.addEventListener('loadedmetadata', () => {
 			if (Number.isFinite(audio.duration) && audio.duration > 0) {
-				durationValue = Math.round(audio.duration);
+				durationValue = Math.round(audio.duration * 1000) / 1000;
 			}
 			URL.revokeObjectURL(url);
 		});
@@ -292,6 +292,7 @@
 						name="durationSeconds"
 						type="number"
 						min="0"
+						step="0.001"
 						bind:value={durationValue}
 						class="font-mono text-xs"
 					/>
@@ -559,16 +560,39 @@
 								</div>
 								<div class="space-y-1.5">
 									<Label for="archive-version" class="text-xs">Вид версии</Label>
-									<select
-										id="archive-version"
-										name="versionId"
-										bind:value={archiveVersionId}
-										class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs shadow-xs"
-									>
-										{#each versionOptions as option (option.id)}
-											<option value={option.id}>{option.label}</option>
-										{/each}
-									</select>
+									{#if versionOptions.length < 3}
+										<div
+											class="flex flex-wrap gap-1 rounded-md border border-input bg-muted/40 p-0.5"
+											role="group"
+											aria-label="Вид версии"
+										>
+											{#each versionOptions as option (option.id)}
+												<button
+													type="button"
+													aria-pressed={archiveVersionId === option.id}
+													class="rounded px-2 py-1.5 text-xs font-medium transition-colors {archiveVersionId ===
+													option.id
+														? 'bg-background text-foreground shadow-xs'
+														: 'text-muted-foreground hover:text-foreground'}"
+													onclick={() => (archiveVersionId = option.id)}
+												>
+													{option.label}
+												</button>
+											{/each}
+										</div>
+										<input type="hidden" name="versionId" value={archiveVersionId} />
+									{:else}
+										<select
+											id="archive-version"
+											name="versionId"
+											bind:value={archiveVersionId}
+											class="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs shadow-xs"
+										>
+											{#each versionOptions as option (option.id)}
+												<option value={option.id}>{option.label}</option>
+											{/each}
+										</select>
+									{/if}
 								</div>
 								<div class="space-y-1.5">
 									<Label for="archive-duration" class="text-xs">Длительность, сек</Label>
@@ -577,6 +601,7 @@
 										name="durationSeconds"
 										type="number"
 										min="0"
+										step="0.001"
 										value={chapter.durationSeconds}
 										class="font-mono text-xs"
 									/>

@@ -34,7 +34,7 @@
 | Lint/format       | ✅ prettier + eslint чисто                                                                   |
 | Unit-тесты        | ✅ 198/198 (`pnpm test:unit`)                                                                |
 | E2E               | ✅ 46/46 при `--workers=1`; тесты внешних OAuth-редиректов всё ещё зависят от сети           |
-| Миграции БД       | ✅ `db:migrate` 0000–0012; БД пересобрана, схема совпадает с `schema.ts`; `generate` no-op   |
+| Миграции БД       | ✅ `db:migrate` 0000–0013; БД пересобрана, схема совпадает с `schema.ts`; `generate` no-op   |
 | Offline-данные    | ✅ P0-01/P0-03/P0-05: owner-aware sync, logout-clear, consent на guest-импорт, offline flush |
 | Production deploy | ✅ production Dockerfile + app-сервис, миграции при старте, `/health`, graceful shutdown     |
 | P1                | ✅ 17/17: SSR/404/OG, history, R2, auth redirects, analytics, indexes, CI, e2e mocks         |

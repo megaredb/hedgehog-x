@@ -6,6 +6,7 @@
 	import * as AudioPlayer from '$lib/components/ui/audio/player/index.js';
 	import * as Drawer from '$lib/components/ui/drawer/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
@@ -221,15 +222,25 @@
 			<AudioPlayer.ControlBar class="flex items-center justify-between">
 				<div class="flex w-fit min-w-0 items-center gap-2">
 					{@render shortBookInfo()}
-					<Button
-						variant="ghost"
-						size="icon"
-						class="h-8 w-8 text-muted-foreground hover:text-foreground"
-						onclick={openBookmarkModal}
-						title={strings.player.addBookmark}
-					>
-						<BookmarkIcon class="h-4 w-4" />
-					</Button>
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon"
+									class="h-8 w-8 text-muted-foreground hover:text-foreground"
+									onclick={openBookmarkModal}
+									aria-label={strings.player.addBookmark}
+								>
+									<BookmarkIcon class="h-4 w-4" />
+								</Button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content sideOffset={6} class="z-[110]">
+							{strings.player.addBookmark}
+						</Tooltip.Content>
+					</Tooltip.Root>
 				</div>
 
 				<div class="flex max-w-2xl flex-1 flex-col items-center gap-2">
@@ -338,15 +349,25 @@
 
 						<!-- Secondary controls -->
 						<div class="flex items-center justify-evenly gap-2 pt-2">
-							<Button
-								variant="ghost"
-								size="icon"
-								class="h-9 w-9 text-muted-foreground hover:text-foreground"
-								onclick={openBookmarkModal}
-								title={strings.player.addBookmark}
-							>
-								<BookmarkIcon class="h-4 w-4" />
-							</Button>
+							<Tooltip.Root>
+								<Tooltip.Trigger>
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon"
+											class="h-9 w-9 text-muted-foreground hover:text-foreground"
+											onclick={openBookmarkModal}
+											aria-label={strings.player.addBookmark}
+										>
+											<BookmarkIcon class="h-4 w-4" />
+										</Button>
+									{/snippet}
+								</Tooltip.Trigger>
+								<Tooltip.Content sideOffset={6} class="z-[110]">
+									{strings.player.addBookmark}
+								</Tooltip.Content>
+							</Tooltip.Root>
 							<AudioPlayer.Download />
 							<AudioPlayer.SleepTimer class="flex" />
 							<AudioPlayer.Speed class="flex" />

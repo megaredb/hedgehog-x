@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { onDestroy, tick, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { SubmitFunction } from './$types';
@@ -13,6 +14,7 @@
 	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import {
 		Card,
 		CardContent,
@@ -39,12 +41,14 @@
 		CircleCheck,
 		Disc3,
 		ExternalLink,
+		GripVertical,
 		Image as ImageIcon,
 		Layers,
 		MessageSquare,
 		Pencil,
 		Play,
 		Plus,
+		Search,
 		TriangleAlert,
 		X
 	} from '@lucide/svelte';
@@ -66,6 +70,28 @@
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
 	let toastVersion = 0;
 	let didInit = false;
+	let reorderForm = $state<HTMLFormElement | null>(null);
+	let pendingBookOrder = $state('');
+	let draggedBookId = $state<string | null>(null);
+	let searchValue = $state(untrack(() => data.q ?? ''));
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	let volumeSort = $state<'number' | 'title' | 'updated' | 'chapters'>('number');
+	let volumeDirection = $state<'asc' | 'desc'>('asc');
+	let chapterSort = $state<'number' | 'title' | 'duration' | 'updated'>('number');
+	let chapterDirection = $state<'asc' | 'desc'>('asc');
+
+	const volumeSortOptions = [
+		{ value: 'number', label: 'По номеру' },
+		{ value: 'title', label: 'По названию' },
+		{ value: 'updated', label: 'По обновлению' },
+		{ value: 'chapters', label: 'По главам' }
+	] as const;
+	const chapterSortOptions = [
+		{ value: 'number', label: 'По номеру' },
+		{ value: 'title', label: 'По названию' },
+		{ value: 'duration', label: 'По длительности' },
+		{ value: 'updated', label: 'По обновлению' }
+	] as const;
 
 	const selectedBook = $derived(data.selectedBook);
 	const selectedVolume = $derived(data.selectedVolume);
@@ -90,6 +116,52 @@
 	const nextIllustrationSort = $derived(
 		data.illustrations.reduce((max, illustration) => Math.max(max, illustration.sortOrder), 0) + 1
 	);
+	const sortedVolumes = $derived.by(() => {
+		const rows = [...data.volumes];
+		const direction = volumeDirection === 'asc' ? 1 : -1;
+		rows.sort((a, b) => {
+			let difference: number;
+			switch (volumeSort) {
+				case 'title':
+					difference = a.title.localeCompare(b.title, 'ru');
+					break;
+				case 'updated':
+					difference = new Date(a.updatedAt ?? 0).getTime() - new Date(b.updatedAt ?? 0).getTime();
+					break;
+				case 'chapters':
+					difference = a.chapterCount - b.chapterCount;
+					break;
+				default:
+					difference = a.volumeNumber - b.volumeNumber;
+			}
+			return difference * direction;
+		});
+		return rows;
+	});
+
+	const sortedChapters = $derived.by(() => {
+		const rows = [...data.chapters];
+		const direction = chapterDirection === 'asc' ? 1 : -1;
+		rows.sort((a, b) => {
+			let difference: number;
+			switch (chapterSort) {
+				case 'title':
+					difference = a.title.localeCompare(b.title, 'ru');
+					break;
+				case 'duration':
+					difference = a.durationSeconds - b.durationSeconds;
+					break;
+				case 'updated':
+					difference = new Date(a.updatedAt ?? 0).getTime() - new Date(b.updatedAt ?? 0).getTime();
+					break;
+				default:
+					difference = a.chapterNumber - b.chapterNumber;
+			}
+			return difference * direction;
+		});
+		return rows;
+	});
+
 	const statusLabels: Record<string, string> = {
 		ongoing: 'Выходит',
 		completed: 'Завершён',
@@ -147,9 +219,10 @@
 		edit?: string | null;
 		chapter?: string | null;
 		new?: ContentIntent | null;
+		q?: string | null;
 	}) {
 		const url = new URL(page.url);
-		for (const key of ['book', 'volume', 'tab', 'edit', 'chapter', 'new']) {
+		for (const key of ['book', 'volume', 'tab', 'edit', 'chapter', 'new', 'q']) {
 			url.searchParams.delete(key);
 		}
 		if (params.book) url.searchParams.set('book', params.book);
@@ -158,6 +231,12 @@
 		if (params.edit) url.searchParams.set('edit', params.edit);
 		if (params.chapter) url.searchParams.set('chapter', params.chapter);
 		if (params.new) url.searchParams.set('new', params.new);
+		if (params.q !== undefined) {
+			if (params.q) url.searchParams.set('q', params.q);
+			searchValue = params.q ?? '';
+		} else {
+			searchValue = '';
+		}
 		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		void goto(resolve('/admin/content') + url.search + url.hash, {
 			noScroll: true,
@@ -186,6 +265,56 @@
 			volume: selectedVolume?.id ?? null,
 			tab
 		});
+	}
+
+	function handleSearchInput(event: Event) {
+		const value = (event.currentTarget as HTMLInputElement).value;
+		searchValue = value;
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => applySearch(value), 320);
+	}
+
+	function submitSearch() {
+		clearTimeout(searchTimer);
+		applySearch(searchValue);
+	}
+
+	function applySearch(value: string) {
+		const query = value.trim();
+		if (query === (data.q ?? '')) return;
+		navigate({
+			book: selectedBook?.id ?? null,
+			volume: selectedVolume?.id ?? null,
+			tab: activeTab,
+			q: query || null
+		});
+	}
+
+	function clearSearch() {
+		clearTimeout(searchTimer);
+		searchValue = '';
+		navigate({
+			book: selectedBook?.id ?? null,
+			volume: selectedVolume?.id ?? null,
+			tab: activeTab
+		});
+	}
+
+	function openSearchBook(bookId: string) {
+		selectBook(bookId);
+	}
+
+	function openSearchVolume(bookId: string, volumeId: string) {
+		navigate({ book: bookId, volume: volumeId, tab: 'chapters' });
+	}
+
+	function openSearchChapter(bookId: string, volumeId: string, chapterId: string) {
+		chapterDialogId = chapterId;
+		navigate({ book: bookId, volume: volumeId, tab: 'chapters' });
+	}
+
+	function openSearchIllustration(bookId: string, volumeId: string) {
+		navigate({ book: bookId, volume: volumeId, tab: 'illustrations' });
 	}
 
 	function openExternal(url: string | null) {
@@ -256,6 +385,57 @@
 		illustrationDialog = null;
 	}
 
+	const reorderEnhance: SubmitFunction = () => {
+		return async ({ result, update }) => {
+			if (result.type === 'failure') {
+				const failure = result.data as { error?: string } | undefined;
+				notifyError(failure?.error ?? 'Не удалось сохранить порядок книг');
+			} else if (result.type === 'error') {
+				notifyError('Ошибка сервера при сохранении порядка книг');
+			} else {
+				notify('success', 'Порядок книг сохранён');
+			}
+			pendingBookOrder = '';
+			await update({ reset: false });
+		};
+	};
+
+	function startBookDrag(event: DragEvent, bookId: string) {
+		draggedBookId = bookId;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', bookId);
+		}
+	}
+
+	function allowBookDrop(event: DragEvent) {
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+	}
+
+	async function dropBook(event: DragEvent, targetId: string) {
+		event.preventDefault();
+		const sourceId = draggedBookId ?? event.dataTransfer?.getData('text/plain') ?? '';
+		draggedBookId = null;
+		if (!sourceId || sourceId === targetId) return;
+		const ids = data.books.map((book) => book.id);
+		const from = ids.indexOf(sourceId);
+		const to = ids.indexOf(targetId);
+		if (from < 0 || to < 0) return;
+		ids.splice(from, 1);
+		ids.splice(to, 0, sourceId);
+		pendingBookOrder = ids.join(',');
+		// Let Svelte flush the hidden input value before submitting the form.
+		await tick();
+		reorderForm?.requestSubmit();
+	}
+
+	function endBookDrag() {
+		draggedBookId = null;
+	}
+
+	onDestroy(() => clearTimeout(searchTimer));
+
 	const moveEnhance: SubmitFunction = () => {
 		return async ({ result, update }) => {
 			if (result.type === 'failure') {
@@ -290,617 +470,913 @@
 		</div>
 	</header>
 
-	{#if data.books.length === 0}
-		<Card class="border-border/50">
-			<CardContent class="flex flex-col items-center gap-2 py-16 text-center">
-				<BookOpen class="h-9 w-9 text-muted-foreground" />
-				<p class="text-sm font-medium">В базе ещё нет книг</p>
-				<p class="max-w-md text-xs text-muted-foreground">
-					Создайте первую книгу, затем добавьте к ней тома, главы и иллюстрации.
-				</p>
-				<Button size="sm" class="mt-2 gap-1.5" onclick={() => (bookDialog = { book: null })}>
-					<Plus class="h-4 w-4" />
-					Создать книгу
-				</Button>
-			</CardContent>
-		</Card>
-	{:else}
-		<section class="space-y-2">
-			<div class="flex items-center justify-between gap-2">
-				<h2 class="flex items-center gap-2 text-sm font-semibold">
-					<BookOpen class="h-4 w-4 text-primary" />
-					Книги
-					<span class="font-mono text-xs text-muted-foreground">({data.books.length})</span>
-				</h2>
-			</div>
-			<div class="flex gap-2.5 overflow-x-auto pb-1">
-				{#each data.books as book (book.id)}
-					{@const selected = selectedBook?.id === book.id}
-					<div
-						class={cn(
-							'w-[230px] shrink-0 rounded-xl border bg-card p-2.5 transition',
-							selected
-								? 'border-primary shadow-sm ring-1 ring-primary/25'
-								: 'border-border/50 hover:border-primary/30'
-						)}
-					>
-						<button
-							type="button"
-							class="flex w-full items-start gap-2.5 text-left"
-							onclick={() => selectBook(book.id)}
-						>
-							<div
-								class="h-16 w-11 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
-							>
-								{#if book.coverUrl}
-									<img src={book.coverUrl} alt={book.title} class="h-full w-full object-cover" />
-								{:else}
-									<div class="flex h-full w-full items-center justify-center">
-										<BookOpen class="h-4 w-4 text-muted-foreground" />
-									</div>
-								{/if}
-							</div>
-							<div class="min-w-0 flex-1">
-								<p class="line-clamp-2 text-sm leading-tight font-semibold">{book.title}</p>
-								<p class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-									{book.id}
-								</p>
-								<div class="mt-1 flex flex-wrap gap-1">
-									<Badge variant={statusVariant(book.status)} class="text-[10px]">
-										{statusLabel(book.status)}
-									</Badge>
-									<Badge variant="outline" class="text-[10px]">Томов: {book.volumeCount}</Badge>
-								</div>
-							</div>
-						</button>
-						<div class="mt-2 flex items-center justify-between border-t border-border/40 pt-1">
-							<span class="text-[10px] text-muted-foreground">
-								{book.themeColor ? '#' + book.themeColor : 'Без темы'}
-							</span>
-							<div class="flex items-center gap-0.5">
-								<Button
-									size="icon-xs"
-									variant="ghost"
-									title="Редактировать книгу"
-									aria-label={'Редактировать книгу ' + book.title}
-									onclick={() => (bookDialog = { book })}
-								>
-									<Pencil class="h-3 w-3" />
-								</Button>
-								<ConfirmDeleteForm
-									id={book.id}
-									action="?/bookDelete"
-									title={'Удалить книгу «' + book.title + '»?'}
-									description="Все тома, главы, архивные версии и иллюстрации книги будут удалены."
-									onDeleted={() => handleBookDeleted(selected)}
-									onError={notifyError}
-								/>
-							</div>
-						</div>
-					</div>
-				{/each}
+	<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+		<div class="relative w-full max-w-xl">
+			<Search class="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
+			<Input
+				value={searchValue}
+				oninput={handleSearchInput}
+				onkeydown={(event) => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						submitSearch();
+					}
+				}}
+				placeholder="Поиск по книгам, томам, главам, версиям и иллюстрациям"
+				aria-label="Глобальный поиск по контенту"
+				autocomplete="off"
+				class="pr-8 pl-8 text-sm"
+			/>
+			{#if searchValue}
 				<button
 					type="button"
-					class="flex w-[140px] shrink-0 flex-col items-center justify-center gap-1 self-stretch rounded-xl border border-dashed border-border/70 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
-					onclick={() => (bookDialog = { book: null })}
+					class="absolute top-1.5 right-1.5 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+					onclick={clearSearch}
+					aria-label="Очистить поиск"
 				>
-					<Plus class="h-4 w-4" />
-					Новая книга
+					<X class="h-4 w-4" />
 				</button>
-			</div>
-		</section>
+			{/if}
+		</div>
+		{#if data.search}
+			<Badge variant="secondary" class="self-start font-mono text-[11px]">
+				Найдено: {data.search.total}
+			</Badge>
+		{/if}
+	</div>
 
-		{#if selectedBook}
+	{#if data.search}
+		<section class="space-y-3">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<h2 class="flex items-center gap-2 text-sm font-semibold">
+						<Search class="h-4 w-4 text-primary" />
+						Результаты поиска «{data.search.q}»
+					</h2>
+					<p class="mt-1 text-xs text-muted-foreground">
+						Совпадения во всех книгах, томах, главах, архивных версиях и иллюстрациях.
+					</p>
+				</div>
+				<Button variant="outline" size="sm" onclick={clearSearch}>Очистить поиск</Button>
+			</div>
+
+			{#if data.search.total === 0}
+				<Card class="border-border/50">
+					<CardContent class="flex flex-col items-center gap-2 py-16 text-center">
+						<Search class="h-9 w-9 text-muted-foreground" />
+						<p class="text-sm font-medium">Ничего не найдено</p>
+						<p class="max-w-sm text-xs text-muted-foreground">
+							Попробуйте другое название, ID или часть подписи.
+						</p>
+					</CardContent>
+				</Card>
+			{:else}
+				<div class="grid gap-3 lg:grid-cols-2">
+					{#if data.search.books.length > 0}
+						<Card class="border-border/50">
+							<CardHeader class="pb-2">
+								<CardTitle class="text-sm">Книги ({data.search.books.length})</CardTitle>
+							</CardHeader>
+							<CardContent class="space-y-1">
+								{#each data.search.books as hit (hit.id)}
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
+										onclick={() => openSearchBook(hit.id)}
+									>
+										{#if hit.coverUrl}
+											<img
+												src={hit.coverUrl}
+												alt=""
+												class="h-12 w-8 shrink-0 rounded object-cover"
+											/>
+										{:else}
+											<BookOpen class="h-4 w-4 shrink-0 text-muted-foreground" />
+										{/if}
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium">{hit.title}</p>
+											<p class="truncate font-mono text-[10px] text-muted-foreground">{hit.id}</p>
+										</div>
+										<Badge variant={statusVariant(hit.status)} class="text-[10px]">
+											{statusLabel(hit.status)}
+										</Badge>
+									</button>
+								{/each}
+							</CardContent>
+						</Card>
+					{/if}
+
+					{#if data.search.volumes.length > 0}
+						<Card class="border-border/50">
+							<CardHeader class="pb-2">
+								<CardTitle class="text-sm">Тома ({data.search.volumes.length})</CardTitle>
+							</CardHeader>
+							<CardContent class="space-y-1">
+								{#each data.search.volumes as hit (hit.id)}
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
+										onclick={() => openSearchVolume(hit.bookId, hit.id)}
+									>
+										<Layers class="h-4 w-4 shrink-0 text-muted-foreground" />
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium">
+												Том {hit.volumeNumber}: {hit.title}
+											</p>
+											<p class="truncate text-xs text-muted-foreground">{hit.bookTitle}</p>
+										</div>
+									</button>
+								{/each}
+							</CardContent>
+						</Card>
+					{/if}
+
+					{#if data.search.chapters.length > 0}
+						<Card class="border-border/50">
+							<CardHeader class="pb-2">
+								<CardTitle class="text-sm">Главы ({data.search.chapters.length})</CardTitle>
+							</CardHeader>
+							<CardContent class="space-y-1">
+								{#each data.search.chapters as hit (hit.id)}
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
+										onclick={() => openSearchChapter(hit.bookId, hit.volumeId, hit.id)}
+									>
+										<Disc3 class="h-4 w-4 shrink-0 text-muted-foreground" />
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium">
+												Глава {hit.chapterNumber}: {hit.title}
+											</p>
+											<p class="truncate text-xs text-muted-foreground">
+												{hit.bookTitle} · Том {hit.volumeNumber} · {formatDuration(
+													hit.durationSeconds
+												)}
+											</p>
+										</div>
+									</button>
+								{/each}
+							</CardContent>
+						</Card>
+					{/if}
+
+					{#if data.search.tracks.length > 0}
+						<Card class="border-border/50">
+							<CardHeader class="pb-2">
+								<CardTitle class="text-sm">Архивные версии ({data.search.tracks.length})</CardTitle>
+							</CardHeader>
+							<CardContent class="space-y-1">
+								{#each data.search.tracks as hit (hit.id)}
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
+										onclick={() => openSearchChapter(hit.bookId, hit.volumeId, hit.chapterId)}
+									>
+										<Archive class="h-4 w-4 shrink-0 text-muted-foreground" />
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium">{hit.title}</p>
+											<p class="truncate text-xs text-muted-foreground">
+												{hit.bookTitle} · Том {hit.volumeNumber} · Глава {hit.chapterNumber}:
+												{hit.chapterTitle}
+											</p>
+										</div>
+										<Badge variant="outline" class="text-[10px]">{hit.versionId}</Badge>
+									</button>
+								{/each}
+							</CardContent>
+						</Card>
+					{/if}
+
+					{#if data.search.illustrations.length > 0}
+						<Card class="border-border/50">
+							<CardHeader class="pb-2">
+								<CardTitle class="text-sm"
+									>Иллюстрации ({data.search.illustrations.length})</CardTitle
+								>
+							</CardHeader>
+							<CardContent class="space-y-1">
+								{#each data.search.illustrations as hit (hit.id)}
+									<button
+										type="button"
+										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
+										onclick={() => openSearchIllustration(hit.bookId, hit.volumeId)}
+									>
+										<img
+											src={hit.imageUrl}
+											alt=""
+											class="h-10 w-14 shrink-0 rounded object-cover"
+										/>
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium">
+												{hit.caption || 'Без подписи'}
+											</p>
+											<p class="truncate text-xs text-muted-foreground">
+												{hit.bookTitle} · Том {hit.volumeNumber}
+											</p>
+										</div>
+									</button>
+								{/each}
+							</CardContent>
+						</Card>
+					{/if}
+				</div>
+			{/if}
+		</section>
+	{:else}
+		{#if data.books.length === 0}
+			<Card class="border-border/50">
+				<CardContent class="flex flex-col items-center gap-2 py-16 text-center">
+					<BookOpen class="h-9 w-9 text-muted-foreground" />
+					<p class="text-sm font-medium">В базе ещё нет книг</p>
+					<p class="max-w-md text-xs text-muted-foreground">
+						Создайте первую книгу, затем добавьте к ней тома, главы и иллюстрации.
+					</p>
+					<Button size="sm" class="mt-2 gap-1.5" onclick={() => (bookDialog = { book: null })}>
+						<Plus class="h-4 w-4" />
+						Создать книгу
+					</Button>
+				</CardContent>
+			</Card>
+		{:else}
+			<form
+				bind:this={reorderForm}
+				method="POST"
+				action="?/booksReorder"
+				use:enhance={reorderEnhance}
+				class="hidden"
+			>
+				<input type="hidden" name="order" value={pendingBookOrder} />
+			</form>
 			<section class="space-y-2">
 				<div class="flex items-center justify-between gap-2">
 					<h2 class="flex items-center gap-2 text-sm font-semibold">
-						<Layers class="h-4 w-4 text-primary" />
-						Тома
-						<span class="font-mono text-xs text-muted-foreground">({data.volumes.length})</span>
+						<BookOpen class="h-4 w-4 text-primary" />
+						Книги
+						<span class="font-mono text-xs text-muted-foreground">({data.books.length})</span>
 					</h2>
-					<Button
-						size="sm"
-						variant="outline"
-						class="gap-1.5"
-						onclick={() => (volumeDialogOpen = true)}
-					>
-						<Plus class="h-3.5 w-3.5" />
-						Новый том
-					</Button>
 				</div>
-
-				{#if data.volumes.length === 0}
-					<div class="rounded-xl border border-dashed border-border/60 p-6 text-center">
-						<p class="text-sm font-medium">В книге «{selectedBook.title}» ещё нет томов</p>
-						<p class="mt-1 text-xs text-muted-foreground">
-							Создайте первый том, чтобы добавлять главы и иллюстрации.
-						</p>
-						<Button size="sm" class="mt-3 gap-1.5" onclick={() => (volumeDialogOpen = true)}>
-							<Plus class="h-4 w-4" />
-							Создать том
-						</Button>
-					</div>
-				{:else}
-					<div class="flex gap-2 overflow-x-auto pb-1">
-						{#each data.volumes as volume (volume.id)}
-							{@const selected = selectedVolume?.id === volume.id}
+				<div class="flex gap-2.5 overflow-x-auto pb-1" role="list" aria-label="Книги">
+					{#each data.books as book (book.id)}
+						{@const selected = selectedBook?.id === book.id}
+						<div
+							role="listitem"
+							data-book-id={book.id}
+							aria-label={'Книга ' + book.title + '. Перетащите, чтобы изменить порядок.'}
+							draggable="true"
+							title="Перетащите, чтобы изменить порядок"
+							ondragstart={(event) => startBookDrag(event, book.id)}
+							ondragover={allowBookDrop}
+							ondrop={(event) => dropBook(event, book.id)}
+							ondragend={endBookDrag}
+							class={cn(
+								'w-[230px] shrink-0 cursor-grab rounded-xl border bg-card p-2.5 transition active:cursor-grabbing',
+								selected
+									? 'border-primary shadow-sm ring-1 ring-primary/25'
+									: 'border-border/50 hover:border-primary/30',
+								draggedBookId === book.id && 'opacity-50'
+							)}
+						>
 							<button
 								type="button"
-								class={cn(
-									'flex w-[220px] shrink-0 items-center gap-2 rounded-lg border p-2 text-left transition',
-									selected
-										? 'border-primary bg-primary/5 ring-1 ring-primary/25'
-										: 'border-border/50 bg-card hover:border-primary/30'
-								)}
-								onclick={() => selectVolume(volume.id)}
+								class="flex w-full items-start gap-2.5 text-left"
+								onclick={() => selectBook(book.id)}
 							>
 								<div
-									class="h-14 w-10 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
+									class="h-16 w-11 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
 								>
-									{#if volume.coverUrl}
-										<img
-											src={volume.coverUrl}
-											alt={volume.title}
-											class="h-full w-full object-cover"
-										/>
+									{#if book.coverUrl}
+										<img src={book.coverUrl} alt={book.title} class="h-full w-full object-cover" />
 									{:else}
 										<div class="flex h-full w-full items-center justify-center">
-											<Layers class="h-4 w-4 text-muted-foreground" />
+											<BookOpen class="h-4 w-4 text-muted-foreground" />
 										</div>
 									{/if}
 								</div>
 								<div class="min-w-0 flex-1">
-									<div class="flex items-center justify-between gap-2">
-										<span class="font-mono text-[10px] text-muted-foreground">
-											Том {volume.volumeNumber}
-										</span>
-										<Badge variant={statusVariant(volume.status)} class="text-[9px]">
-											{statusLabel(volume.status)}
-										</Badge>
-									</div>
-									<p class="mt-0.5 truncate text-xs font-semibold">{volume.title}</p>
-									<p class="mt-1 text-[10px] text-muted-foreground">
-										{volume.chapterCount} гл. · {volume.illustrationCount} илл.
+									<p class="line-clamp-2 text-sm leading-tight font-semibold">{book.title}</p>
+									<p class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+										{book.id}
 									</p>
+									<div class="mt-1 flex flex-wrap gap-1">
+										<Badge variant={statusVariant(book.status)} class="text-[10px]">
+											{statusLabel(book.status)}
+										</Badge>
+										<Badge variant="outline" class="text-[10px]">Томов: {book.volumeCount}</Badge>
+										{#if book.videoUrl}
+											<Badge variant="secondary" class="text-[10px]">Видео</Badge>
+										{/if}
+									</div>
 								</div>
 							</button>
-						{/each}
-					</div>
-				{/if}
-			</section>
-		{/if}
-
-		{#if selectedVolume}
-			<div class="space-y-4">
-				<Card class="border-border/50">
-					<CardContent
-						class="flex flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between"
-					>
-						<div class="flex min-w-0 items-start gap-3">
-							<div
-								class="h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/40 bg-muted"
-							>
-								{#if selectedVolume.coverUrl}
-									<img
-										src={selectedVolume.coverUrl}
-										alt={selectedVolume.title}
-										class="h-full w-full object-cover"
+							<div class="mt-2 flex items-center justify-between border-t border-border/40 pt-1">
+								<span class="flex items-center gap-1 text-[10px] text-muted-foreground">
+									<GripVertical class="h-3 w-3" />
+									{book.themeColor ? '#' + book.themeColor : 'Без темы'}
+								</span>
+								<div class="flex items-center gap-0.5">
+									<Button
+										size="icon-xs"
+										variant="ghost"
+										title="Редактировать книгу"
+										aria-label={'Редактировать книгу ' + book.title}
+										onclick={() => (bookDialog = { book })}
+									>
+										<Pencil class="h-3 w-3" />
+									</Button>
+									<ConfirmDeleteForm
+										id={book.id}
+										action="?/bookDelete"
+										title={'Удалить книгу «' + book.title + '»?'}
+										description="Все тома, главы, архивные версии и иллюстрации книги будут удалены."
+										onDeleted={() => handleBookDeleted(selected)}
+										onError={notifyError}
 									/>
-								{:else}
-									<div class="flex h-full w-full items-center justify-center">
-										<Layers class="h-5 w-5 text-muted-foreground" />
-									</div>
-								{/if}
-							</div>
-							<div class="min-w-0">
-								<div class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-									<BookOpen class="h-3 w-3" />
-									<span class="truncate">{selectedBook?.title}</span>
-									<ChevronRight class="h-3 w-3 shrink-0" />
-									<span class="truncate">Том {selectedVolume.volumeNumber}</span>
-								</div>
-								<h2 class="mt-1 truncate text-xl font-bold tracking-tight">
-									{selectedVolume.title}
-								</h2>
-								<div class="mt-2 flex flex-wrap items-center gap-1.5">
-									<Badge variant={statusVariant(selectedVolume.status)}>
-										{statusLabel(selectedVolume.status)}
-									</Badge>
-									<Badge variant="outline" class="gap-1">
-										<Disc3 class="h-3 w-3" />
-										{data.chapters.length}
-										{plural(data.chapters.length, ['глава', 'главы', 'глав'])}
-									</Badge>
-									<Badge variant="outline" class="gap-1">
-										<Archive class="h-3 w-3" />
-										{data.tracks.length} в архиве
-									</Badge>
-									<Badge variant="outline" class="gap-1">
-										<ImageIcon class="h-3 w-3" />
-										{data.illustrations.length}
-										{plural(data.illustrations.length, [
-											'иллюстрация',
-											'иллюстрации',
-											'иллюстраций'
-										])}
-									</Badge>
 								</div>
 							</div>
 						</div>
-						<div class="flex shrink-0 flex-wrap gap-2">
-							{#if selectedBook}
+					{/each}
+					<button
+						type="button"
+						class="flex w-[140px] shrink-0 flex-col items-center justify-center gap-1 self-stretch rounded-xl border border-dashed border-border/70 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+						onclick={() => (bookDialog = { book: null })}
+					>
+						<Plus class="h-4 w-4" />
+						Новая книга
+					</button>
+				</div>
+			</section>
+
+			{#if selectedBook}
+				<section class="space-y-2">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<h2 class="flex items-center gap-2 text-sm font-semibold">
+							<Layers class="h-4 w-4 text-primary" />
+							Тома
+							<span class="font-mono text-xs text-muted-foreground">({data.volumes.length})</span>
+						</h2>
+						<div class="flex flex-wrap items-center justify-end gap-1.5">
+							<select
+								bind:value={volumeSort}
+								aria-label="Сортировка томов"
+								class="flex h-8 rounded-md border border-input bg-background px-2 text-xs shadow-xs"
+							>
+								{#each volumeSortOptions as option (option.value)}
+									<option value={option.value}>{option.label}</option>
+								{/each}
+							</select>
+							<Button
+								size="icon-sm"
+								variant="outline"
+								title={volumeDirection === 'asc' ? 'Тома: по возрастанию' : 'Тома: по убыванию'}
+								aria-label={volumeDirection === 'asc'
+									? 'Тома: по возрастанию'
+									: 'Тома: по убыванию'}
+								onclick={() => (volumeDirection = volumeDirection === 'asc' ? 'desc' : 'asc')}
+							>
+								{#if volumeDirection === 'asc'}
+									<ArrowUp class="h-3.5 w-3.5" />
+								{:else}
+									<ArrowDown class="h-3.5 w-3.5" />
+								{/if}
+							</Button>
+							<Button
+								size="sm"
+								variant="outline"
+								class="gap-1.5"
+								onclick={() => (volumeDialogOpen = true)}
+							>
+								<Plus class="h-3.5 w-3.5" />
+								Новый том
+							</Button>
+						</div>
+					</div>
+
+					{#if data.volumes.length === 0}
+						<div class="rounded-xl border border-dashed border-border/60 p-6 text-center">
+							<p class="text-sm font-medium">В книге «{selectedBook.title}» ещё нет томов</p>
+							<p class="mt-1 text-xs text-muted-foreground">
+								Создайте первый том, чтобы добавлять главы и иллюстрации.
+							</p>
+							<Button size="sm" class="mt-3 gap-1.5" onclick={() => (volumeDialogOpen = true)}>
+								<Plus class="h-4 w-4" />
+								Создать том
+							</Button>
+						</div>
+					{:else}
+						<div class="flex gap-2 overflow-x-auto pb-1">
+							{#each sortedVolumes as volume (volume.id)}
+								{@const selected = selectedVolume?.id === volume.id}
+								<button
+									type="button"
+									class={cn(
+										'flex w-[220px] shrink-0 items-center gap-2 rounded-lg border p-2 text-left transition',
+										selected
+											? 'border-primary bg-primary/5 ring-1 ring-primary/25'
+											: 'border-border/50 bg-card hover:border-primary/30'
+									)}
+									onclick={() => selectVolume(volume.id)}
+								>
+									<div
+										class="h-14 w-10 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
+									>
+										{#if volume.coverUrl}
+											<img
+												src={volume.coverUrl}
+												alt={volume.title}
+												class="h-full w-full object-cover"
+											/>
+										{:else}
+											<div class="flex h-full w-full items-center justify-center">
+												<Layers class="h-4 w-4 text-muted-foreground" />
+											</div>
+										{/if}
+									</div>
+									<div class="min-w-0 flex-1">
+										<div class="flex items-center justify-between gap-2">
+											<span class="font-mono text-[10px] text-muted-foreground">
+												Том {volume.volumeNumber}
+											</span>
+											<Badge variant={statusVariant(volume.status)} class="text-[9px]">
+												{statusLabel(volume.status)}
+											</Badge>
+										</div>
+										<p class="mt-0.5 truncate text-xs font-semibold">{volume.title}</p>
+										<p class="mt-1 text-[10px] text-muted-foreground">
+											{volume.chapterCount} гл. · {volume.illustrationCount} илл.
+										</p>
+									</div>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</section>
+			{/if}
+
+			{#if selectedVolume}
+				<div class="space-y-4">
+					<Card class="border-border/50">
+						<CardContent
+							class="flex flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between"
+						>
+							<div class="flex min-w-0 items-start gap-3">
+								<div
+									class="h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/40 bg-muted"
+								>
+									{#if selectedVolume.coverUrl}
+										<img
+											src={selectedVolume.coverUrl}
+											alt={selectedVolume.title}
+											class="h-full w-full object-cover"
+										/>
+									{:else}
+										<div class="flex h-full w-full items-center justify-center">
+											<Layers class="h-5 w-5 text-muted-foreground" />
+										</div>
+									{/if}
+								</div>
+								<div class="min-w-0">
+									<div class="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+										<BookOpen class="h-3 w-3" />
+										<span class="truncate">{selectedBook?.title}</span>
+										<ChevronRight class="h-3 w-3 shrink-0" />
+										<span class="truncate">Том {selectedVolume.volumeNumber}</span>
+									</div>
+									<h2 class="mt-1 truncate text-xl font-bold tracking-tight">
+										{selectedVolume.title}
+									</h2>
+									<div class="mt-2 flex flex-wrap items-center gap-1.5">
+										<Badge variant={statusVariant(selectedVolume.status)}>
+											{statusLabel(selectedVolume.status)}
+										</Badge>
+										<Badge variant="outline" class="gap-1">
+											<Disc3 class="h-3 w-3" />
+											{data.chapters.length}
+											{plural(data.chapters.length, ['глава', 'главы', 'глав'])}
+										</Badge>
+										<Badge variant="outline" class="gap-1">
+											<Archive class="h-3 w-3" />
+											{data.tracks.length} в архиве
+										</Badge>
+										<Badge variant="outline" class="gap-1">
+											<ImageIcon class="h-3 w-3" />
+											{data.illustrations.length}
+											{plural(data.illustrations.length, [
+												'иллюстрация',
+												'иллюстрации',
+												'иллюстраций'
+											])}
+										</Badge>
+									</div>
+								</div>
+							</div>
+							<div class="flex shrink-0 flex-wrap gap-2">
+								{#if selectedBook}
+									<Button
+										href={'/books/' + selectedBook.id + '/' + selectedVolume.id}
+										target="_blank"
+										variant="outline"
+										size="sm"
+										class="gap-1.5"
+									>
+										<ExternalLink class="h-3.5 w-3.5" />
+										На сайте
+									</Button>
+								{/if}
 								<Button
-									href={'/books/' + selectedBook.id + '/' + selectedVolume.id}
-									target="_blank"
 									variant="outline"
 									size="sm"
 									class="gap-1.5"
+									onclick={() => selectTab('volume')}
 								>
-									<ExternalLink class="h-3.5 w-3.5" />
-									На сайте
+									<Pencil class="h-3.5 w-3.5" />
+									Редактировать том
 								</Button>
-							{/if}
-							<Button
-								variant="outline"
-								size="sm"
-								class="gap-1.5"
-								onclick={() => selectTab('volume')}
-							>
-								<Pencil class="h-3.5 w-3.5" />
-								Редактировать том
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
-
-				<div class="flex flex-wrap items-center gap-1 rounded-lg bg-muted/60 p-1">
-					<button
-						type="button"
-						class={cn(
-							'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
-							activeTab === 'chapters'
-								? 'bg-background text-foreground shadow-xs'
-								: 'text-muted-foreground hover:text-foreground'
-						)}
-						onclick={() => selectTab('chapters')}
-					>
-						<Disc3 class="h-3.5 w-3.5" />
-						Главы
-						<span class="font-mono text-[10px] text-muted-foreground">{data.chapters.length}</span>
-					</button>
-					<button
-						type="button"
-						class={cn(
-							'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
-							activeTab === 'illustrations'
-								? 'bg-background text-foreground shadow-xs'
-								: 'text-muted-foreground hover:text-foreground'
-						)}
-						onclick={() => selectTab('illustrations')}
-					>
-						<ImageIcon class="h-3.5 w-3.5" />
-						Иллюстрации
-						<span class="font-mono text-[10px] text-muted-foreground">
-							{data.illustrations.length}
-						</span>
-					</button>
-					<button
-						type="button"
-						class={cn(
-							'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
-							activeTab === 'volume'
-								? 'bg-background text-foreground shadow-xs'
-								: 'text-muted-foreground hover:text-foreground'
-						)}
-						onclick={() => selectTab('volume')}
-					>
-						<Layers class="h-3.5 w-3.5" />
-						Том
-					</button>
-				</div>
-
-				{#if activeTab === 'chapters'}
-					<Card class="border-border/50">
-						<CardHeader class="flex flex-row flex-wrap items-start justify-between gap-2 pb-3">
-							<div>
-								<CardTitle class="flex items-center gap-2 text-base">
-									<Disc3 class="h-4 w-4 text-primary" />
-									Главы
-								</CardTitle>
-								<CardDescription class="mt-1 text-xs">
-									{data.chapters.length}
-									{plural(data.chapters.length, ['глава', 'главы', 'глав'])} · {formatDuration(
-										totalDuration
-									)} общей длительности
-								</CardDescription>
 							</div>
-							<Button
-								size="sm"
-								class="gap-1.5"
-								onclick={() => (chapterDialogId = 'new')}
-								disabled={!selectedVolume}
-							>
-								<Plus class="h-3.5 w-3.5" />
-								Добавить главу
-							</Button>
-						</CardHeader>
-						<CardContent class="p-0">
-							{#if data.chapters.length === 0}
-								<div class="flex flex-col items-center gap-1 px-4 py-12 text-center">
-									<Disc3 class="h-8 w-8 text-muted-foreground" />
-									<p class="text-sm font-medium">В томе ещё нет глав</p>
-									<p class="text-xs text-muted-foreground">
-										Загрузите аудиофайл, укажите номер и название главы.
-									</p>
-									<Button size="sm" class="mt-2 gap-1.5" onclick={() => (chapterDialogId = 'new')}>
-										<Plus class="h-4 w-4" />
-										Добавить первую главу
-									</Button>
-								</div>
-							{:else}
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead class="w-14">№</TableHead>
-											<TableHead>Глава</TableHead>
-											<TableHead class="hidden w-24 sm:table-cell">Время</TableHead>
-											<TableHead class="hidden w-16 md:table-cell">TG</TableHead>
-											<TableHead class="hidden w-24 sm:table-cell">Версии</TableHead>
-											<TableHead class="w-28 text-right">Действия</TableHead>
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{#each data.chapters as chapter (chapter.id)}
-											{@const chapterTracks = tracksByChapter[chapter.id] ?? []}
-											<TableRow>
-												<TableCell class="font-mono text-xs">{chapter.chapterNumber}</TableCell>
-												<TableCell>
-													<button
-														type="button"
-														class="block max-w-80 text-left"
-														onclick={() => (chapterDialogId = chapter.id)}
-													>
-														<span class="block truncate text-sm font-medium">
-															{chapter.title}
-														</span>
-														<span
-															class="block truncate font-mono text-[10px] text-muted-foreground"
-														>
-															{chapter.id}
-														</span>
-													</button>
-												</TableCell>
-												<TableCell class="hidden font-mono text-xs sm:table-cell">
-													{formatDuration(chapter.durationSeconds)}
-												</TableCell>
-												<TableCell class="hidden md:table-cell">
-													{#if chapter.telegramPostUrl}
-														<button
-															type="button"
-															class="inline-flex text-blue-500 hover:text-blue-600"
-															aria-label="Открыть пост в Telegram"
-															onclick={() => openExternal(chapter.telegramPostUrl)}
-														>
-															<MessageSquare class="h-4 w-4" />
-														</button>
-													{:else}
-														<span class="text-xs text-muted-foreground">—</span>
-													{/if}
-												</TableCell>
-												<TableCell class="hidden sm:table-cell">
-													{#if chapterTracks.length > 0}
-														<Badge variant="secondary" class="gap-1 text-[10px]">
-															<Archive class="h-3 w-3" />
-															{chapterTracks.length}
-														</Badge>
-													{:else}
-														<span class="text-xs text-muted-foreground">—</span>
-													{/if}
-												</TableCell>
-												<TableCell class="text-right">
-													<div class="flex items-center justify-end gap-0.5">
-														<Button
-															href={chapter.audioUrl}
-															target="_blank"
-															size="icon-sm"
-															variant="ghost"
-															title="Слушать аудио"
-															aria-label={'Слушать ' + chapter.title}
-														>
-															<Play class="h-3.5 w-3.5" />
-														</Button>
-														<Button
-															size="icon-sm"
-															variant="ghost"
-															title="Редактировать главу"
-															aria-label={'Редактировать ' + chapter.title}
-															onclick={() => (chapterDialogId = chapter.id)}
-														>
-															<Pencil class="h-3.5 w-3.5" />
-														</Button>
-														<ConfirmDeleteForm
-															id={chapter.id}
-															action="?/chapterDelete"
-															title={'Удалить главу «' + chapter.title + '»?'}
-															description="Аудио и архивные версии главы также будут удалены."
-															onDeleted={() => handleChapterDeleted(chapter.id)}
-															onError={notifyError}
-														/>
-													</div>
-												</TableCell>
-											</TableRow>
-										{/each}
-									</TableBody>
-								</Table>
-							{/if}
 						</CardContent>
 					</Card>
-				{:else if activeTab === 'illustrations'}
-					<Card class="border-border/50">
-						<CardHeader class="flex flex-row flex-wrap items-start justify-between gap-2 pb-3">
-							<div>
-								<CardTitle class="flex items-center gap-2 text-base">
-									<ImageIcon class="h-4 w-4 text-primary" />
-									Иллюстрации
-								</CardTitle>
-								<CardDescription class="mt-1 text-xs">
-									Порядок можно менять стрелками. Изображения конвертируются в WebP.
-								</CardDescription>
-							</div>
-							<Button
-								size="sm"
-								class="gap-1.5"
-								onclick={() => (illustrationDialog = { illustration: null })}
+
+					<div class="flex flex-wrap items-center gap-1 rounded-lg bg-muted/60 p-1">
+						<button
+							type="button"
+							class={cn(
+								'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
+								activeTab === 'chapters'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => selectTab('chapters')}
+						>
+							<Disc3 class="h-3.5 w-3.5" />
+							Главы
+							<span class="font-mono text-[10px] text-muted-foreground">{data.chapters.length}</span
 							>
-								<Plus class="h-3.5 w-3.5" />
-								Добавить иллюстрацию
-							</Button>
-						</CardHeader>
-						<CardContent>
-							{#if data.illustrations.length === 0}
-								<div class="flex flex-col items-center gap-1 py-12 text-center">
-									<ImageIcon class="h-8 w-8 text-muted-foreground" />
-									<p class="text-sm font-medium">Иллюстраций пока нет</p>
-									<p class="text-xs text-muted-foreground">
-										Загрузите арт или укажите ссылку на изображение.
-									</p>
+						</button>
+						<button
+							type="button"
+							class={cn(
+								'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
+								activeTab === 'illustrations'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => selectTab('illustrations')}
+						>
+							<ImageIcon class="h-3.5 w-3.5" />
+							Иллюстрации
+							<span class="font-mono text-[10px] text-muted-foreground">
+								{data.illustrations.length}
+							</span>
+						</button>
+						<button
+							type="button"
+							class={cn(
+								'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition',
+								activeTab === 'volume'
+									? 'bg-background text-foreground shadow-xs'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => selectTab('volume')}
+						>
+							<Layers class="h-3.5 w-3.5" />
+							Том
+						</button>
+					</div>
+
+					{#if activeTab === 'chapters'}
+						<Card class="border-border/50">
+							<CardHeader class="flex flex-row flex-wrap items-start justify-between gap-2 pb-3">
+								<div>
+									<CardTitle class="flex items-center gap-2 text-base">
+										<Disc3 class="h-4 w-4 text-primary" />
+										Главы
+									</CardTitle>
+									<CardDescription class="mt-1 text-xs">
+										{data.chapters.length}
+										{plural(data.chapters.length, ['глава', 'главы', 'глав'])} · {formatDuration(
+											totalDuration
+										)} общей длительности
+									</CardDescription>
+								</div>
+								<div class="flex flex-wrap items-center justify-end gap-1.5">
+									<select
+										bind:value={chapterSort}
+										aria-label="Сортировка глав"
+										class="flex h-8 rounded-md border border-input bg-background px-2 text-xs shadow-xs"
+									>
+										{#each chapterSortOptions as option (option.value)}
+											<option value={option.value}>{option.label}</option>
+										{/each}
+									</select>
+									<Button
+										size="icon-sm"
+										variant="outline"
+										title={chapterDirection === 'asc'
+											? 'Главы: по возрастанию'
+											: 'Главы: по убыванию'}
+										aria-label={chapterDirection === 'asc'
+											? 'Главы: по возрастанию'
+											: 'Главы: по убыванию'}
+										onclick={() => (chapterDirection = chapterDirection === 'asc' ? 'desc' : 'asc')}
+									>
+										{#if chapterDirection === 'asc'}
+											<ArrowUp class="h-3.5 w-3.5" />
+										{:else}
+											<ArrowDown class="h-3.5 w-3.5" />
+										{/if}
+									</Button>
 									<Button
 										size="sm"
-										class="mt-2 gap-1.5"
-										onclick={() => (illustrationDialog = { illustration: null })}
+										class="gap-1.5"
+										onclick={() => (chapterDialogId = 'new')}
+										disabled={!selectedVolume}
 									>
-										<Plus class="h-4 w-4" />
-										Добавить иллюстрацию
+										<Plus class="h-3.5 w-3.5" />
+										Добавить главу
 									</Button>
 								</div>
-							{:else}
-								<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-									{#each data.illustrations as illustration, index (illustration.id)}
-										<div class="overflow-hidden rounded-lg border border-border/50">
-											<button
-												type="button"
-												class="block aspect-[4/3] w-full bg-muted"
-												aria-label={'Открыть иллюстрацию ' + (illustration.caption ?? '')}
-												onclick={() => openExternal(illustration.imageUrl)}
-											>
-												<img
-													src={illustration.imageUrl}
-													alt={illustration.caption ?? 'Иллюстрация'}
-													class="h-full w-full object-cover"
-													loading="lazy"
-												/>
-											</button>
-											<div class="space-y-1.5 p-2">
-												<p class="truncate text-xs font-medium">
-													{illustration.caption || 'Без подписи'}
-												</p>
-												<div class="flex items-center justify-between gap-1">
-													<span class="font-mono text-[10px] text-muted-foreground">
-														#{illustration.sortOrder}
-													</span>
-													<div class="flex items-center gap-0.5">
-														<form
-															method="POST"
-															action="?/illustrationMove"
-															use:enhance={moveEnhance}
+							</CardHeader>
+							<CardContent class="p-0">
+								{#if data.chapters.length === 0}
+									<div class="flex flex-col items-center gap-1 px-4 py-12 text-center">
+										<Disc3 class="h-8 w-8 text-muted-foreground" />
+										<p class="text-sm font-medium">В томе ещё нет глав</p>
+										<p class="text-xs text-muted-foreground">
+											Загрузите аудиофайл, укажите номер и название главы.
+										</p>
+										<Button
+											size="sm"
+											class="mt-2 gap-1.5"
+											onclick={() => (chapterDialogId = 'new')}
+										>
+											<Plus class="h-4 w-4" />
+											Добавить первую главу
+										</Button>
+									</div>
+								{:else}
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead class="w-14">№</TableHead>
+												<TableHead>Глава</TableHead>
+												<TableHead class="hidden w-24 sm:table-cell">Время</TableHead>
+												<TableHead class="hidden w-16 md:table-cell">TG</TableHead>
+												<TableHead class="hidden w-24 sm:table-cell">Версии</TableHead>
+												<TableHead class="w-28 text-right">Действия</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{#each sortedChapters as chapter (chapter.id)}
+												{@const chapterTracks = tracksByChapter[chapter.id] ?? []}
+												<TableRow>
+													<TableCell class="font-mono text-xs">{chapter.chapterNumber}</TableCell>
+													<TableCell>
+														<button
+															type="button"
+															class="block max-w-80 text-left"
+															onclick={() => (chapterDialogId = chapter.id)}
 														>
-															<input type="hidden" name="id" value={illustration.id} />
-															<input type="hidden" name="direction" value="up" />
+															<span class="block truncate text-sm font-medium">
+																{chapter.title}
+															</span>
+															<span
+																class="block truncate font-mono text-[10px] text-muted-foreground"
+															>
+																{chapter.id}
+															</span>
+														</button>
+													</TableCell>
+													<TableCell class="hidden font-mono text-xs sm:table-cell">
+														{formatDuration(chapter.durationSeconds)}
+													</TableCell>
+													<TableCell class="hidden md:table-cell">
+														{#if chapter.telegramPostUrl}
+															<button
+																type="button"
+																class="inline-flex text-blue-500 hover:text-blue-600"
+																aria-label="Открыть пост в Telegram"
+																onclick={() => openExternal(chapter.telegramPostUrl)}
+															>
+																<MessageSquare class="h-4 w-4" />
+															</button>
+														{:else}
+															<span class="text-xs text-muted-foreground">—</span>
+														{/if}
+													</TableCell>
+													<TableCell class="hidden sm:table-cell">
+														{#if chapterTracks.length > 0}
+															<Badge variant="secondary" class="gap-1 text-[10px]">
+																<Archive class="h-3 w-3" />
+																{chapterTracks.length}
+															</Badge>
+														{:else}
+															<span class="text-xs text-muted-foreground">—</span>
+														{/if}
+													</TableCell>
+													<TableCell class="text-right">
+														<div class="flex items-center justify-end gap-0.5">
 															<Button
-																type="submit"
+																href={chapter.audioUrl}
+																target="_blank"
+																size="icon-sm"
+																variant="ghost"
+																title="Слушать аудио"
+																aria-label={'Слушать ' + chapter.title}
+															>
+																<Play class="h-3.5 w-3.5" />
+															</Button>
+															<Button
+																size="icon-sm"
+																variant="ghost"
+																title="Редактировать главу"
+																aria-label={'Редактировать ' + chapter.title}
+																onclick={() => (chapterDialogId = chapter.id)}
+															>
+																<Pencil class="h-3.5 w-3.5" />
+															</Button>
+															<ConfirmDeleteForm
+																id={chapter.id}
+																action="?/chapterDelete"
+																title={'Удалить главу «' + chapter.title + '»?'}
+																description="Аудио и архивные версии главы также будут удалены."
+																onDeleted={() => handleChapterDeleted(chapter.id)}
+																onError={notifyError}
+															/>
+														</div>
+													</TableCell>
+												</TableRow>
+											{/each}
+										</TableBody>
+									</Table>
+								{/if}
+							</CardContent>
+						</Card>
+					{:else if activeTab === 'illustrations'}
+						<Card class="border-border/50">
+							<CardHeader class="flex flex-row flex-wrap items-start justify-between gap-2 pb-3">
+								<div>
+									<CardTitle class="flex items-center gap-2 text-base">
+										<ImageIcon class="h-4 w-4 text-primary" />
+										Иллюстрации
+									</CardTitle>
+									<CardDescription class="mt-1 text-xs">
+										Порядок можно менять стрелками. Изображения конвертируются в WebP.
+									</CardDescription>
+								</div>
+								<Button
+									size="sm"
+									class="gap-1.5"
+									onclick={() => (illustrationDialog = { illustration: null })}
+								>
+									<Plus class="h-3.5 w-3.5" />
+									Добавить иллюстрацию
+								</Button>
+							</CardHeader>
+							<CardContent>
+								{#if data.illustrations.length === 0}
+									<div class="flex flex-col items-center gap-1 py-12 text-center">
+										<ImageIcon class="h-8 w-8 text-muted-foreground" />
+										<p class="text-sm font-medium">Иллюстраций пока нет</p>
+										<p class="text-xs text-muted-foreground">
+											Загрузите арт или укажите ссылку на изображение.
+										</p>
+										<Button
+											size="sm"
+											class="mt-2 gap-1.5"
+											onclick={() => (illustrationDialog = { illustration: null })}
+										>
+											<Plus class="h-4 w-4" />
+											Добавить иллюстрацию
+										</Button>
+									</div>
+								{:else}
+									<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+										{#each data.illustrations as illustration, index (illustration.id)}
+											<div class="overflow-hidden rounded-lg border border-border/50">
+												<button
+													type="button"
+													class="block aspect-[4/3] w-full bg-muted"
+													aria-label={'Открыть иллюстрацию ' + (illustration.caption ?? '')}
+													onclick={() => openExternal(illustration.imageUrl)}
+												>
+													<img
+														src={illustration.imageUrl}
+														alt={illustration.caption ?? 'Иллюстрация'}
+														class="h-full w-full object-cover"
+														loading="lazy"
+													/>
+												</button>
+												<div class="space-y-1.5 p-2">
+													<p class="truncate text-xs font-medium">
+														{illustration.caption || 'Без подписи'}
+													</p>
+													<div class="flex items-center justify-between gap-1">
+														<span class="font-mono text-[10px] text-muted-foreground">
+															#{illustration.sortOrder}
+														</span>
+														<div class="flex items-center gap-0.5">
+															<form
+																method="POST"
+																action="?/illustrationMove"
+																use:enhance={moveEnhance}
+															>
+																<input type="hidden" name="id" value={illustration.id} />
+																<input type="hidden" name="direction" value="up" />
+																<Button
+																	type="submit"
+																	size="icon-xs"
+																	variant="ghost"
+																	disabled={index === 0}
+																	title="Выше"
+																	aria-label="Переместить выше"
+																>
+																	<ArrowUp class="h-3 w-3" />
+																</Button>
+															</form>
+															<form
+																method="POST"
+																action="?/illustrationMove"
+																use:enhance={moveEnhance}
+															>
+																<input type="hidden" name="id" value={illustration.id} />
+																<input type="hidden" name="direction" value="down" />
+																<Button
+																	type="submit"
+																	size="icon-xs"
+																	variant="ghost"
+																	disabled={index === data.illustrations.length - 1}
+																	title="Ниже"
+																	aria-label="Переместить ниже"
+																>
+																	<ArrowDown class="h-3 w-3" />
+																</Button>
+															</form>
+															<Button
 																size="icon-xs"
 																variant="ghost"
-																disabled={index === 0}
-																title="Выше"
-																aria-label="Переместить выше"
+																title="Редактировать"
+																aria-label="Редактировать иллюстрацию"
+																onclick={() => (illustrationDialog = { illustration })}
 															>
-																<ArrowUp class="h-3 w-3" />
+																<Pencil class="h-3 w-3" />
 															</Button>
-														</form>
-														<form
-															method="POST"
-															action="?/illustrationMove"
-															use:enhance={moveEnhance}
-														>
-															<input type="hidden" name="id" value={illustration.id} />
-															<input type="hidden" name="direction" value="down" />
-															<Button
-																type="submit"
-																size="icon-xs"
-																variant="ghost"
-																disabled={index === data.illustrations.length - 1}
-																title="Ниже"
-																aria-label="Переместить ниже"
-															>
-																<ArrowDown class="h-3 w-3" />
-															</Button>
-														</form>
-														<Button
-															size="icon-xs"
-															variant="ghost"
-															title="Редактировать"
-															aria-label="Редактировать иллюстрацию"
-															onclick={() => (illustrationDialog = { illustration })}
-														>
-															<Pencil class="h-3 w-3" />
-														</Button>
-														<ConfirmDeleteForm
-															id={illustration.id}
-															action="?/illustrationDelete"
-															title="Удалить иллюстрацию?"
-															description="Изображение будет удалено из хранилища."
-															onDeleted={() => handleIllustrationDeleted(illustration.id)}
-															onError={notifyError}
-														/>
+															<ConfirmDeleteForm
+																id={illustration.id}
+																action="?/illustrationDelete"
+																title="Удалить иллюстрацию?"
+																description="Изображение будет удалено из хранилища."
+																onDeleted={() => handleIllustrationDeleted(illustration.id)}
+																onError={notifyError}
+															/>
+														</div>
 													</div>
 												</div>
 											</div>
-										</div>
-									{/each}
-								</div>
-							{/if}
-						</CardContent>
-					</Card>
-				{:else}
-					<Card class="border-border/50">
-						<CardHeader class="pb-3">
-							<CardTitle class="flex items-center gap-2 text-base">
-								<Layers class="h-4 w-4 text-primary" />
-								Данные тома
-							</CardTitle>
-							<CardDescription class="mt-1 text-xs">
-								Метаданные и обложка тома. ID: <span class="font-mono">{selectedVolume.id}</span>
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							{#if selectedBook}
-								{#key selectedVolume.id}
-									<VolumeForm
-										bookId={selectedBook.id}
-										volume={selectedVolume}
-										onSaved={handleVolumeInlineSaved}
-										onDeleted={handleVolumeDeleted}
-									/>
-								{/key}
-							{/if}
-						</CardContent>
-					</Card>
-				{/if}
-			</div>
-		{:else if selectedBook}
-			<Card class="border-border/50">
-				<CardContent class="flex flex-col items-center gap-2 py-16 text-center">
-					<Layers class="h-9 w-9 text-muted-foreground" />
-					<p class="text-sm font-medium">Выберите том</p>
-					<p class="max-w-sm text-xs text-muted-foreground">
-						Создайте том в книге «{selectedBook.title}» или выберите существующий выше.
-					</p>
-					<Button size="sm" class="mt-2 gap-1.5" onclick={() => (volumeDialogOpen = true)}>
-						<Plus class="h-4 w-4" />
-						Создать том
-					</Button>
-				</CardContent>
-			</Card>
+										{/each}
+									</div>
+								{/if}
+							</CardContent>
+						</Card>
+					{:else}
+						<Card class="border-border/50">
+							<CardHeader class="pb-3">
+								<CardTitle class="flex items-center gap-2 text-base">
+									<Layers class="h-4 w-4 text-primary" />
+									Данные тома
+								</CardTitle>
+								<CardDescription class="mt-1 text-xs">
+									Метаданные и обложка тома. ID: <span class="font-mono">{selectedVolume.id}</span>
+								</CardDescription>
+							</CardHeader>
+							<CardContent>
+								{#if selectedBook}
+									{#key selectedVolume.id}
+										<VolumeForm
+											bookId={selectedBook.id}
+											volume={selectedVolume}
+											onSaved={handleVolumeInlineSaved}
+											onDeleted={handleVolumeDeleted}
+										/>
+									{/key}
+								{/if}
+							</CardContent>
+						</Card>
+					{/if}
+				</div>
+			{:else if selectedBook}
+				<Card class="border-border/50">
+					<CardContent class="flex flex-col items-center gap-2 py-16 text-center">
+						<Layers class="h-9 w-9 text-muted-foreground" />
+						<p class="text-sm font-medium">Выберите том</p>
+						<p class="max-w-sm text-xs text-muted-foreground">
+							Создайте том в книге «{selectedBook.title}» или выберите существующий выше.
+						</p>
+						<Button size="sm" class="mt-2 gap-1.5" onclick={() => (volumeDialogOpen = true)}>
+							<Plus class="h-4 w-4" />
+							Создать том
+						</Button>
+					</CardContent>
+				</Card>
+			{/if}
 		{/if}
 	{/if}
 </div>

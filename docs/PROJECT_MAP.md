@@ -42,7 +42,7 @@
 ├── Dockerfile.test            # Playwright image: db:migrate -> seed -> build -> test
 ├── server.js                  # compression + immutable cache headers + adapter-node handler
 ├── scripts/                   # migrate.mjs + docker-entrypoint.sh
-├── drizzle/                   # 13 SQL-миграций 0000–0012 + meta (актуальны)
+├── drizzle/                   # 14 SQL-миграций 0000–0013 + meta (актуальны)
 ├── e2e/                       # 9 файлов Playwright
 ├── dynamic/dev.yaml           # Traefik file-provider для dev
 ├── docker/init-umami-db.sh
@@ -58,24 +58,24 @@
 
 Легенда: **SSR** — что реально рендерится сервером; **Данные** — откуда берётся контент.
 
-| Путь                         | Файлы                                                                    | SSR                    | Данные                                        | Заметки                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------ | ---------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `/`                          | `routes/+page.svelte`, `+page.ts`                                        | оболочка + витрина-мок | `mockShowcase` (хардкод)                      | `?book=id`; видеофоны; нет OG; `+page.ts` пустой                                              |
-| `/books`                     | `routes/books/+page.ts`                                                  | —                      | —                                             | `redirect(302, '/')`                                                                          |
-| `/books/[bookId]`            | `+layout.ts`, `+page.svelte`                                             | «Загрузка...»          | Dexie (`books`, `volumes`)                    | layout фоново `syncBookDetails` + `syncUserData`; grid/list                                   |
-| `/books/[bookId]/[volumeId]` | `+page.svelte`, `+page.server.ts`                                        | SSR (БД) + Dexie       | Dexie                                         | табы главы/закладки/иллюстрации/обсуждение; выбор версии озвучки; `?ch=&t=`; completion modal |
-| `/bookmarks`                 | `+page.svelte`                                                           | каркас                 | Dexie `bookmarks` + enrich                    | пагинация, удаление, play                                                                     |
-| `/history`                   | `+page.svelte`                                                           | каркас                 | Dexie `progress` + enrich                     | пагинация, «очистить» только локально                                                         |
-| `/downloads`                 | `+page.svelte`                                                           | каркас                 | Dexie `downloads` + `chapters`/`volumes`      | очередь и сохранённые тома                                                                    |
-| `/settings`                  | `+page.svelte`, `settings-helpers.ts`                                    | каркас                 | localStorage/audioStore/Dexie counts          | seek step, rate, auto-advance, mirror, cache, sync                                            |
-| `/profile`                   | `+page.svelte`                                                           | каркас                 | `useSession`, `useAccounts`                   | редирект на `/auth`; link/unlink/delete                                                       |
-| `/auth`                      | `+page.svelte`                                                           | каркас                 | `useSession`                                  | Telegram/Discord; ошибки; `?from=`                                                            |
-| `/community`                 | `+page.svelte`                                                           | статика                | константы                                     | VK/TG/Discord/Boosty                                                                          |
-| `/support`                   | `+page.svelte`                                                           | статика                | `strings`                                     | карта/TON/QR                                                                                  |
-| `/about`                     | `+page.svelte`                                                           | статика                | константы                                     | авторы/разработчики                                                                           |
-| `/admin`                     | `+layout.server.ts`, `+layout.svelte`, `+page.server.ts`, `+page.svelte` | SSR (БД)               | Drizzle counts/recent                         | только admin; dev self-promote                                                                |
-| `/admin/analytics`           | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)               | агрегаты                                      | admin; Umami-статус                                                                           |
-| `/admin/content`             | `+page.server.ts`, `+page.svelte`, `$lib/components/admin/content/*`     | SSR (БД)               | books/volumes/chapters/versions/illustrations | единое рабочее пространство: книги, тома, главы, версии озвучки и иллюстрации                 |
+| Путь                         | Файлы                                                                    | SSR              | Данные                                        | Заметки                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------ | ---------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/`                          | `routes/+page.svelte`, `+page.server.ts`                                 | SSR (БД)         | `books` (обложки/видео, порядок)              | `?book=id`; видеофоны из R2; обложки из БД; нет OG                                            |
+| `/books`                     | `routes/books/+page.svelte`, `+page.server.ts`                           | SSR (БД)         | Drizzle `books`                               | порядок `books.sort_order`, затем title                                                       |
+| `/books/[bookId]`            | `+layout.ts`, `+page.svelte`                                             | «Загрузка...»    | Dexie (`books`, `volumes`)                    | layout фоново `syncBookDetails` + `syncUserData`; grid/list                                   |
+| `/books/[bookId]/[volumeId]` | `+page.svelte`, `+page.server.ts`                                        | SSR (БД) + Dexie | Dexie                                         | табы главы/закладки/иллюстрации/обсуждение; выбор версии озвучки; `?ch=&t=`; completion modal |
+| `/bookmarks`                 | `+page.svelte`                                                           | каркас           | Dexie `bookmarks` + enrich                    | пагинация, удаление, play                                                                     |
+| `/history`                   | `+page.svelte`                                                           | каркас           | Dexie `progress` + enrich                     | пагинация, «очистить» только локально                                                         |
+| `/downloads`                 | `+page.svelte`                                                           | каркас           | Dexie `downloads` + `chapters`/`volumes`      | очередь и сохранённые тома                                                                    |
+| `/settings`                  | `+page.svelte`, `settings-helpers.ts`                                    | каркас           | localStorage/audioStore/Dexie counts          | seek step, rate, auto-advance, mirror, cache, sync                                            |
+| `/profile`                   | `+page.svelte`                                                           | каркас           | `useSession`, `useAccounts`                   | редирект на `/auth`; link/unlink/delete                                                       |
+| `/auth`                      | `+page.svelte`                                                           | каркас           | `useSession`                                  | Telegram/Discord; ошибки; `?from=`                                                            |
+| `/community`                 | `+page.svelte`                                                           | статика          | константы                                     | VK/TG/Discord/Boosty                                                                          |
+| `/support`                   | `+page.svelte`                                                           | статика          | `strings`                                     | карта/TON/QR                                                                                  |
+| `/about`                     | `+page.svelte`                                                           | статика          | константы                                     | авторы/разработчики                                                                           |
+| `/admin`                     | `+layout.server.ts`, `+layout.svelte`, `+page.server.ts`, `+page.svelte` | SSR (БД)         | Drizzle counts/recent                         | только admin; dev self-promote                                                                |
+| `/admin/analytics`           | `+page.server.ts`, `+page.svelte`                                        | SSR (БД)         | агрегаты                                      | admin; Umami-статус                                                                           |
+| `/admin/content`             | `+page.server.ts`, `+page.svelte`, `$lib/components/admin/content/*`     | SSR (БД)         | books/volumes/chapters/versions/illustrations | единое рабочее пространство: книги, тома, главы, версии озвучки и иллюстрации                 |
 
 Старые URL `/admin/books`, `/admin/volumes`, `/admin/chapters`, `/admin/versions`,
 `/admin/illustrations` отдают 303 на `/admin/content` (`src/routes/admin/[legacy]/+page.server.ts`).
@@ -196,7 +196,7 @@
 | `utils/telegram.ts`                                | `t.me/channel/123` → `channel/123`                                | regex                                              |
 | `actions/inview.ts`                                | IntersectionObserver action                                       | callback только true                               |
 | `constants/strings.ts`                             | русские строки                                                    | часть UI хардкодит текст                           |
-| `data/mockShowcase.ts`                             | 2 книги для главной                                               | дублирует seed                                     |
+| `types/showcase.ts`                                | тип витрины главной                                               | данные приходят из `+page.server.ts`               |
 
 ### 5.1. Dexie
 
@@ -294,20 +294,20 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 
 ### 7.1. Доменные таблицы (`src/lib/server/db/schema.ts`)
 
-| Таблица                  | Колонки (ключевые)                                                                                                                                                                                       | Ключи/индексы                                             | Связи                               |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------- |
-| `books`                  | `id` varchar128 PK, `title` 255 NN, `description` text, `cover_url` 1024, `blurhash` 100, `theme_color` 6, `status` 50 def 'ongoing', `created_at/updated_at`                                            | PK id                                                     | 1→N volumes                         |
-| `volumes`                | `id` PK, `book_id` NN FK, `volume_number` int NN, `title` 255 NN, `description`, `cover_url` 1024, `blurhash` 100, `status` 50 def 'ongoing', timestamps                                                 | PK; FK cascade                                            | →book, 1→N chapters/illustrations   |
-| `chapters`               | `id` PK, `volume_id` NN FK, `chapter_number` int NN, `title` 255 NN, `audio_url` 2048 NN, `duration_seconds` int NN, `telegram_post_url` 1024, timestamps                                                | PK; FK cascade                                            | →volume; 1→N chapter_audio_versions |
-| `audio_versions`         | `id` 64 PK, `label` 120 NN, `description` text, `sort_order` int NN def 0, `created_at`                                                                                                                  | PK                                                        | 1→N chapter_audio_versions          |
-| `chapter_audio_versions` | `id` 200 PK, `chapter_id` 128 NN FK, `version_id` 64 NN FK, `title` 255 NN, `audio_url` 2048 NN, `duration_seconds` int NN, `chapter_start/end` int NN, timestamps                                       | PK; unique(chapter,version); indexes                      | →chapter, →audio_version            |
-| `illustrations`          | `id` PK, `volume_id` NN FK, `image_url` 1024 NN, `blurhash` 100, `caption` 255, `sort_order` int NN def 0, timestamps                                                                                    | PK; FK cascade                                            | →volume                             |
-| `listening_progress`     | `user_id` text NN FK, `chapter_id` varchar128 NN FK, `progress_seconds` int NN def 0, `is_completed` bool def false, `updated_at`                                                                        | PK(user,chapter); FK cascade                              | user/chapter                        |
-| `volume_likes`           | `user_id` NN FK, `volume_id` NN FK, `created_at`                                                                                                                                                         | PK(user,volume); FK cascade                               | user/volume                         |
-| `chapter_likes`          | `user_id` NN FK, `chapter_id` NN FK, `created_at`                                                                                                                                                        | PK(user,chapter); FK cascade                              | user/chapter                        |
-| `bookmarks`              | `id` varchar36 PK, `user_id` NN FK, `chapter_id` NN FK, `timestamp_seconds` int NN, `end_timestamp_seconds` int, `note` 500, `created_at`                                                                | PK; FK cascade                                            | user/chapter                        |
-| `listening_sessions`     | `id` varchar36 PK (UUID default), `user_id` FK nullable, `book_id` FK nullable, `volume_id` FK nullable, `chapter_id` NN FK, `listened_seconds` int NN, `started_at` NN def now, `created_at` NN def now | indexes: user, chapter, started_at; FK cascade            | user/book/volume/chapter            |
-| `daily_listening_stats`  | `id` varchar128 PK, `date` varchar10 NN, `user_id` FK nullable, `book_id` FK nullable, `chapter_id` FK nullable, `total_seconds` int NN def 0, `sessions_count` int NN def 1, `updated_at` NN            | indexes: date, book, user; unique(date,book,chapter,user) | user/book/chapter                   |
+| Таблица                  | Колонки (ключевые)                                                                                                                                                                                         | Ключи/индексы                                             | Связи                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------- |
+| `books`                  | `id` varchar128 PK, `title` 255 NN, `description` text, `cover_url` 1024, `blurhash` 100, `theme_color` 6, `video_url` 2048, `sort_order` int NN def 0, `status` 50 def 'ongoing', `created_at/updated_at` | PK id                                                     | 1→N volumes                         |
+| `volumes`                | `id` PK, `book_id` NN FK, `volume_number` int NN, `title` 255 NN, `description`, `cover_url` 1024, `blurhash` 100, `status` 50 def 'ongoing', timestamps                                                   | PK; FK cascade                                            | →book, 1→N chapters/illustrations   |
+| `chapters`               | `id` PK, `volume_id` NN FK, `chapter_number` int NN, `title` 255 NN, `audio_url` 2048 NN, `duration_seconds` double precision NN, `telegram_post_url` 1024, timestamps                                     | PK; FK cascade                                            | →volume; 1→N chapter_audio_versions |
+| `audio_versions`         | `id` 64 PK, `label` 120 NN, `description` text, `sort_order` int NN def 0, `created_at`                                                                                                                    | PK                                                        | 1→N chapter_audio_versions          |
+| `chapter_audio_versions` | `id` 200 PK, `chapter_id` 128 NN FK, `version_id` 64 NN FK, `title` 255 NN, `audio_url` 2048 NN, `duration_seconds` double precision NN, `chapter_start/end` int NN, timestamps                            | PK; unique(chapter,version); indexes                      | →chapter, →audio_version            |
+| `illustrations`          | `id` PK, `volume_id` NN FK, `image_url` 1024 NN, `blurhash` 100, `caption` 255, `sort_order` int NN def 0, timestamps                                                                                      | PK; FK cascade                                            | →volume                             |
+| `listening_progress`     | `user_id` text NN FK, `chapter_id` varchar128 NN FK, `progress_seconds` int NN def 0, `is_completed` bool def false, `updated_at`                                                                          | PK(user,chapter); FK cascade                              | user/chapter                        |
+| `volume_likes`           | `user_id` NN FK, `volume_id` NN FK, `created_at`                                                                                                                                                           | PK(user,volume); FK cascade                               | user/volume                         |
+| `chapter_likes`          | `user_id` NN FK, `chapter_id` NN FK, `created_at`                                                                                                                                                          | PK(user,chapter); FK cascade                              | user/chapter                        |
+| `bookmarks`              | `id` varchar36 PK, `user_id` NN FK, `chapter_id` NN FK, `timestamp_seconds` int NN, `end_timestamp_seconds` int, `note` 500, `created_at`                                                                  | PK; FK cascade                                            | user/chapter                        |
+| `listening_sessions`     | `id` varchar36 PK (UUID default), `user_id` FK nullable, `book_id` FK nullable, `volume_id` FK nullable, `chapter_id` NN FK, `listened_seconds` int NN, `started_at` NN def now, `created_at` NN def now   | indexes: user, chapter, started_at; FK cascade            | user/book/volume/chapter            |
+| `daily_listening_stats`  | `id` varchar128 PK, `date` varchar10 NN, `user_id` FK nullable, `book_id` FK nullable, `chapter_id` FK nullable, `total_seconds` int NN def 0, `sessions_count` int NN def 1, `updated_at` NN              | indexes: date, book, user; unique(date,book,chapter,user) | user/book/chapter                   |
 
 **Отсутствуют индексы на** `volumes.book_id`, `chapters.volume_id`,
 `illustrations.volume_id`, `bookmarks.user_id`, likes/progress — кроме тех, что
@@ -388,7 +388,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                   |
 | `docker:up/down/logs`             | compose                                       | —                                   |
 | `db:push`                         | drizzle-kit push                              | dev-shortcut, может удалять колонки |
-| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0012)            |
+| `db:generate/migrate/seed/studio` | drizzle/seed                                  | рабочий путь (0000–0013)            |
 | `auth:schema`                     | better-auth generate                          | может перезаписать ручные поля      |
 
 ### 8.3. Конфиги
@@ -415,7 +415,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `static/audio/volume-complete.mp3`                | джингл завершения тома                      |
 | `static/img/mushoku_tensei.webp`, `overlord.webp` | обложки/иллюстрации сида                    |
 | `static/logo.webp`, `logo-full.webp`              | логотипы                                    |
-| `static/video/*.webm`                             | видеофоны витрины                           |
+| `static/video/*.webm`                             | legacy-файлы; рабочие видеофонды — в R2/БД  |
 | `static/qr/bank-qr.svg`, `ton-qr.svg`             | QR для поддержки                            |
 | `static/pwa-*.png`, `maskable-icon-512x512.png`   | PWA-иконки                                  |
 | `static/screenshot-*.webp`                        | PWA screenshots                             |
@@ -487,7 +487,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | Хочу                   | Иди в                                                                                    |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
 | Поправить текст UI     | `constants/strings.ts` + конкретная страница                                             |
-| Добавить поле книги    | `db/schema.ts` + миграция + admin books + mappers/OfflineBook + API                      |
+| Добавить поле книги    | `db/schema.ts` + миграция + admin/content + mappers/OfflineBook + API                    |
 | Добавить эндпоинт      | `src/routes/api/.../+server.ts` + типы + тест                                            |
 | Изменить синхронизацию | `syncService.ts`, `hydrate.ts`, `+layout.ts`, `/api/user/sync`                           |
 | Изменить плеер         | `audio-store.svelte.ts`, `html-audio.ts`, `audio-provider.svelte`, `GlobalPlayer.svelte` |

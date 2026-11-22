@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
-	import { showcaseBooks } from '$lib/data/mockShowcase';
+	import type { ShowcaseBook } from '$lib/types/showcase';
 	import { strings } from '$lib/constants/strings';
 
 	import ShowcaseBackground from '$lib/components/showcase/ShowcaseBackground.svelte';
@@ -10,13 +10,17 @@
 	import ShowcaseNav from '$lib/components/showcase/ShowcaseNav.svelte';
 	import { resolve } from '$app/paths';
 	import { ChevronUp, ChevronDown } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { fade } from 'svelte/transition';
+
+	let { data }: { data: { books: ShowcaseBook[] } } = $props();
+	const showcaseBooks = $derived(data.books);
 
 	// Initialize start index at declaration to avoid hydration mismatch
 	let initialIndex = 0;
 	const initialBookId = page.url.searchParams.get('book');
 	if (initialBookId) {
-		const foundIndex = showcaseBooks.findIndex((b) => b.id === initialBookId);
+		const foundIndex = untrack(() => data.books.findIndex((b) => b.id === initialBookId));
 		if (foundIndex !== -1) {
 			initialIndex = foundIndex;
 		}
@@ -112,6 +116,18 @@
 <div class="relative isolate flex w-full flex-1 flex-col overflow-hidden">
 	<ShowcaseBackground books={showcaseBooks} {currentIndex} {isVideoPlaying} />
 
+	{#if showcaseBooks.length === 0}
+		<div class="relative z-10 flex flex-1 items-center justify-center px-6 text-center">
+			<div class="max-w-md space-y-3">
+				<h1 class="text-3xl font-extrabold tracking-tight">Скоро здесь появятся книги</h1>
+				<p class="text-sm text-muted-foreground">
+					Добавьте книги и видеофон в панели управления контентом.
+				</p>
+				<Button href={resolve('/books')} variant="outline">Перейти в каталог</Button>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Showcase scroll viewport -->
 	<div
 		bind:this={scrollContainer}
@@ -164,17 +180,19 @@
 	{/if}
 
 	<!-- Navigation controls -->
-	<ShowcaseNav
-		books={showcaseBooks}
-		{currentIndex}
-		{isVideoPlaying}
-		onToggleVideo={toggleVideo}
-		onScrollTo={(idx) => {
-			currentIndex = idx;
-			updateUrl(showcaseBooks[idx].id);
-			scrollToIndex(idx);
-		}}
-	/>
+	{#if showcaseBooks.length > 0}
+		<ShowcaseNav
+			books={showcaseBooks}
+			{currentIndex}
+			{isVideoPlaying}
+			onToggleVideo={toggleVideo}
+			onScrollTo={(idx) => {
+				currentIndex = idx;
+				updateUrl(showcaseBooks[idx].id);
+				scrollToIndex(idx);
+			}}
+		/>
+	{/if}
 </div>
 
 <style>

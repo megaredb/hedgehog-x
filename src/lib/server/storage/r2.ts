@@ -18,8 +18,10 @@ const log = createLogger('R2Storage');
 
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.mp4', '.ogg', '.opus', '.wav', '.aac']);
+const ALLOWED_VIDEO_EXTENSIONS = new Set(['.webm', '.mp4', '.mov', '.m4v']);
 
 export class StorageValidationError extends Error {
 	constructor(message: string) {
@@ -65,6 +67,20 @@ export interface UploadImageResult {
 export interface UploadAudioResult {
 	url: string;
 	key: string;
+}
+
+export interface UploadVideoResult {
+	url: string;
+	key: string;
+}
+
+function isSupportedVideo(buffer: Buffer): boolean {
+	if (buffer.length < 12) return false;
+	const ascii = buffer.subarray(0, 12).toString('ascii');
+	return (
+		(buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) ||
+		ascii.slice(4, 8) === 'ftyp'
+	);
 }
 
 /** Fetches an object for the local media proxy (including byte ranges for audio seeking). */
@@ -248,6 +264,61 @@ export async function uploadAudio(
 	const localFilePath = path.resolve(localDir, path.basename(key));
 	await fs.writeFile(localFilePath, buffer);
 	log.info(`Saved audio locally (fallback): ${localFilePath}`);
+
+	return {
+		url: `/uploads/${key}`,
+		key
+	};
+}
+
+/**
+ * Uploads a background video to Cloudflare R2 (or fallback local directory).
+ */
+export async function uploadVideo(
+	buffer: Buffer,
+	options: { originalFilename?: string; contentType?: string; folder?: string } = {}
+): Promise<UploadVideoResult> {
+	if (buffer.length === 0 || buffer.length > MAX_VIDEO_BYTES) {
+		throw new StorageValidationError('Video must be between 1 byte and 100 MB');
+	}
+	if (!isSupportedVideo(buffer)) {
+		throw new StorageValidationError('Unsupported video format');
+	}
+
+	const folder = options.folder ?? 'video';
+	const rawExt = options.originalFilename
+		? path.extname(options.originalFilename).toLowerCase()
+		: '.mp4';
+	const safeExt = ALLOWED_VIDEO_EXTENSIONS.has(rawExt) ? rawExt : '.mp4';
+	const key = `${folder}/${randomUUID()}${safeExt}`;
+	const contentType = options.contentType || 'video/mp4';
+
+	const r2 = getS3Client();
+	if (r2) {
+		log.info(`Uploading video to R2 bucket ${r2.bucket}: ${key}`);
+		await r2.client.send(
+			new PutObjectCommand({
+				Bucket: r2.bucket,
+				Key: key,
+				Body: buffer,
+				ContentType: contentType
+			})
+		);
+		return {
+			url: `${r2.publicUrl}/${key}`,
+			key
+		};
+	}
+
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
+	}
+
+	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
+	await fs.mkdir(localDir, { recursive: true });
+	const localFilePath = path.resolve(localDir, path.basename(key));
+	await fs.writeFile(localFilePath, buffer);
+	log.info(`Saved video locally (fallback): ${localFilePath}`);
 
 	return {
 		url: `/uploads/${key}`,

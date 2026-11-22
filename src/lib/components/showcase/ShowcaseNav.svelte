@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronUp, ChevronDown, MonitorPlay, MonitorOff } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { ShowcaseBook } from '$lib/data/mockShowcase';
+	import type { ShowcaseBook } from '$lib/types/showcase';
 
 	let {
 		books,

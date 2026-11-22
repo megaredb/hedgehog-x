@@ -48,7 +48,7 @@ keyboard; metrics endpoint; 197 unit и 46 e2e; чистка мёртвого к
 | ------------------ | --------------------------------------------------------- | --------------------------------------------------------- |
 | Production build   | vite build                                                | exit 0                                                    |
 | Production image   | docker build -t hedgehog-x:prod .                         | ✅ build 0; runtime-only deps                             |
-| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 13 миграций, seed 2 книги, non-root, health 200        |
+| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 14 миграций, seed 2 книги, non-root, health 200        |
 | Graceful shutdown  | docker stop -t 20                                         | ✅ exit 0 (DB pool закрывается)                           |
 | Compose config     | docker compose -f compose.yaml -f compose.prod.yml config | ✅ app + Traefik labels; ошибок нет                       |
 | Dual domain        | Host headers `hedgehog-inc.one` / `ru.hedgehog-inc.one`   | ✅ 200; Telegram redirect_uri на каждом хосте             |

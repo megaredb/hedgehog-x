@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShowcaseBook } from '$lib/data/mockShowcase';
+	import type { ShowcaseBook } from '$lib/types/showcase';
 	import { inview } from '$lib/actions/inview';
 	import { Button } from '$lib/components/ui/button';
 	import { Play } from '@lucide/svelte';
@@ -30,11 +30,13 @@
 		<h1 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
 			{book.title}
 		</h1>
-		<p
-			class="line-clamp-3 max-w-xl text-lg leading-relaxed text-foreground/90 drop-shadow md:line-clamp-4 md:text-xl"
-		>
-			{book.description}
-		</p>
+		{#if book.description}
+			<p
+				class="line-clamp-3 max-w-xl text-lg leading-relaxed text-foreground/90 drop-shadow md:line-clamp-4 md:text-xl"
+			>
+				{book.description}
+			</p>
+		{/if}
 
 		<div class="flex flex-wrap items-center gap-4 pt-4">
 			<Button

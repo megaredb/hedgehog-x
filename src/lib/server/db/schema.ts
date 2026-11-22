@@ -1,6 +1,7 @@
 import {
 	pgTable,
 	integer,
+	doublePrecision,
 	text,
 	boolean,
 	primaryKey,
@@ -24,6 +25,10 @@ export const books = pgTable(
 		coverHeight: integer('cover_height'),
 		blurhash: varchar('blurhash', { length: 100 }),
 		themeColor: varchar('theme_color', { length: 6 }),
+		/** Optional background video for the home showcase (R2 URL). */
+		videoUrl: varchar('video_url', { length: 2048 }),
+		/** Manual order used on the home page and in the public catalog. */
+		sortOrder: integer('sort_order').notNull().default(0),
 		status: varchar('status', { length: 50 }).default('ongoing'),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at')
@@ -82,7 +87,7 @@ export const chapters = pgTable(
 		chapterNumber: integer('chapter_number').notNull(),
 		title: varchar('title', { length: 255 }).notNull(),
 		audioUrl: varchar('audio_url', { length: 2048 }).notNull(),
-		durationSeconds: integer('duration_seconds').notNull(),
+		durationSeconds: doublePrecision('duration_seconds').notNull(),
 		telegramPostUrl: varchar('telegram_post_url', { length: 1024 }),
 		createdAt: timestamp('created_at').defaultNow(),
 		updatedAt: timestamp('updated_at')
@@ -115,7 +120,7 @@ export const chapterAudioVersions = pgTable(
 			.notNull(),
 		title: varchar('title', { length: 255 }).notNull(),
 		audioUrl: varchar('audio_url', { length: 2048 }).notNull(),
-		durationSeconds: integer('duration_seconds').notNull(),
+		durationSeconds: doublePrecision('duration_seconds').notNull(),
 		chapterStart: integer('chapter_start').notNull(),
 		chapterEnd: integer('chapter_end').notNull(),
 		createdAt: timestamp('created_at').defaultNow()

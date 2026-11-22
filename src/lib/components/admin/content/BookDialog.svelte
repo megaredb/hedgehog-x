@@ -3,6 +3,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import BaseModal from '$lib/components/overlay/BaseModal.svelte';
 	import ImageField from './ImageField.svelte';
+	import VideoField from './VideoField.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -146,6 +147,14 @@
 				label="Обложка книги"
 				aspect="cover"
 				hint="Загрузите обложку или укажите прямой URL"
+			/>
+
+			<VideoField
+				fileField="videoFile"
+				urlField="videoUrl"
+				value={book?.videoUrl ?? null}
+				label="Видеофон на главной"
+				hint="WebM или MP4, до 100 МБ. Используется в витрине на главной странице."
 			/>
 
 			<div class="flex items-center gap-2 pt-1">

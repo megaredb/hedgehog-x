@@ -267,18 +267,40 @@
 						{strings.share.selectChapter}
 					</label>
 					{#if chapters.length > 0}
-						<select
-							id="share-chapter-select"
-							value={selectedChapterId}
-							onchange={(e) => (userSelectedChapterId = e.currentTarget.value)}
-							class="w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-medium shadow-xs focus:ring-2 focus:ring-primary focus:outline-none"
-						>
-							{#each chapters as ch (ch.id)}
-								<option value={ch.id}>
-									Глава {ch.chapterNumber}: {ch.title}
-								</option>
-							{/each}
-						</select>
+						{#if chapters.length < 3}
+							<div
+								class="flex flex-wrap gap-1 rounded-xl border border-input bg-muted/40 p-1"
+								role="group"
+								aria-label={strings.share.selectChapter}
+							>
+								{#each chapters as ch (ch.id)}
+									<button
+										type="button"
+										aria-pressed={selectedChapterId === ch.id}
+										class="rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors {selectedChapterId ===
+										ch.id
+											? 'bg-background text-foreground shadow-xs'
+											: 'text-muted-foreground hover:text-foreground'}"
+										onclick={() => (userSelectedChapterId = ch.id)}
+									>
+										Глава {ch.chapterNumber}: {ch.title}
+									</button>
+								{/each}
+							</div>
+						{:else}
+							<select
+								id="share-chapter-select"
+								value={selectedChapterId}
+								onchange={(e) => (userSelectedChapterId = e.currentTarget.value)}
+								class="w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-medium shadow-xs focus:ring-2 focus:ring-primary focus:outline-none"
+							>
+								{#each chapters as ch (ch.id)}
+									<option value={ch.id}>
+										Глава {ch.chapterNumber}: {ch.title}
+									</option>
+								{/each}
+							</select>
+						{/if}
 					{:else}
 						<p class="text-xs text-muted-foreground">{strings.share.noChapters}</p>
 					{/if}
