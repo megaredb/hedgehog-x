@@ -442,7 +442,7 @@ node ./node_modules/vite/bin/vite.js build
 | E2E integration     | `delete-account.integration.e2e.ts`           | ✅ 3 pass                                                           |
 | Migrations          | migrate 0000..0007 на чистой БД + seed        | ✅ 7 миграций, seed 2/4/10/4                                        |
 | Schema parity       | DB vs schema.ts / generate                    | ✅ diff пуст; `No schema changes`                                   |
-| Admin SSR           | /admin, /admin/books, /admin/analytics        | ✅ 200 с подписанной сессией                                        |
+| Admin SSR           | /admin, /admin/content, /admin/analytics      | ✅ 200 с подписанной сессией; старые content-URL редиректят         |
 | Analytics write     | POST /api/analytics/listen на scratch DB      | ✅ 200; session + daily stats вставлены                             |
 | Guest data loss     | Playwright + IndexedDB                        | ❌ progress/bookmarks/likes стёрты после перехода на страницу книги |
 

@@ -45,6 +45,7 @@ export const strings = {
 		volumes: 'Тома',
 		illustrations: 'Иллюстрации',
 		versions: 'Версии',
+		content: 'Контент',
 		users: 'Пользователи',
 		auth: 'Авторизация',
 		unknown: 'Раздел'

@@ -13,27 +13,19 @@
 	import {
 		ShieldAlert,
 		BookOpen,
-		Layers,
-		Disc3,
-		Image as ImageIcon,
 		LayoutDashboard,
 		ArrowLeft,
 		ShieldCheck,
 		ChartColumn,
-		Users,
-		AudioLines
+		Users
 	} from '@lucide/svelte';
 
 	let { data, children } = $props();
 
 	const navItems = [
 		{ href: '/admin', label: 'Обзор', icon: LayoutDashboard },
+		{ href: '/admin/content', label: 'Контент', icon: BookOpen },
 		{ href: '/admin/analytics', label: 'Аналитика', icon: ChartColumn },
-		{ href: '/admin/books', label: 'Книги', icon: BookOpen },
-		{ href: '/admin/volumes', label: 'Тома', icon: Layers },
-		{ href: '/admin/chapters', label: 'Главы', icon: Disc3 },
-		{ href: '/admin/versions', label: 'Версии', icon: AudioLines },
-		{ href: '/admin/illustrations', label: 'Иллюстрации', icon: ImageIcon },
 		{ href: '/admin/users', label: 'Пользователи', icon: Users }
 	];
 </script>

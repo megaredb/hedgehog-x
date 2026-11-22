@@ -381,7 +381,8 @@ src/lib/server/auth.ts:
 /admin/+layout.server.ts: нет user → redirect /auth?from=/admin
                            user → { user, isAdmin: role==='admin', isDev }
 /admin overview/analytics: if role!=='admin' → { notAdmin:true, пустые данные }
-/admin/{books,volumes,chapters,illustrations}: requireAdmin(locals) → throw 401/403
+/admin/content: requireAdmin(locals) → throw 401/403
+/admin/{books,volumes,chapters,versions,illustrations}: 303 → /admin/content
 ```
 
 Несогласованность: overview/analytics рисуют карточку «Доступ ограничен» в layout,
@@ -469,10 +470,11 @@ uploadImage(buffer,{folder,filenamePrefix}):
 
 uploadAudio — без конвертации, расширение из имени файла, content-type из браузера.
 
-deleteFromStorage(keyOrUrl) — есть, но **не вызывается** из admin CRUD. При
-удалении/замене обложки/аудио старый объект остаётся в R2 (утечка). Локальный
-fallback для production не работает: adapter-node не раздаёт файлы, записанные в
-static/uploads после сборки.
+deleteFromStorage(keyOrUrl) — вызывается админкой (`/admin/content`) при замене и
+удалении обложек, аудио и иллюстраций, в том числе после каскадного удаления
+книги/тома. Аудио удаляется только если на него больше никто не ссылается.
+Локальный fallback для production не работает: adapter-node не раздаёт файлы,
+записанные в static/uploads после сборки.
 
 ### 9.3. Ограничения
 
@@ -593,7 +595,7 @@ Boosty-вход, rate-limit, route-titles.ts, page-object e2e и +error.svelte �
    db:push как основной путь и не правь применённые миграции задним числом.
 3. api/books/[bookId]/+server.ts — поле попадёт автоматически через select.
 4. mappers.ts + OfflineBook — добавить поле.
-5. admin/books/+page.server.ts — create/update; +page.svelte — input.
+5. admin/content/+page.server.ts — create/update; +page.svelte — input.
 6. Проверить seed (если поле обязательное) и тесты.
 
 ### Добавить новый тип мутации

@@ -71,7 +71,7 @@ keyboard; metrics endpoint; 197 unit и 46 e2e; чистка мёртвого к
 | E2E integration    | delete-account.integration                                | ✅ 3 pass                                                 |
 | Migrations         | migrate 0000..0007 на чистой БД + seed                    | ✅ 7 миграций; seed 2/4/10/4                              |
 | Schema parity      | DB vs schema.ts + drizzle-kit generate                    | ✅ diff пуст; `No schema changes`                         |
-| Admin SSR          | /admin, /admin/books, /admin/analytics                    | ✅ 200 с подписанной сессией; role/таблицы работают       |
+| Admin SSR          | /admin, /admin/content, /admin/analytics                  | ✅ 200 с подписанной сессией; role/таблицы работают       |
 | Analytics write    | POST /api/analytics/listen на scratch DB                  | ✅ 200; session + daily stats вставлены                   |
 | Guest data wipe    | sync-data-safety.e2e.ts                                   | ✅ данные сохраняются (регрессия закрыта)                 |
 | SSR fallback       | curl /books/overlord                                      | 200, H1 «Загрузка...», OG «Книга / Тома»                  |
