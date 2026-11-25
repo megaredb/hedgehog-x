@@ -1,0 +1,1 @@
+ALTER TABLE "broadcasts" ADD COLUMN "cover_blurhash" varchar(100);

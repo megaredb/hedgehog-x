@@ -32,6 +32,7 @@
 		"db:studio": "drizzle-kit studio",
 		"auth:schema": "node scripts/auth-schema.mjs",
 		"test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
+		"test:coverage": "node --import tsx --test --experimental-test-coverage \"src/**/*.test.ts\"",
 		"admin:grant": "node scripts/grant-admin.mjs"
 	},
 	"devDependencies": {

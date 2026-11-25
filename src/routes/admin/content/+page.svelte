@@ -3,12 +3,15 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { onDestroy, tick, untrack } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { page } from '$app/state';
 	import type { SubmitFunction } from './$types';
 	import BookDialog from '$lib/components/admin/content/BookDialog.svelte';
 	import ChapterDialog from '$lib/components/admin/content/ChapterDialog.svelte';
 	import IllustrationDialog from '$lib/components/admin/content/IllustrationDialog.svelte';
+	import MediaLightbox from '$lib/components/admin/content/MediaLightbox.svelte';
 	import VolumeCreateDialog from '$lib/components/admin/content/VolumeCreateDialog.svelte';
 	import VolumeForm from '$lib/components/admin/content/VolumeForm.svelte';
 	import ConfirmDeleteForm from '$lib/components/admin/ConfirmDeleteForm.svelte';
@@ -32,6 +35,7 @@
 	} from '$lib/components/ui/table';
 	import { cn } from '$lib/utils';
 	import { formatDuration } from '$lib/utils/time';
+	import { audioStore } from '$lib/audio-store.svelte';
 	import {
 		Archive,
 		ArrowDown,
@@ -55,6 +59,7 @@
 	import type {
 		AdminArchiveTrack,
 		AdminBook,
+		AdminChapter,
 		AdminIllustration,
 		ContentIntent,
 		ContentTab
@@ -79,6 +84,22 @@
 	let volumeDirection = $state<'asc' | 'desc'>('asc');
 	let chapterSort = $state<'number' | 'title' | 'duration' | 'updated'>('number');
 	let chapterDirection = $state<'asc' | 'desc'>('asc');
+	let mediaOpen = $state(false);
+	let mediaSrc = $state<string | null>(null);
+	let mediaTitle = $state('Просмотр');
+	let mediaKind = $state<'image' | 'video'>('image');
+
+	function openMedia(
+		src: string | null | undefined,
+		title: string,
+		kind: 'image' | 'video' = 'image'
+	) {
+		if (!src) return;
+		mediaSrc = src;
+		mediaTitle = title;
+		mediaKind = kind;
+		mediaOpen = true;
+	}
 
 	const volumeSortOptions = [
 		{ value: 'number', label: 'По номеру' },
@@ -116,6 +137,104 @@
 	const nextIllustrationSort = $derived(
 		data.illustrations.reduce((max, illustration) => Math.max(max, illustration.sortOrder), 0) + 1
 	);
+	interface IllustrationTimingInfo {
+		chapterNumber: number;
+		chapterTitle: string;
+		showAtSeconds: number;
+	}
+	const illustrationTimingsById = $derived.by(() => {
+		const chaptersById = new SvelteMap(data.chapters.map((chapter) => [chapter.id, chapter]));
+		const map = new SvelteMap<string, IllustrationTimingInfo>();
+		for (const timing of data.chapterIllustrationTimings) {
+			const chapter = chaptersById.get(timing.chapterId);
+			if (!chapter) continue;
+			const current = map.get(timing.illustrationId);
+			const next = {
+				chapterNumber: chapter.chapterNumber,
+				chapterTitle: chapter.title,
+				showAtSeconds: timing.showAtSeconds
+			};
+			if (
+				!current ||
+				next.chapterNumber < current.chapterNumber ||
+				(next.chapterNumber === current.chapterNumber && next.showAtSeconds < current.showAtSeconds)
+			) {
+				map.set(timing.illustrationId, next);
+			}
+		}
+		return map;
+	});
+	const orderedIllustrations = $derived.by(() => {
+		const timed: AdminIllustration[] = [];
+		const manual: AdminIllustration[] = [];
+		for (const illustration of data.illustrations) {
+			(illustrationTimingsById.has(illustration.id) ? timed : manual).push(illustration);
+		}
+		timed.sort((a, b) => {
+			const left = illustrationTimingsById.get(a.id);
+			const right = illustrationTimingsById.get(b.id);
+			if (!left || !right) return 0;
+			return (
+				left.chapterNumber - right.chapterNumber ||
+				left.showAtSeconds - right.showAtSeconds ||
+				a.sortOrder - b.sortOrder
+			);
+		});
+		manual.sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+		return [...timed, ...manual];
+	});
+	const draggableIllustrations = $derived(
+		orderedIllustrations.filter((illustration) => !illustrationTimingsById.has(illustration.id))
+	);
+	let illustrationDragId = $state<string | null>(null);
+	let illustrationDropTargetId = $state<string | null>(null);
+	let illustrationOrder = $state('[]');
+	let illustrationReorderForm = $state<HTMLFormElement | null>(null);
+
+	function startIllustrationDrag(event: DragEvent, illustration: AdminIllustration) {
+		if (illustrationTimingsById.has(illustration.id)) return;
+		illustrationDragId = illustration.id;
+		illustrationDropTargetId = null;
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', illustration.id);
+		}
+	}
+
+	function allowIllustrationDrop(event: DragEvent, targetId: string) {
+		if (!illustrationDragId || illustrationDragId === targetId) return;
+		if (!draggableIllustrations.some((illustration) => illustration.id === targetId)) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		illustrationDropTargetId = targetId;
+	}
+
+	function endIllustrationDrag() {
+		illustrationDragId = null;
+		illustrationDropTargetId = null;
+	}
+
+	async function dropIllustration(event: DragEvent, targetId: string) {
+		event.preventDefault();
+		const sourceId = illustrationDragId;
+		if (!sourceId || sourceId === targetId) {
+			endIllustrationDrag();
+			return;
+		}
+		const ids = draggableIllustrations.map((illustration) => illustration.id);
+		const from = ids.indexOf(sourceId);
+		const to = ids.indexOf(targetId);
+		if (from === -1 || to === -1) {
+			endIllustrationDrag();
+			return;
+		}
+		const [moved] = ids.splice(from, 1);
+		ids.splice(to, 0, moved);
+		illustrationOrder = JSON.stringify(ids);
+		endIllustrationDrag();
+		await tick();
+		illustrationReorderForm?.requestSubmit();
+	}
 	const sortedVolumes = $derived.by(() => {
 		const rows = [...data.volumes];
 		const direction = volumeDirection === 'asc' ? 1 : -1;
@@ -192,6 +311,39 @@
 			illustrationDialog = { illustration: null };
 		}
 	});
+
+	function openPublic(href: string) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(href);
+	}
+
+	function handleTitleKeydown(event: KeyboardEvent, href: string) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			event.stopPropagation();
+			openPublic(href);
+		}
+	}
+
+	function playChapterAudio(chapter: AdminChapter) {
+		if (!chapter.audioUrl) return;
+		audioStore.setQueueAndPlay(
+			[
+				{
+					id: chapter.id,
+					url: chapter.audioUrl,
+					title: chapter.title,
+					duration: chapter.durationSeconds,
+					versionId: 'default',
+					artwork: selectedVolume?.coverUrl ?? undefined,
+					album: selectedVolume?.title ?? undefined,
+					volumeId: selectedVolume?.id,
+					bookId: selectedBook?.id
+				}
+			],
+			0
+		);
+	}
 
 	function notify(kind: 'success' | 'error', text: string) {
 		const version = ++toastVersion;
@@ -545,10 +697,11 @@
 										onclick={() => openSearchBook(hit.id)}
 									>
 										{#if hit.coverUrl}
-											<img
+											<BlurhashImage
 												src={hit.coverUrl}
 												alt=""
 												class="h-12 w-8 shrink-0 rounded object-cover"
+												blurhash={hit.blurhash}
 											/>
 										{:else}
 											<BookOpen class="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -661,10 +814,11 @@
 										class="flex w-full items-center gap-2 rounded-md p-2 text-left transition hover:bg-muted/50"
 										onclick={() => openSearchIllustration(hit.bookId, hit.volumeId)}
 									>
-										<img
+										<BlurhashImage
 											src={hit.imageUrl}
 											alt=""
 											class="h-10 w-14 shrink-0 rounded object-cover"
+											blurhash={hit.blurhash}
 										/>
 										<div class="min-w-0 flex-1">
 											<p class="truncate text-sm font-medium">
@@ -745,7 +899,30 @@
 									class="h-16 w-11 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
 								>
 									{#if book.coverUrl}
-										<img src={book.coverUrl} alt={book.title} class="h-full w-full object-cover" />
+										<span
+											role="button"
+											tabindex="0"
+											title="Открыть обложку"
+											class="block h-full w-full cursor-zoom-in"
+											onclick={(event) => {
+												event.stopPropagation();
+												openMedia(book.coverUrl, book.title);
+											}}
+											onkeydown={(event) => {
+												if (event.key === 'Enter' || event.key === ' ') {
+													event.preventDefault();
+													event.stopPropagation();
+													openMedia(book.coverUrl, book.title);
+												}
+											}}
+										>
+											<BlurhashImage
+												src={book.coverUrl}
+												alt={book.title}
+												class="h-full w-full object-cover"
+												blurhash={book.blurhash}
+											/>
+										</span>
 									{:else}
 										<div class="flex h-full w-full items-center justify-center">
 											<BookOpen class="h-4 w-4 text-muted-foreground" />
@@ -753,7 +930,18 @@
 									{/if}
 								</div>
 								<div class="min-w-0 flex-1">
-									<p class="line-clamp-2 text-sm leading-tight font-semibold">{book.title}</p>
+									<span
+										role="link"
+										tabindex="0"
+										title="Открыть книгу на сайте"
+										class="line-clamp-2 cursor-pointer text-sm leading-tight font-semibold hover:underline"
+										onclick={(event) => {
+											event.stopPropagation();
+											openPublic(`/books/${book.id}`);
+										}}
+										onkeydown={(event) => handleTitleKeydown(event, `/books/${book.id}`)}
+										>{book.title}</span
+									>
 									<p class="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
 										{book.id}
 									</p>
@@ -880,11 +1068,30 @@
 										class="h-14 w-10 shrink-0 overflow-hidden rounded border border-border/40 bg-muted"
 									>
 										{#if volume.coverUrl}
-											<img
-												src={volume.coverUrl}
-												alt={volume.title}
-												class="h-full w-full object-cover"
-											/>
+											<span
+												role="button"
+												tabindex="0"
+												title="Открыть обложку"
+												class="block h-full w-full cursor-zoom-in"
+												onclick={(event) => {
+													event.stopPropagation();
+													openMedia(volume.coverUrl, volume.title);
+												}}
+												onkeydown={(event) => {
+													if (event.key === 'Enter' || event.key === ' ') {
+														event.preventDefault();
+														event.stopPropagation();
+														openMedia(volume.coverUrl, volume.title);
+													}
+												}}
+											>
+												<BlurhashImage
+													src={volume.coverUrl}
+													alt={volume.title}
+													class="h-full w-full object-cover"
+													blurhash={volume.blurhash}
+												/>
+											</span>
 										{:else}
 											<div class="flex h-full w-full items-center justify-center">
 												<Layers class="h-4 w-4 text-muted-foreground" />
@@ -900,7 +1107,20 @@
 												{statusLabel(volume.status)}
 											</Badge>
 										</div>
-										<p class="mt-0.5 truncate text-xs font-semibold">{volume.title}</p>
+										<span
+											role="link"
+											tabindex="0"
+											title="Открыть том на сайте"
+											class="mt-0.5 block truncate text-xs font-semibold hover:underline"
+											onclick={(event) => {
+												event.stopPropagation();
+												if (selectedBook) openPublic(`/books/${selectedBook.id}/${volume.id}`);
+											}}
+											onkeydown={(event) => {
+												if (selectedBook)
+													handleTitleKeydown(event, `/books/${selectedBook.id}/${volume.id}`);
+											}}>{volume.title}</span
+										>
 										<p class="mt-1 text-[10px] text-muted-foreground">
 											{volume.chapterCount} гл. · {volume.illustrationCount} илл.
 										</p>
@@ -923,11 +1143,24 @@
 									class="h-20 w-14 shrink-0 overflow-hidden rounded-md border border-border/40 bg-muted"
 								>
 									{#if selectedVolume.coverUrl}
-										<img
-											src={selectedVolume.coverUrl}
-											alt={selectedVolume.title}
-											class="h-full w-full object-cover"
-										/>
+										<button
+											type="button"
+											class="group relative h-full w-full cursor-zoom-in"
+											title="Открыть обложку"
+											onclick={() => openMedia(selectedVolume.coverUrl, selectedVolume.title)}
+										>
+											<BlurhashImage
+												src={selectedVolume.coverUrl}
+												alt={selectedVolume.title}
+												class="h-full w-full object-cover"
+												blurhash={selectedVolume.blurhash}
+											/>
+											<span
+												class="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"
+											>
+												<ImageIcon class="h-4 w-4" />
+											</span>
+										</button>
 									{:else}
 										<div class="flex h-full w-full items-center justify-center">
 											<Layers class="h-5 w-5 text-muted-foreground" />
@@ -942,7 +1175,17 @@
 										<span class="truncate">Том {selectedVolume.volumeNumber}</span>
 									</div>
 									<h2 class="mt-1 truncate text-xl font-bold tracking-tight">
-										{selectedVolume.title}
+										{#if selectedBook}
+											<a
+												href={resolve('/books/[bookId]/[volumeId]', {
+													bookId: selectedBook.id,
+													volumeId: selectedVolume.id
+												})}
+												class="transition hover:underline">{selectedVolume.title}</a
+											>
+										{:else}
+											{selectedVolume.title}
+										{/if}
 									</h2>
 									<div class="mt-2 flex flex-wrap items-center gap-1.5">
 										<Badge variant={statusVariant(selectedVolume.status)}>
@@ -1135,7 +1378,27 @@
 															class="block max-w-80 text-left"
 															onclick={() => (chapterDialogId = chapter.id)}
 														>
-															<span class="block truncate text-sm font-medium">
+															<span
+																role="link"
+																tabindex="0"
+																title="Открыть главу на сайте"
+																class="block cursor-pointer truncate text-sm font-medium hover:underline"
+																onkeydown={(event) => {
+																	if (selectedBook && selectedVolume)
+																		handleTitleKeydown(
+																			event,
+																			`/books/${selectedBook.id}/${selectedVolume.id}?chapter=${chapter.id}`
+																		);
+																}}
+																onclick={(event) => {
+																	event.stopPropagation();
+																	if (selectedBook && selectedVolume) {
+																		openPublic(
+																			`/books/${selectedBook.id}/${selectedVolume.id}?chapter=${chapter.id}`
+																		);
+																	}
+																}}
+															>
 																{chapter.title}
 															</span>
 															<span
@@ -1175,8 +1438,7 @@
 													<TableCell class="text-right">
 														<div class="flex items-center justify-end gap-0.5">
 															<Button
-																href={chapter.audioUrl}
-																target="_blank"
+																onclick={() => playChapterAudio(chapter)}
 																size="icon-sm"
 																variant="ghost"
 																title="Слушать аудио"
@@ -1219,7 +1481,8 @@
 										Иллюстрации
 									</CardTitle>
 									<CardDescription class="mt-1 text-xs">
-										Порядок можно менять стрелками. Изображения конвертируются в WebP.
+										Иллюстрации с таймкодом сортируются автоматически. Остальные можно
+										перетаскивать.
 									</CardDescription>
 								</div>
 								<Button
@@ -1232,6 +1495,16 @@
 								</Button>
 							</CardHeader>
 							<CardContent>
+								<form
+									bind:this={illustrationReorderForm}
+									method="POST"
+									action="?/illustrationReorder"
+									use:enhance={moveEnhance}
+									class="hidden"
+								>
+									<input type="hidden" name="volumeId" value={data.selectedVolume?.id ?? ''} />
+									<input type="hidden" name="order" value={illustrationOrder} />
+								</form>
 								{#if data.illustrations.length === 0}
 									<div class="flex flex-col items-center gap-1 py-12 text-center">
 										<ImageIcon class="h-8 w-8 text-muted-foreground" />
@@ -1249,85 +1522,77 @@
 										</Button>
 									</div>
 								{:else}
-									<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-										{#each data.illustrations as illustration, index (illustration.id)}
-											<div class="overflow-hidden rounded-lg border border-border/50">
+									<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4" role="list">
+										{#each orderedIllustrations as illustration (illustration.id)}
+											{@const timing = illustrationTimingsById.get(illustration.id)}
+											<div
+												role="listitem"
+												aria-label={illustration.caption || 'Иллюстрация'}
+												class="overflow-hidden rounded-lg border border-border/50 transition {timing
+													? 'border-primary/20'
+													: 'cursor-grab active:cursor-grabbing'} {illustrationDragId ===
+												illustration.id
+													? 'opacity-50'
+													: ''} {illustrationDropTargetId === illustration.id
+													? 'ring-2 ring-primary'
+													: ''}"
+												draggable={!timing}
+												ondragstart={(event) => startIllustrationDrag(event, illustration)}
+												ondragover={(event) => allowIllustrationDrop(event, illustration.id)}
+												ondrop={(event) => void dropIllustration(event, illustration.id)}
+												ondragend={endIllustrationDrag}
+											>
 												<button
 													type="button"
 													class="block aspect-[4/3] w-full bg-muted"
 													aria-label={'Открыть иллюстрацию ' + (illustration.caption ?? '')}
-													onclick={() => openExternal(illustration.imageUrl)}
+													onclick={() =>
+														openMedia(illustration.imageUrl, illustration.caption || 'Иллюстрация')}
 												>
-													<img
+													<BlurhashImage
 														src={illustration.imageUrl}
 														alt={illustration.caption ?? 'Иллюстрация'}
 														class="h-full w-full object-cover"
 														loading="lazy"
+														blurhash={illustration.blurhash}
 													/>
 												</button>
 												<div class="space-y-1.5 p-2">
 													<p class="truncate text-xs font-medium">
 														{illustration.caption || 'Без подписи'}
 													</p>
-													<div class="flex items-center justify-between gap-1">
-														<span class="font-mono text-[10px] text-muted-foreground">
-															#{illustration.sortOrder}
-														</span>
-														<div class="flex items-center gap-0.5">
-															<form
-																method="POST"
-																action="?/illustrationMove"
-																use:enhance={moveEnhance}
-															>
-																<input type="hidden" name="id" value={illustration.id} />
-																<input type="hidden" name="direction" value="up" />
-																<Button
-																	type="submit"
-																	size="icon-xs"
-																	variant="ghost"
-																	disabled={index === 0}
-																	title="Выше"
-																	aria-label="Переместить выше"
-																>
-																	<ArrowUp class="h-3 w-3" />
-																</Button>
-															</form>
-															<form
-																method="POST"
-																action="?/illustrationMove"
-																use:enhance={moveEnhance}
-															>
-																<input type="hidden" name="id" value={illustration.id} />
-																<input type="hidden" name="direction" value="down" />
-																<Button
-																	type="submit"
-																	size="icon-xs"
-																	variant="ghost"
-																	disabled={index === data.illustrations.length - 1}
-																	title="Ниже"
-																	aria-label="Переместить ниже"
-																>
-																	<ArrowDown class="h-3 w-3" />
-																</Button>
-															</form>
-															<Button
-																size="icon-xs"
-																variant="ghost"
-																title="Редактировать"
-																aria-label="Редактировать иллюстрацию"
-																onclick={() => (illustrationDialog = { illustration })}
-															>
-																<Pencil class="h-3 w-3" />
-															</Button>
-															<ConfirmDeleteForm
-																id={illustration.id}
-																action="?/illustrationDelete"
-																title="Удалить иллюстрацию?"
-																description="Изображение будет удалено из хранилища."
-																onDeleted={() => handleIllustrationDeleted(illustration.id)}
-																onError={notifyError}
-															/>
-														</div>
+													{#if timing}
+														<p
+															class="truncate text-[10px] text-primary"
+															title={timing.chapterTitle}
+														>
+															Гл. {timing.chapterNumber} · {formatDuration(timing.showAtSeconds)}
+														</p>
+														<p class="text-[9px] text-muted-foreground">Авто по таймингу</p>
+													{:else}
+														<p class="flex items-center gap-1 text-[10px] text-muted-foreground">
+															<GripVertical class="h-3 w-3" />
+															Без таймкода · перетащите
+														</p>
+													{/if}
+													<div class="flex items-center justify-end gap-0.5">
+														<Button
+															size="icon-xs"
+															variant="ghost"
+															title="Редактировать"
+															aria-label="Редактировать иллюстрацию"
+															onclick={() => (illustrationDialog = { illustration })}
+														>
+															<Pencil class="h-3 w-3" />
+														</Button>
+														<ConfirmDeleteForm
+															id={illustration.id}
+															action="?/illustrationDelete"
+															title="Удалить иллюстрацию?"
+															description="Изображение будет удалено из хранилища."
+															onDeleted={() => handleIllustrationDeleted(illustration.id)}
+															onError={notifyError}
+														/>
 													</div>
 												</div>
 											</div>
@@ -1414,10 +1679,20 @@
 {/if}
 
 {#if illustrationDialog && selectedVolume}
+	{@const dialogIllustrationId = illustrationDialog.illustration?.id ?? ''}
 	<IllustrationDialog
 		illustration={illustrationDialog.illustration}
 		volumeId={selectedVolume.id}
 		nextSortOrder={nextIllustrationSort}
+		chapters={data.chapters}
+		timings={illustrationDialog.illustration
+			? data.chapterIllustrationTimings
+					.filter((timing) => timing.illustrationId === dialogIllustrationId)
+					.map((timing) => ({
+						chapterId: timing.chapterId,
+						showAtSeconds: timing.showAtSeconds
+					}))
+			: []}
 		onClose={() => (illustrationDialog = null)}
 		onSaved={handleIllustrationSaved}
 		onToast={notify}
@@ -1450,3 +1725,5 @@
 		</button>
 	</div>
 {/if}
+
+<MediaLightbox bind:open={mediaOpen} src={mediaSrc} title={mediaTitle} kind={mediaKind} />

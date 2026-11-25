@@ -24,7 +24,7 @@
 
 <section
 	use:inview={handleInView}
-	class="relative flex h-full w-full snap-start snap-always flex-col justify-end overflow-hidden px-8 pb-24 md:px-16 md:pb-32 lg:px-24"
+	class="showcase-section relative flex h-full w-full snap-start snap-always flex-col justify-end overflow-hidden px-8 pb-24 md:px-16 md:pb-32 lg:px-24"
 >
 	<div class="max-w-2xl space-y-6">
 		<h1 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
@@ -50,3 +50,35 @@
 		</div>
 	</div>
 </section>
+
+<style>
+	@media (orientation: landscape) and (max-height: 500px) and (max-width: 1100px) {
+		.showcase-section {
+			justify-content: flex-end;
+			padding: 0.75rem 1.5rem 1rem;
+		}
+
+		.showcase-section h1 {
+			font-size: 2rem;
+			line-height: 1.05;
+		}
+
+		.showcase-section p {
+			font-size: 0.875rem;
+			line-height: 1.35;
+			line-clamp: 2;
+			-webkit-line-clamp: 2;
+		}
+
+		.showcase-section :global(.max-w-2xl) {
+			gap: 0.75rem;
+			max-width: min(34rem, calc(100vw - 8rem));
+		}
+
+		.showcase-section :global(button) {
+			height: 2.5rem;
+			padding-inline: 1.25rem;
+			font-size: 0.875rem;
+		}
+	}
+</style>

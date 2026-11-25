@@ -1,7 +1,9 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import type { OfflineVolume } from '$lib/client/db';
+	import type { SiteSupportSettings } from '$lib/types/site';
 	import SupportBlock from '$lib/components/support/SupportBlock.svelte';
 	import { Play, Sparkles, BookCheck, Clock } from '@lucide/svelte';
 	import { strings } from '$lib/constants/strings';
@@ -10,6 +12,7 @@
 		open: boolean;
 		currentVolume: OfflineVolume | undefined;
 		nextVolume?: OfflineVolume | null;
+		support?: SiteSupportSettings;
 		onPlayNextVolume?: () => void;
 	}
 
@@ -17,6 +20,7 @@
 		open = $bindable(false),
 		currentVolume,
 		nextVolume = null,
+		support,
 		onPlayNextVolume
 	}: Props = $props();
 
@@ -69,10 +73,11 @@
 					class="flex flex-col items-center gap-4 rounded-2xl border border-primary/30 bg-primary/5 p-4 shadow-sm sm:flex-row"
 				>
 					{#if nextVolume.coverUrl}
-						<img
+						<BlurhashImage
 							src={nextVolume.coverUrl}
+							blurhash={nextVolume.blurhash}
 							alt={nextVolume.title}
-							class="h-28 w-20 shrink-0 rounded-xl object-cover shadow-md"
+							class="h-28 w-20 shrink-0 rounded-xl shadow-md"
 						/>
 					{/if}
 					<div class="flex-1 text-center sm:text-left">
@@ -117,7 +122,7 @@
 			<!-- Author support section -->
 			<div class="border-t border-border/60 pt-4">
 				<h4 class="mb-3 text-sm font-bold text-foreground">{strings.support.title}</h4>
-				<SupportBlock />
+				<SupportBlock {support} />
 			</div>
 		</div>
 	</Dialog.Content>

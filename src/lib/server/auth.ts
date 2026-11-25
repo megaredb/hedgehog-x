@@ -1,3 +1,4 @@
+import dns from 'node:dns';
 import { betterAuth } from 'better-auth';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -7,8 +8,44 @@ import { building } from '$app/environment';
 import { db } from '$lib/server/db';
 import { env } from '$env/dynamic/private';
 import { createLogger } from '$lib/logger';
+import { getSubscriptionRecord } from '$lib/server/subscriptions/entitlement';
+import { checkAllSubscriptionSources } from '$lib/server/subscriptions/sources';
 
 const log = createLogger('Auth');
+
+// Node's outbound TLS to Telegram occasionally gets ECONNRESET on the first
+// connection (especially through a local proxy). Prefer IPv4 and retry
+// transient transport failures during OAuth code exchange. Do not retry HTTP
+// responses: only thrown network errors.
+dns.setDefaultResultOrder('ipv4first');
+type GlobalWithTelegramRetry = typeof globalThis & {
+	__hedgehogTelegramFetchRetry?: boolean;
+};
+if (!(globalThis as GlobalWithTelegramRetry).__hedgehogTelegramFetchRetry) {
+	const nativeFetch = globalThis.fetch.bind(globalThis);
+	const patchedFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		const url =
+			typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+		if (!url.includes('telegram.org')) return nativeFetch(input, init);
+
+		let lastError: unknown;
+		for (let attempt = 0; attempt < 3; attempt += 1) {
+			try {
+				return await nativeFetch(input instanceof Request ? input.clone() : input, init);
+			} catch (error) {
+				lastError = error;
+				const message = error instanceof Error ? error.message : 'network error';
+				log.warn(`Telegram OAuth request failed (attempt ${attempt + 1}/3): ${message}`);
+				if (attempt < 2) {
+					await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+				}
+			}
+		}
+		throw lastError;
+	};
+	globalThis.fetch = patchedFetch as typeof fetch;
+	(globalThis as GlobalWithTelegramRetry).__hedgehogTelegramFetchRetry = true;
+}
 
 // Dynamic baseURL configuration based on allowed hosts from environment
 const allowedHosts = env.BETTER_AUTH_ALLOWED_HOSTS
@@ -71,6 +108,7 @@ export const auth = betterAuth({
 		discord: {
 			clientId: discordClientId,
 			clientSecret: discordClientSecret,
+			scope: ['identify', 'email', 'guilds.members.read'],
 			mapProfileToUser: (profile) => ({
 				discordAvatar: profile.image_url,
 				discordUsername: profile.username ?? null
@@ -90,7 +128,24 @@ export const auth = betterAuth({
 	databaseHooks: {
 		session: {
 			create: {
+				before: async (session) => {
+					if (building) return;
+					try {
+						const record = await getSubscriptionRecord(session.userId);
+						if (record?.blockedAt) return false;
+					} catch (error) {
+						log.warn('Failed to check account block before session create:', error);
+					}
+				},
 				after: async (session, context) => {
+					// Subscription sources are checked once after login/registration,
+					// not on every page load. Wait briefly so the OAuth transaction has
+					// committed the account/session rows.
+					setTimeout(() => {
+						void checkAllSubscriptionSources(session.userId).catch((error) => {
+							log.warn('Failed to check subscription sources after login:', error);
+						});
+					}, 750);
 					try {
 						const ctx = context as unknown as {
 							request?: { url?: string };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ShowcaseBook } from '$lib/types/showcase';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 
 	let {
 		books,
@@ -45,14 +46,15 @@
 			class:opacity-0={currentIndex !== i}
 		>
 			<!-- Background image -->
-			{#if book.bgImage}
-				<img
+			{#if book.bgImage || book.bgBlurhash}
+				<BlurhashImage
 					src={book.bgImage}
+					blurhash={book.bgBlurhash}
 					alt={book.title}
 					loading={i === 0 ? 'eager' : 'lazy'}
 					fetchpriority={i === 0 ? 'high' : 'auto'}
 					decoding="async"
-					class="absolute inset-0 h-full w-full object-cover"
+					class="absolute inset-0"
 				/>
 			{:else if !book.bgVideo}
 				<div
@@ -65,7 +67,6 @@
 				<video
 					bind:this={videoElements[i]}
 					src={book.bgVideo}
-					poster={book.bgImage ?? undefined}
 					preload="none"
 					loop
 					muted

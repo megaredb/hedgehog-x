@@ -18,3 +18,14 @@ export function splitAudioVersionKey(key: string): { chapterId: string; versionI
 export function normalizeVersionId(value: unknown): string {
 	return typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_AUDIO_VERSION;
 }
+
+export const BROADCAST_PROGRESS_PREFIX = 'broadcast-progress:';
+
+/** Local progress key for a broadcast replay, isolated from chapter progress. */
+export function broadcastProgressKey(broadcastId: string): string {
+	return BROADCAST_PROGRESS_PREFIX + broadcastId;
+}
+
+export function isBroadcastProgressKey(key: string): boolean {
+	return key.startsWith(BROADCAST_PROGRESS_PREFIX);
+}

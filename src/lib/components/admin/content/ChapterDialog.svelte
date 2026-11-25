@@ -7,7 +7,19 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { Archive, ArrowUpToLine, Plus, Trash2, TriangleAlert, Upload, X } from '@lucide/svelte';
+	import { Switch } from '$lib/components/ui/switch';
+	import {
+		Archive,
+		ArrowUpToLine,
+		FolderOpen,
+		Plus,
+		Trash2,
+		TriangleAlert,
+		Upload,
+		X
+	} from '@lucide/svelte';
+	import R2FilePicker from './R2FilePicker.svelte';
+	import type { MediaLibraryFile } from '$lib/server/storage/r2';
 	import { formatDuration } from '$lib/utils/time';
 	import type { AdminArchiveTrack, AdminAudioVersion, AdminChapter } from './types';
 
@@ -37,15 +49,17 @@
 	let pendingSave = $state(false);
 	let saveError = $state('');
 	let durationValue = $state<number | string>(untrack(() => chapter?.durationSeconds ?? 0));
-	let audioObjectUrl = $state<string | null>(null);
-	let audioFileName = $state('');
-	let audioPreview = $derived(audioObjectUrl ?? chapter?.audioUrl ?? '');
+	let published = $state(untrack(() => chapter?.published ?? false));
+	let audioUrlValue = $state(untrack(() => chapter?.audioUrl ?? ''));
+	let chapterAudioPickerOpen = $state(false);
+	let audioPreview = $derived(audioUrlValue);
 	let loadedChapterKey = $state('');
 
 	let showArchiveForm = $state(false);
 	let archiveTitle = $state(untrack(() => chapter?.title ?? ''));
 	let archiveVersionId = $state('old');
-	let archiveFileName = $state('');
+	let archiveAudioUrl = $state('');
+	let archiveAudioPickerOpen = $state(false);
 	let archiveError = $state('');
 	let archivePending = $state(false);
 	let promoteConfirmId = $state<string | null>(null);
@@ -70,14 +84,12 @@
 		if (key === loadedChapterKey) return;
 		loadedChapterKey = key;
 		durationValue = chapter?.durationSeconds ?? 0;
+		published = chapter?.published ?? false;
 		archiveTitle = chapter?.title ?? '';
-	});
-
-	$effect(() => {
-		const url = audioObjectUrl;
-		return () => {
-			if (url) URL.revokeObjectURL(url);
-		};
+		audioUrlValue = chapter?.audioUrl ?? '';
+		archiveAudioUrl = '';
+		chapterAudioPickerOpen = false;
+		archiveAudioPickerOpen = false;
 	});
 
 	function versionLabel(versionId: string): string {
@@ -99,13 +111,6 @@
 		return date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
 	}
 
-	function formatBytes(bytes: number): string {
-		if (!Number.isFinite(bytes) || bytes <= 0) return '0 Б';
-		const megabytes = bytes / (1024 * 1024);
-		if (megabytes >= 1) return megabytes.toFixed(megabytes >= 10 ? 0 : 1) + ' МБ';
-		return Math.max(1, Math.round(bytes / 1024)) + ' КБ';
-	}
-
 	function fileName(url: string): string {
 		if (!url) return '—';
 		try {
@@ -117,35 +122,22 @@
 		}
 	}
 
-	function readAudioDuration(file: File) {
-		const url = URL.createObjectURL(file);
+	function readAudioDuration(url: string) {
 		const audio = new Audio(url);
 		audio.addEventListener('loadedmetadata', () => {
 			if (Number.isFinite(audio.duration) && audio.duration > 0) {
 				durationValue = Math.round(audio.duration * 1000) / 1000;
 			}
-			URL.revokeObjectURL(url);
 		});
-		audio.addEventListener('error', () => URL.revokeObjectURL(url));
 	}
 
-	function handleAudioFile(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0] ?? null;
-		if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
-		if (file) {
-			audioObjectUrl = URL.createObjectURL(file);
-			audioFileName = file.name + ' · ' + formatBytes(file.size);
-			readAudioDuration(file);
-		} else {
-			audioObjectUrl = null;
-			audioFileName = '';
-		}
+	function selectChapterAudio(file: MediaLibraryFile) {
+		audioUrlValue = file.url;
+		readAudioDuration(file.url);
 	}
 
-	function clearFileInput(formElement: HTMLFormElement, name: string) {
-		const input = formElement.elements.namedItem(name);
-		if (input instanceof HTMLInputElement) input.value = '';
+	function selectArchiveAudio(file: MediaLibraryFile) {
+		archiveAudioUrl = file.url;
 	}
 
 	const submitSave: SubmitFunction = () => {
@@ -172,11 +164,10 @@
 	const submitArchiveAdd: SubmitFunction = () => {
 		archivePending = true;
 		archiveError = '';
-		return async ({ result, update, formElement }) => {
+		return async ({ result, update }) => {
 			archivePending = false;
 			if (result.type === 'success') {
-				clearFileInput(formElement, 'audioFile');
-				archiveFileName = '';
+				archiveAudioUrl = '';
 				await update({ reset: false });
 				showArchiveForm = false;
 				onToast('success', 'Архивная версия добавлена');
@@ -257,6 +248,7 @@
 			class="space-y-4"
 		>
 			<input type="hidden" name="volumeId" value={volumeId} />
+			<input type="hidden" name="published" value={String(published)} />
 			{#if isEditing}
 				<input type="hidden" name="id" value={chapter?.id ?? ''} />
 			{/if}
@@ -309,6 +301,13 @@
 				</div>
 			</div>
 
+			<label
+				class="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs"
+			>
+				<span class="font-medium">Опубликована</span>
+				<Switch bind:checked={published} aria-label="Опубликовать главу" />
+			</label>
+
 			<div class="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
 					<p class="text-xs font-semibold">Текущая озвучка</p>
@@ -326,35 +325,29 @@
 						aria-label="Текущая озвучка главы"
 					></audio>
 					<p class="truncate font-mono text-[11px] text-muted-foreground">
-						{audioFileName || fileName(chapter?.audioUrl ?? '')}
+						{fileName(audioUrlValue)}
 					</p>
 				{/if}
-
-				<div class="grid gap-3 sm:grid-cols-2">
-					<div class="space-y-1.5">
-						<Label for="chapter-audio-file" class="text-xs">Аудиофайл</Label>
-						<input
-							id="chapter-audio-file"
-							name="audioFile"
-							type="file"
-							accept="audio/*,.mp3,.m4a"
-							class="block w-full cursor-pointer text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary-foreground hover:file:opacity-90"
-							onchange={handleAudioFile}
-						/>
-					</div>
-					<div class="space-y-1.5">
-						<Label for="chapter-audio-url" class="text-xs">Или URL аудио</Label>
-						<Input
-							id="chapter-audio-url"
-							name="audioUrl"
-							value={chapter?.audioUrl ?? ''}
-							placeholder="/api/media/... или https://..."
-							class="font-mono text-xs"
-						/>
-					</div>
+				<input type="hidden" name="audioUrl" value={audioUrlValue} />
+				<div class="flex flex-wrap items-center gap-2">
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						class="gap-1.5"
+						onclick={() => (chapterAudioPickerOpen = true)}
+					>
+						<FolderOpen class="h-3.5 w-3.5" />
+						{audioUrlValue ? 'Заменить аудио в R2' : 'Выбрать аудио в R2'}
+					</Button>
+					{#if audioUrlValue}
+						<Button type="button" size="sm" variant="ghost" onclick={() => (audioUrlValue = '')}
+							>Убрать</Button
+						>
+					{/if}
 				</div>
 				<p class="text-[11px] text-muted-foreground">
-					Файл важнее URL. Для новой главы файл или URL обязателен.
+					Для новой главы аудио обязательно. Файл выбирается из R2 storage.
 				</p>
 			</div>
 
@@ -631,30 +624,32 @@
 									/>
 								</div>
 								<div class="space-y-1.5 sm:col-span-2">
-									<Label for="archive-file" class="text-xs">Аудиофайл</Label>
-									<input
-										id="archive-file"
-										name="audioFile"
-										type="file"
-										accept="audio/*,.mp3,.m4a"
-										class="block w-full cursor-pointer text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary-foreground hover:file:opacity-90"
-										onchange={(event) => {
-											const file = (event.currentTarget as HTMLInputElement).files?.[0];
-											archiveFileName = file ? file.name + ' · ' + formatBytes(file.size) : '';
-										}}
-									/>
+									<input type="hidden" name="audioUrl" value={archiveAudioUrl} />
+									<div class="flex flex-wrap items-center gap-2">
+										<Button
+											type="button"
+											size="sm"
+											variant="outline"
+											class="gap-1.5"
+											onclick={() => (archiveAudioPickerOpen = true)}
+										>
+											<FolderOpen class="h-3.5 w-3.5" />
+											{archiveAudioUrl ? 'Заменить аудио в R2' : 'Выбрать аудио в R2'}
+										</Button>
+										{#if archiveAudioUrl}
+											<Button
+												type="button"
+												size="sm"
+												variant="ghost"
+												onclick={() => (archiveAudioUrl = '')}>Убрать</Button
+											>
+										{/if}
+									</div>
 									<p class="text-[11px] text-muted-foreground">
-										{archiveFileName || 'Оставьте пустым, чтобы сослаться на текущую озвучку'}
+										{archiveAudioUrl
+											? fileName(archiveAudioUrl)
+											: 'Оставьте пустым, чтобы сослаться на текущую озвучку'}
 									</p>
-								</div>
-								<div class="space-y-1.5 sm:col-span-2">
-									<Label for="archive-url" class="text-xs">Или URL аудио</Label>
-									<Input
-										id="archive-url"
-										name="audioUrl"
-										placeholder="/api/media/... или https://..."
-										class="font-mono text-xs"
-									/>
 								</div>
 							</div>
 							<div class="flex items-center gap-2">
@@ -677,4 +672,7 @@
 			</div>
 		{/if}
 	</div>
+
+	<R2FilePicker bind:open={chapterAudioPickerOpen} type="audio" onSelect={selectChapterAudio} />
+	<R2FilePicker bind:open={archiveAudioPickerOpen} type="audio" onSelect={selectArchiveAudio} />
 </BaseModal>

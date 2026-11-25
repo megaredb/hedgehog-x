@@ -47,6 +47,7 @@ export interface AdminChapter {
 	audioUrl: string;
 	durationSeconds: number;
 	telegramPostUrl: string | null;
+	published: boolean;
 	createdAt: Date | string | null;
 	updatedAt: Date | string | null;
 }

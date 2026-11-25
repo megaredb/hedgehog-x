@@ -3,6 +3,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import type { Track } from '$lib/html-audio.js';
 	import {
@@ -19,6 +20,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { Progress } from '$lib/components/ui/progress';
 	import { strings } from '$lib/constants/strings';
 	import { History, Play, Trash2, BookOpen, CheckCircle2, Clock } from '@lucide/svelte';
@@ -114,6 +116,10 @@
 	}
 
 	async function handleResume(item: EnrichedHistoryItem) {
+		if (item.broadcastHref) {
+			await goto(item.broadcastHref + '?t=' + encodeURIComponent(String(item.progressSeconds)));
+			return;
+		}
 		if (!item.chapter) return;
 		const versionId = item.versionId ?? 'default';
 		const targetSeek = item.isCompleted ? 0 : item.progressSeconds;
@@ -121,7 +127,11 @@
 			typeof audioStore.currentTrack?.versionId === 'string'
 				? audioStore.currentTrack.versionId
 				: 'default';
-		if (audioStore.currentTrack?.id === item.chapter.id && currentVersion === versionId) {
+		if (
+			audioStore.currentTrack?.id === item.chapter.id &&
+			!audioStore.currentTrack.broadcastId &&
+			currentVersion === versionId
+		) {
 			audioStore.seek(targetSeek);
 			if (!audioStore.isPlaying) audioStore.play();
 			return;
@@ -147,6 +157,7 @@
 						album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 						artist: item.book?.title || 'Hedgehog',
 						artwork: item.volume?.coverUrl || item.book?.coverUrl,
+						blurhash: item.volume?.blurhash || item.book?.blurhash,
 						bookId: item.book?.id,
 						volumeId: item.volume?.id,
 						startTime: targetSeek
@@ -172,6 +183,7 @@
 			album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 			artist: item.book?.title || 'Hedgehog',
 			artwork: item.volume?.coverUrl || item.book?.coverUrl,
+			blurhash: item.volume?.blurhash || item.book?.blurhash,
 			bookId: item.book?.id,
 			volumeId: item.volume?.id
 		}));
@@ -187,6 +199,7 @@
 	let clearHistoryError = $state<string | null>(null);
 
 	function chapterHref(item: EnrichedHistoryItem): string {
+		if (item.broadcastHref) return item.broadcastHref;
 		if (!item.book || !item.volume || !item.chapter) return '#';
 		return (
 			resolve(`/books/${item.book.id}/${item.volume.id}`) +
@@ -281,7 +294,11 @@
 	{:else}
 		<div class="grid gap-4">
 			{#each paginatedHistory as item, i (item.chapterId)}
-				{@const duration = item.version?.durationSeconds || item.chapter?.durationSeconds || 1}
+				{@const duration =
+					item.broadcastDurationSeconds ||
+					item.version?.durationSeconds ||
+					item.chapter?.durationSeconds ||
+					1}
 				{@const progressPct = Math.min(100, Math.round((item.progressSeconds / duration) * 100))}
 				{@const isFinished = item.isCompleted || progressPct >= 95}
 
@@ -290,20 +307,21 @@
 				>
 					<div class="flex items-start gap-3.5 p-4 sm:gap-4">
 						<!-- Book & Chapter cover -->
-						{#if item.volume?.coverUrl || item.book?.coverUrl}
+						{#if item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
 							<a href={chapterHref(item)} aria-label="Перейти к главе" class="shrink-0">
-								<img
-									src={item.volume?.coverUrl || item.book?.coverUrl}
+								<BlurhashImage
+									src={item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
+									blurhash={item.volume?.blurhash || item.book?.blurhash}
 									alt={item.volume?.title || item.chapter?.title || 'Cover'}
 									width={56}
 									height={96}
 									loading={i < 2 ? 'eager' : 'lazy'}
-									class="h-20 w-14 rounded-lg object-cover shadow-sm sm:h-24 sm:w-16"
+									class="aspect-[7/10] w-14 rounded-lg shadow-sm sm:w-16"
 								/>
 							</a>
 						{:else}
 							<div
-								class="flex h-20 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-24 sm:w-16"
+								class="flex aspect-[7/10] w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:w-16"
 							>
 								<BookOpen class="h-6 w-6" />
 							</div>
@@ -330,6 +348,13 @@
 											</span>
 										{/if}
 
+										{#if item.broadcastId}<span
+												class="inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-2 py-0.5 text-xs font-semibold text-violet-500"
+												>{item.broadcastLive ? 'Трансляция' : 'Replay'}</span
+											>{:else}<span
+												class="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+												>Глава</span
+											>{/if}
 										{#if item.updatedAt}
 											<span class="text-xxs text-muted-foreground/70">
 												{formatRelativeTime(item.updatedAt)}
@@ -354,7 +379,14 @@
 											</a>
 										</h3>
 										<p class="truncate text-xs text-muted-foreground">
-											{#if item.book?.title}
+											{#if item.broadcastId}
+												<span
+													>{item.broadcastBookTitle ??
+														item.book?.title ??
+														'HEDGEHOG.INC'}{#if item.broadcastVolumeTitle}
+														· {item.broadcastVolumeTitle}{/if}</span
+												>
+											{:else if item.book?.title}
 												<a href={bookHref(item)} class="hover:text-foreground hover:underline">
 													{item.book.title}
 												</a>

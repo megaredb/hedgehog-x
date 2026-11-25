@@ -10,8 +10,10 @@ import {
 	chapters
 } from '$lib/server/db/schema';
 import { user as userTable } from '$lib/server/db/auth.schema';
-import { sum, count, desc, eq, sql } from 'drizzle-orm';
+import { and, sum, count, desc, eq, isNotNull, isNull, notInArray, or, sql } from 'drizzle-orm';
 import { formatListeningDuration } from '$lib/analytics/stats';
+import { getRevenueSummary } from '$lib/server/subscriptions/reports';
+import { isAdminRole } from '$lib/server/admin';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -19,7 +21,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw redirect(303, '/auth?from=/admin/analytics');
 	}
 
-	if (locals.user.role !== 'admin') {
+	if (!isAdminRole(locals.user.role)) {
 		return {
 			notAdmin: true,
 			summary: {
@@ -30,6 +32,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 				formattedTotalTime: formatListeningDuration(0).formatted
 			},
 			dailyBreakdown: [],
+			revenue: {
+				totalRub: 0,
+				donationsCount: 0,
+				donors: 0,
+				lastDonationAt: null,
+				last30Rub: 0,
+				last30Count: 0,
+				recent: []
+			},
 			topBooks: [],
 			topChapters: [],
 			recentSessions: [],
@@ -38,20 +49,42 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 	}
 
+	const excludedAuthorIds = (
+		await db
+			.select({ id: userTable.id })
+			.from(userTable)
+			.where(and(eq(userTable.role, 'author'), eq(userTable.includeInStats, false)))
+	).map((row) => row.id);
+	const visibleDaily =
+		excludedAuthorIds.length > 0
+			? or(
+					isNull(dailyListeningStats.userId),
+					notInArray(dailyListeningStats.userId, excludedAuthorIds)
+				)
+			: undefined;
+	const visibleSessions =
+		excludedAuthorIds.length > 0
+			? or(
+					isNull(listeningSessions.userId),
+					notInArray(listeningSessions.userId, excludedAuthorIds)
+				)
+			: undefined;
+
 	// 1. Overall Aggregates
 	const [totals] = await db
 		.select({
 			totalSeconds: sum(dailyListeningStats.totalSeconds),
 			totalSessions: sum(dailyListeningStats.sessionsCount)
 		})
-		.from(dailyListeningStats);
+		.from(dailyListeningStats)
+		.where(visibleDaily);
 
 	const [uniqueListenersCount] = await db
 		.select({
 			count: count(sql`DISTINCT ${listeningSessions.userId}`)
 		})
 		.from(listeningSessions)
-		.where(sql`${listeningSessions.userId} IS NOT NULL`);
+		.where(and(isNotNull(listeningSessions.userId), visibleSessions));
 
 	const totalSeconds = Number(totals?.totalSeconds) || 0;
 	const totalSessions = Number(totals?.totalSessions) || 0;
@@ -67,6 +100,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			sessionsCount: sum(dailyListeningStats.sessionsCount)
 		})
 		.from(dailyListeningStats)
+		.where(visibleDaily)
 		.groupBy(dailyListeningStats.date)
 		.orderBy(desc(dailyListeningStats.date))
 		.limit(30);
@@ -94,6 +128,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			sessionsCount: sum(dailyListeningStats.sessionsCount)
 		})
 		.from(dailyListeningStats)
+		.where(visibleDaily)
 		.innerJoin(books, eq(dailyListeningStats.bookId, books.id))
 		.groupBy(books.id, books.title, books.coverUrl)
 		.orderBy(desc(sum(dailyListeningStats.totalSeconds)))
@@ -125,6 +160,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			sessionsCount: sum(dailyListeningStats.sessionsCount)
 		})
 		.from(dailyListeningStats)
+		.where(visibleDaily)
 		.innerJoin(chapters, eq(dailyListeningStats.chapterId, chapters.id))
 		.leftJoin(volumes, eq(chapters.volumeId, volumes.id))
 		.leftJoin(books, eq(volumes.bookId, books.id))
@@ -163,13 +199,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			chapterTitle: chapters.title,
 			versionId: listeningSessions.versionId,
 			bookTitle: books.title,
-			userName: userTable.name,
-			userEmail: userTable.email
+			userName: userTable.name
 		})
 		.from(listeningSessions)
 		.leftJoin(chapters, eq(listeningSessions.chapterId, chapters.id))
 		.leftJoin(books, eq(listeningSessions.bookId, books.id))
 		.leftJoin(userTable, eq(listeningSessions.userId, userTable.id))
+		.where(visibleSessions)
 		.orderBy(desc(listeningSessions.startedAt))
 		.limit(10);
 
@@ -181,8 +217,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		chapterTitle: s.chapterTitle ?? 'Неизвестная глава',
 		versionId: s.versionId,
 		bookTitle: s.bookTitle ?? 'Неизвестная книга',
-		user: s.userName || s.userEmail || 'Гость'
+		user: s.userName || 'Гость'
 	}));
+
+	const revenue = await getRevenueSummary();
 
 	const isUmamiConfigured = Boolean(
 		publicEnv.PUBLIC_UMAMI_WEBSITE_ID ||
@@ -207,6 +245,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			formattedTotalTime
 		},
 		dailyBreakdown,
+		revenue,
 		topBooks,
 		topChapters,
 		recentSessions,

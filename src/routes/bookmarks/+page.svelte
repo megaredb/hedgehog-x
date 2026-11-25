@@ -2,6 +2,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import type { Track } from '$lib/html-audio.js';
 	import {
@@ -18,6 +19,7 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
 	import { strings } from '$lib/constants/strings';
@@ -102,13 +104,21 @@
 	}
 
 	async function handlePlayBookmark(item: EnrichedBookmark) {
+		if (item.broadcastHref) {
+			await goto(item.broadcastHref + '?t=' + encodeURIComponent(String(item.timestampSeconds)));
+			return;
+		}
 		if (!item.chapter) return;
 		const versionId = item.versionId ?? 'default';
 		const currentVersion =
 			typeof audioStore.currentTrack?.versionId === 'string'
 				? audioStore.currentTrack.versionId
 				: 'default';
-		if (audioStore.currentTrack?.id === item.chapterId && currentVersion === versionId) {
+		if (
+			audioStore.currentTrack?.id === item.chapterId &&
+			!audioStore.currentTrack.broadcastId &&
+			currentVersion === versionId
+		) {
 			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 			audioStore.seek(item.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
@@ -135,6 +145,7 @@
 						album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 						artist: item.book?.title || 'Hedgehog',
 						artwork: item.volume?.coverUrl || item.book?.coverUrl,
+						blurhash: item.volume?.blurhash || item.book?.blurhash,
 						bookId: item.book?.id,
 						volumeId: item.volume?.id,
 						startTime: item.timestampSeconds
@@ -161,6 +172,7 @@
 			album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 			artist: item.book?.title || 'Hedgehog',
 			artwork: item.volume?.coverUrl || item.book?.coverUrl,
+			blurhash: item.volume?.blurhash || item.book?.blurhash,
 			bookId: item.book?.id,
 			volumeId: item.volume?.id
 		}));
@@ -210,6 +222,7 @@
 	}
 
 	function chapterHref(item: EnrichedBookmark): string {
+		if (item.broadcastHref) return item.broadcastHref;
 		if (!item.book || !item.volume || !item.chapter) return '#';
 		return (
 			resolve(`/books/${item.book.id}/${item.volume.id}`) +
@@ -269,7 +282,7 @@
 			<p class="mt-1.5 max-w-md text-xs text-muted-foreground sm:text-sm">
 				{strings.bookmarks.emptyDescription}
 			</p>
-			<Button href={resolve('/')} class="mt-6 gap-2">
+			<Button href={resolve('/books')} class="mt-6 gap-2">
 				<BookOpen class="h-4 w-4" />
 				<span>{strings.nav.catalog}</span>
 			</Button>
@@ -283,20 +296,21 @@
 					<div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
 						<!-- Book & Chapter info -->
 						<div class="flex min-w-0 items-start gap-3 sm:items-center">
-							{#if item.volume?.coverUrl || item.book?.coverUrl}
+							{#if item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
 								<a href={chapterHref(item)} aria-label="Перейти к главе" class="shrink-0">
-									<img
-										src={item.volume?.coverUrl || item.book?.coverUrl}
+									<BlurhashImage
+										src={item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
+										blurhash={item.volume?.blurhash || item.book?.blurhash}
 										alt={item.volume?.title || item.chapter?.title || 'Cover'}
 										width={56}
 										height={80}
 										loading={i < 2 ? 'eager' : 'lazy'}
-										class="h-16 w-12 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
+										class="aspect-[7/10] w-12 rounded-lg shadow-sm sm:w-14"
 									/>
 								</a>
 							{:else}
 								<div
-									class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-20 sm:w-14"
+									class="flex aspect-[7/10] w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:w-14"
 								>
 									<BookOpen class="h-6 w-6" />
 								</div>
@@ -315,6 +329,13 @@
 											{/if}
 										</span>
 									</span>
+									{#if item.broadcastId}<span
+											class="inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-2 py-0.5 text-xs font-semibold text-violet-500"
+											>{item.broadcastLive ? 'Трансляция' : 'Replay'}</span
+										>{:else}<span
+											class="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+											>Глава</span
+										>{/if}
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">
 											{formatDate(item.createdAt)}
@@ -334,26 +355,26 @@
 
 								<h3 class="truncate text-base font-semibold text-foreground">
 									<a href={chapterHref(item)} class="hover:underline">
-										{item.chapter?.title ?? strings.player.chapterFallback}
+										{item.broadcastTitle ?? item.chapter?.title ?? strings.player.chapterFallback}
 									</a>
 								</h3>
 
 								<p class="truncate text-xs text-muted-foreground">
-									{#if item.book?.title}
-										<a href={bookHref(item)} class="hover:text-foreground hover:underline"
-											>{item.book.title}</a
-										>
-										{#if item.volume?.title}
-											<span> &bull; </span>
-											<a href={volumeHref(item)} class="hover:text-foreground hover:underline"
-												>{item.volume.title}</a
-											>
-										{/if}
-									{:else if item.volume?.title}
-										<a href={volumeHref(item)} class="hover:text-foreground hover:underline"
-											>{item.volume.title}</a
-										>
-									{/if}
+									{#if item.broadcastId}<span
+											>{item.broadcastBookTitle ??
+												item.book?.title ??
+												'HEDGEHOG.INC'}{#if item.broadcastVolumeTitle}
+												· {item.broadcastVolumeTitle}{/if}</span
+										>{:else if item.book?.title}<a
+											href={bookHref(item)}
+											class="hover:text-foreground hover:underline">{item.book.title}</a
+										>{#if item.volume?.title}<span> &bull; </span><a
+												href={volumeHref(item)}
+												class="hover:text-foreground hover:underline">{item.volume.title}</a
+											>{/if}{:else if item.volume?.title}<a
+											href={volumeHref(item)}
+											class="hover:text-foreground hover:underline">{item.volume.title}</a
+										>{/if}
 								</p>
 
 								{#if item.note}

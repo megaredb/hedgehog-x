@@ -17,6 +17,8 @@
 		ArrowLeft,
 		ShieldCheck,
 		ChartColumn,
+		Radio,
+		Globe,
 		Users
 	} from '@lucide/svelte';
 
@@ -26,11 +28,13 @@
 		{ href: '/admin', label: 'Обзор', icon: LayoutDashboard },
 		{ href: '/admin/content', label: 'Контент', icon: BookOpen },
 		{ href: '/admin/analytics', label: 'Аналитика', icon: ChartColumn },
-		{ href: '/admin/users', label: 'Пользователи', icon: Users }
+		{ href: '/admin/users', label: 'Пользователи', icon: Users },
+		{ href: '/admin/broadcasts', label: 'Трансляции', icon: Radio },
+		{ href: '/admin/site', label: 'Сайт', icon: Globe }
 	];
 </script>
 
-<div class="min-h-screen bg-background text-foreground">
+<div class="admin-root min-h-screen bg-background text-foreground">
 	{#if !data.isAdmin}
 		<div class="container mx-auto flex min-h-[70vh] max-w-lg items-center justify-center p-4">
 			<Card class="w-full border-destructive/30">
@@ -41,9 +45,7 @@
 						<ShieldAlert class="h-7 w-7" />
 					</div>
 					<CardTitle class="text-xl">Доступ ограничен</CardTitle>
-					<CardDescription>
-						У вашей учетной записи ({data.user.email}) нет прав администратора.
-					</CardDescription>
+					<CardDescription>У вашей учетной записи нет прав администратора.</CardDescription>
 				</CardHeader>
 				<CardContent class="space-y-4">
 					{#if data.isDev}
@@ -117,3 +119,16 @@
 		</main>
 	{/if}
 </div>
+
+<style>
+	:global(.admin-root [class*='overflow-x-auto']) {
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+	}
+
+	:global(.admin-root [class*='overflow-x-auto']::-webkit-scrollbar) {
+		display: none;
+		height: 0;
+		width: 0;
+	}
+</style>

@@ -49,7 +49,15 @@ const navigationRoute = new NavigationRoute(
 	},
 	{
 		// Never cache authenticated/personal pages in the shared pages-cache.
-		denylist: [/^\/admin/, /^\/auth/, /^\/bookmarks/, /^\/history/, /^\/profile/, /^\/settings/]
+		denylist: [
+			/^\/admin/,
+			/^\/auth/,
+			/^\/bookmarks/,
+			/^\/history/,
+			/^\/profile/,
+			/^\/settings/,
+			/^\/subscription/
+		]
 	}
 );
 registerRoute(navigationRoute);

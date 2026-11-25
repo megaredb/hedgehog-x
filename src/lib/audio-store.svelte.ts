@@ -2,7 +2,7 @@ import { htmlAudio, type Track } from '$lib/html-audio.js';
 import { resolveMediaUrl } from '$lib/utils/mirror.js';
 import { calculateNextIndex, calculatePreviousIndex, type RepeatMode } from '$lib/audio-queue.js';
 import { db } from '$lib/client/db';
-import { audioVersionKey } from '$lib/audio-version';
+import { audioVersionKey, broadcastProgressKey } from '$lib/audio-version';
 
 export type { RepeatMode } from '$lib/audio-queue.js';
 export { calculateNextIndex, calculatePreviousIndex } from '$lib/audio-queue.js';
@@ -158,6 +158,13 @@ class AudioStore {
 
 	play(): void {
 		if (this.isLoading) return;
+		if (this.currentTrack?.broadcastLive) {
+			const startedAt = Number(this.currentTrack.broadcastStartedAt);
+			if (Number.isFinite(startedAt) && startedAt > 0) {
+				const offset = Math.max(0, (Date.now() - startedAt) / 1000);
+				if (offset < (this.currentTrack.duration ?? Infinity)) this.seek(offset, false);
+			}
+		}
 		this.isPlaying = true;
 		void htmlAudio.play().catch((error) => {
 			this.isPlaying = false;
@@ -220,6 +227,13 @@ class AudioStore {
 	}
 
 	private async withSavedStart(track: Track): Promise<Track> {
+		if (track.broadcastId) {
+			if (track.broadcastLive) return track;
+			if (track.startTime && track.startTime > 0) return track;
+			const replay = await db.progress.get(broadcastProgressKey(String(track.broadcastId)));
+			if (!replay || replay.isCompleted || replay.progressSeconds <= 0) return track;
+			return { ...track, startTime: replay.progressSeconds };
+		}
 		if (track.startTime && track.startTime > 0) return track;
 		const versionId = typeof track.versionId === 'string' ? track.versionId : 'default';
 		const saved = await db.progress.get(audioVersionKey(String(track.id), versionId));
@@ -280,6 +294,8 @@ class AudioStore {
 		const wasSameTrack =
 			this.currentTrack?.id === target.id &&
 			currentVersion === targetVersion &&
+			(this.currentTrack?.broadcastId ?? null) === (target.broadcastId ?? null) &&
+			Boolean(this.currentTrack?.broadcastLive) === Boolean(target.broadcastLive) &&
 			Boolean(htmlAudio.getAudioElement()?.src);
 		this.setQueue(songs, startIndex);
 		if (wasSameTrack) {
@@ -291,11 +307,13 @@ class AudioStore {
 			if (!this.isPlaying) this.play();
 			return;
 		}
-		this.loadAndPlayTrack(target, startIndex);
+		void this.withSavedStart(target).then((resolved) =>
+			this.loadAndPlayTrack(resolved, startIndex)
+		);
 	}
 
 	handleTrackEnd(): void {
-		if (this.currentTrack) {
+		if (this.currentTrack && !this.currentTrack.broadcastId) {
 			this.lastCompletedTrackId =
 				this.currentTrack.id != null ? String(this.currentTrack.id) : null;
 			this.lastCompletedTrackAt = Date.now();
@@ -431,6 +449,16 @@ class AudioStore {
 
 	// ── State actions ───────────────────────────────────────────────────────
 
+	updateTrackMetadata(patch: Partial<Track>): void {
+		if (!this.currentTrack) return;
+		const broadcastId = this.currentTrack.broadcastId;
+		this.currentTrack = { ...this.currentTrack, ...patch };
+		this.queue = this.queue.map((track) =>
+			track.broadcastId === broadcastId ? { ...track, ...patch } : track
+		);
+		this.saveToStorage();
+	}
+
 	setCurrentTrack(track: Track | null): void {
 		if (!track) {
 			this.currentTrack = null;
@@ -456,6 +484,50 @@ class AudioStore {
 		this.isError = false;
 		this.errorMessage = null;
 		this.loadAndPlayTrack(resolvedTrack, 0);
+	}
+
+	/**
+	 * Remove a broadcast that disappeared on the server. This is deliberately
+	 * stronger than pause: a deleted broadcast must leave no current track,
+	 * queue, progress or audio source behind, as if it was never played.
+	 */
+	async removeBroadcast(broadcastId: string): Promise<void> {
+		if (
+			!this.currentTrack?.broadcastId ||
+			String(this.currentTrack.broadcastId) !== String(broadcastId)
+		) {
+			return;
+		}
+
+		this.isPlaying = false;
+		this.pause();
+		htmlAudio.stop();
+		this.currentTrack = null;
+		this.queue = [];
+		this.currentQueueIndex = -1;
+		this.currentTime = 0;
+		this.duration = 0;
+		this.progress = 0;
+		this.bufferedTime = 0;
+		this.isPlaying = false;
+		this.isLoading = false;
+		this.isBuffering = false;
+		this.isError = false;
+		this.errorMessage = null;
+		this.clearClipRange();
+		this.lastSeekFrom = null;
+		this.undoSeekAvailable = false;
+		if (this.undoTimer) {
+			clearTimeout(this.undoTimer);
+			this.undoTimer = null;
+		}
+		this.cancelSleepTimer();
+		try {
+			await db.progress.delete(broadcastProgressKey(String(broadcastId)));
+		} catch {
+			/* local progress cleanup is best-effort */
+		}
+		this.saveToStorage();
 	}
 
 	/** Called by AudioProvider to sync audio element time into state. */

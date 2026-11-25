@@ -11,6 +11,7 @@
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Badge } from '$lib/components/ui/badge';
 	import ImageLightbox from '$lib/components/ui/lightbox/ImageLightbox.svelte';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import {
 		Share2,
@@ -220,13 +221,15 @@
 						: 'group-hover:scale-102'}"
 					title="Нажмите, чтобы приблизить обложку"
 				>
-					<img
+					<BlurhashImage
 						src={volume.coverUrl}
+						blurhash={volume.blurhash}
 						alt={volume.title}
 						width={320}
 						height={480}
+						loading="eager"
 						fetchpriority="high"
-						class="aspect-2/3 w-36 object-cover sm:w-48"
+						class="aspect-2/3 w-36 sm:w-48"
 					/>
 					<!-- Hover overlay with zoom icon -->
 					<div

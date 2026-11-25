@@ -13,7 +13,7 @@
 	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
 	import { formatDuration } from '$lib/utils/time';
-	import { audioVersionKey } from '$lib/audio-version';
+	import { audioVersionKey, isBroadcastProgressKey } from '$lib/audio-version';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -40,6 +40,13 @@
 		selectedVersionId?: string;
 		chapterVersions?: ChapterAudioVersion[];
 		chapterVersionLikes?: Array<{ chapterId: string; versionId: string; count: number }>;
+		serverProgress?: Array<{
+			chapterId: string;
+			versionId: string;
+			progressSeconds: number;
+			isCompleted: boolean | null;
+			updatedAt: Date | string | null;
+		}>;
 	}
 
 	let {
@@ -49,7 +56,8 @@
 		isLoading = false,
 		selectedVersionId = 'default',
 		chapterVersions = [],
-		chapterVersionLikes = []
+		chapterVersionLikes = [],
+		serverProgress = []
 	}: Props = $props();
 
 	const activeVersionId = $derived(selectedVersionId || 'default');
@@ -91,8 +99,21 @@
 
 	const progressMap = $derived.by(() => {
 		const map = new SvelteMap<string, OfflineProgress>();
+		for (const p of serverProgress) {
+			const key = audioVersionKey(p.chapterId, p.versionId);
+			map.set(key, {
+				chapterId: key,
+				baseChapterId: p.chapterId,
+				versionId: p.versionId,
+				progressSeconds: p.progressSeconds,
+				isCompleted: Boolean(p.isCompleted),
+				updatedAt: p.updatedAt ? new Date(p.updatedAt).getTime() : 0
+			});
+		}
 		for (const p of progressQuery.data) {
-			map.set(p.chapterId, p);
+			if (p.broadcastId || isBroadcastProgressKey(p.chapterId)) continue;
+			const current = map.get(p.chapterId);
+			if (!current || (p.updatedAt ?? 0) >= (current.updatedAt ?? 0)) map.set(p.chapterId, p);
 		}
 		return map;
 	});
@@ -154,6 +175,7 @@
 				duration: chapter.durationSeconds,
 				versionId: 'default',
 				artwork: volume?.coverUrl,
+				blurhash: volume?.blurhash,
 				album: volume?.title,
 				volumeId: volume?.id,
 				bookId,
@@ -172,6 +194,7 @@
 					duration: version.durationSeconds,
 					versionId: activeVersionId,
 					artwork: volume?.coverUrl,
+					blurhash: volume?.blurhash,
 					album: volume?.title,
 					volumeId: volume?.id,
 					bookId,
@@ -189,7 +212,11 @@
 		if (trackIndex === -1) return;
 
 		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
-		if (audioStore.currentTrack?.id === chapter.id && currentVersion === activeVersionId) {
+		if (
+			audioStore.currentTrack?.id === chapter.id &&
+			currentVersion === activeVersionId &&
+			!audioStore.currentTrack.broadcastId
+		) {
 			audioStore.togglePlay();
 			return;
 		}
@@ -245,7 +272,9 @@
 		if (!isChapterAvailable(chapter)) return;
 		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
 		const isCurrent =
-			audioStore.currentTrack?.id === chapter.id && currentVersion === activeVersionId;
+			audioStore.currentTrack?.id === chapter.id &&
+			currentVersion === activeVersionId &&
+			!audioStore.currentTrack.broadcastId;
 
 		if (!isCurrent) {
 			handlePlayChapter(chapter);
@@ -302,7 +331,9 @@
 				{@const isAvailable = isDefaultVersion || !!versionTrack}
 				{@const currentVersion = audioStore.currentTrack?.versionId ?? 'default'}
 				{@const isCurrent =
-					audioStore.currentTrack?.id === chapter.id && currentVersion === activeVersionId}
+					audioStore.currentTrack?.id === chapter.id &&
+					currentVersion === activeVersionId &&
+					!audioStore.currentTrack.broadcastId}
 				{@const isPlaying = isCurrent && audioStore.isPlaying}
 				{@const isLoading = isCurrent && (audioStore.isLoading || audioStore.isBuffering)}
 				{@const saved = progressMap.get(audioVersionKey(chapter.id, activeVersionId))}

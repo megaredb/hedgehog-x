@@ -5,6 +5,7 @@ import {
 	books,
 	chapters,
 	chapterAudioVersions,
+	chapterIllustrations,
 	illustrations,
 	volumes
 } from '$lib/server/db/schema';
@@ -179,6 +180,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	let chapterList: AdminChapter[] = [];
 	let trackList: AdminArchiveTrack[] = [];
 	let illustrationList: AdminIllustration[] = [];
+	let chapterIllustrationTimings: Array<{
+		chapterId: string;
+		illustrationId: string;
+		showAtSeconds: number;
+	}> = [];
 	if (selectedVolume) {
 		[chapterList, illustrationList] = await Promise.all([
 			db
@@ -215,6 +221,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				.where(inArray(chapterAudioVersions.chapterId, chapterIds))
 				.orderBy(asc(chapters.chapterNumber), asc(chapterAudioVersions.createdAt));
 		}
+		chapterIllustrationTimings = await db
+			.select({
+				chapterId: chapterIllustrations.chapterId,
+				illustrationId: chapterIllustrations.illustrationId,
+				showAtSeconds: chapterIllustrations.showAtSeconds
+			})
+			.from(chapterIllustrations)
+			.where(inArray(chapterIllustrations.chapterId, chapterIds));
 	}
 
 	if (openChapterId && !chapterList.some((chapter) => chapter.id === openChapterId)) {
@@ -229,7 +243,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
 	let search: {
 		q: string;
-		books: Array<{ id: string; title: string; coverUrl: string | null; status: string | null }>;
+		books: Array<{
+			id: string;
+			title: string;
+			coverUrl: string | null;
+			blurhash: string | null;
+			status: string | null;
+		}>;
 		volumes: Array<{
 			id: string;
 			title: string;
@@ -266,6 +286,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			id: string;
 			caption: string | null;
 			imageUrl: string;
+			blurhash: string | null;
 			sortOrder: number;
 			bookId: string;
 			bookTitle: string;
@@ -284,6 +305,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					id: books.id,
 					title: books.title,
 					coverUrl: books.coverUrl,
+					blurhash: books.blurhash,
 					status: books.status
 				})
 				.from(books)
@@ -355,6 +377,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 					id: illustrations.id,
 					caption: illustrations.caption,
 					imageUrl: illustrations.imageUrl,
+					blurhash: illustrations.blurhash,
 					sortOrder: illustrations.sortOrder,
 					bookId: books.id,
 					bookTitle: books.title,
@@ -400,6 +423,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		chapters: chapterList,
 		tracks: trackList,
 		illustrations: illustrationList,
+		chapterIllustrationTimings,
 		audioVersions: versionRows,
 		tab,
 		intent,
@@ -596,108 +620,6 @@ async function removeAudioIfUnreferenced(audioUrl: string): Promise<void> {
 	} catch {
 		// Best-effort cleanup: the database change already succeeded.
 	}
-}
-
-function uniqueMedia(values: Array<string | null | undefined>): string[] {
-	return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
-}
-
-async function cleanupMedia(
-	images: Array<string | null | undefined>,
-	audio: Array<string | null | undefined>
-) {
-	await Promise.allSettled(uniqueMedia(images).map((url) => deleteFromStorage(url)));
-	for (const url of uniqueMedia(audio)) await removeAudioIfUnreferenced(url);
-}
-
-async function collectBookMedia(bookId: string) {
-	const [bookRow] = await db
-		.select({
-			coverUrl: books.coverUrl,
-			homeImageUrl: books.homeImageUrl,
-			homeVideoUrl: books.homeVideoUrl
-		})
-		.from(books)
-		.where(eq(books.id, bookId))
-		.limit(1);
-	const bookVolumes = await db
-		.select({ id: volumes.id, coverUrl: volumes.coverUrl })
-		.from(volumes)
-		.where(eq(volumes.bookId, bookId));
-	const volumeIds = bookVolumes.map((volume) => volume.id);
-	let chapterRows: Array<{ id: string; audioUrl: string }> = [];
-	let trackRows: Array<{ audioUrl: string }> = [];
-	let illustrationRows: Array<{ imageUrl: string }> = [];
-	if (volumeIds.length) {
-		chapterRows = await db
-			.select({ id: chapters.id, audioUrl: chapters.audioUrl })
-			.from(chapters)
-			.where(inArray(chapters.volumeId, volumeIds));
-		const chapterIds = chapterRows.map((chapter) => chapter.id);
-		if (chapterIds.length) {
-			trackRows = await db
-				.select({ audioUrl: chapterAudioVersions.audioUrl })
-				.from(chapterAudioVersions)
-				.where(inArray(chapterAudioVersions.chapterId, chapterIds));
-		}
-		illustrationRows = await db
-			.select({ imageUrl: illustrations.imageUrl })
-			.from(illustrations)
-			.where(inArray(illustrations.volumeId, volumeIds));
-	}
-	return {
-		images: [
-			bookRow?.coverUrl,
-			bookRow?.homeImageUrl,
-			bookRow?.homeVideoUrl,
-			...bookVolumes.map((volume) => volume.coverUrl),
-			...illustrationRows.map((row) => row.imageUrl)
-		],
-		audio: [...chapterRows.map((row) => row.audioUrl), ...trackRows.map((row) => row.audioUrl)]
-	};
-}
-
-async function collectVolumeMedia(volumeId: string) {
-	const [volumeRow] = await db
-		.select({ coverUrl: volumes.coverUrl })
-		.from(volumes)
-		.where(eq(volumes.id, volumeId))
-		.limit(1);
-	const chapterRows = await db
-		.select({ id: chapters.id, audioUrl: chapters.audioUrl })
-		.from(chapters)
-		.where(eq(chapters.volumeId, volumeId));
-	const chapterIds = chapterRows.map((chapter) => chapter.id);
-	const trackRows = chapterIds.length
-		? await db
-				.select({ audioUrl: chapterAudioVersions.audioUrl })
-				.from(chapterAudioVersions)
-				.where(inArray(chapterAudioVersions.chapterId, chapterIds))
-		: [];
-	const illustrationRows = await db
-		.select({ imageUrl: illustrations.imageUrl })
-		.from(illustrations)
-		.where(eq(illustrations.volumeId, volumeId));
-	return {
-		images: [volumeRow?.coverUrl, ...illustrationRows.map((row) => row.imageUrl)],
-		audio: [...chapterRows.map((row) => row.audioUrl), ...trackRows.map((row) => row.audioUrl)]
-	};
-}
-
-async function collectChapterMedia(chapterId: string) {
-	const [chapterRow] = await db
-		.select({ audioUrl: chapters.audioUrl })
-		.from(chapters)
-		.where(eq(chapters.id, chapterId))
-		.limit(1);
-	const trackRows = await db
-		.select({ audioUrl: chapterAudioVersions.audioUrl })
-		.from(chapterAudioVersions)
-		.where(eq(chapterAudioVersions.chapterId, chapterId));
-	return {
-		images: [] as Array<string | null | undefined>,
-		audio: [chapterRow?.audioUrl, ...trackRows.map((row) => row.audioUrl)]
-	};
 }
 
 export const actions: Actions = {
@@ -971,6 +893,7 @@ export const actions: Actions = {
 		const durationInput = parseNumber(form.get('durationSeconds'));
 		const telegramPostUrl = text(form, 'telegramPostUrl') || null;
 		const audioUrlInput = text(form, 'audioUrl');
+		const published = String(form.get('published') ?? 'false') === 'true';
 
 		if (!volumeId) return fail(400, { error: 'Необходимо выбрать том' });
 		if (!title) return fail(400, { error: 'Название главы обязательно' });
@@ -1024,7 +947,15 @@ export const actions: Actions = {
 			if (isUpdate) {
 				await db
 					.update(chapters)
-					.set({ volumeId, chapterNumber, title, audioUrl, durationSeconds, telegramPostUrl })
+					.set({
+						volumeId,
+						chapterNumber,
+						title,
+						audioUrl,
+						durationSeconds,
+						telegramPostUrl,
+						published
+					})
 					.where(eq(chapters.id, id));
 				if (oldAudioUrl && oldAudioUrl !== audioUrl) {
 					await removeAudioIfUnreferenced(oldAudioUrl);
@@ -1039,7 +970,8 @@ export const actions: Actions = {
 				title,
 				audioUrl,
 				durationSeconds,
-				telegramPostUrl
+				telegramPostUrl,
+				published
 			});
 			return { success: true, chapterId: id, bookId: volumeRow.bookId, volumeId };
 		} catch (e) {
@@ -1198,14 +1130,16 @@ export const actions: Actions = {
 
 		const isUpdate = Boolean(idInput);
 		let oldImageUrl: string | null = null;
+		let existingSortOrder: number | null = null;
 		if (isUpdate) {
 			const [existing] = await db
-				.select({ imageUrl: illustrations.imageUrl })
+				.select({ imageUrl: illustrations.imageUrl, sortOrder: illustrations.sortOrder })
 				.from(illustrations)
 				.where(eq(illustrations.id, idInput))
 				.limit(1);
 			if (!existing) return fail(404, { error: 'Иллюстрация не найдена' });
 			oldImageUrl = existing.imageUrl;
+			existingSortOrder = existing.sortOrder;
 		}
 
 		const uploaded = await uploadImageFile(form.get('imageFile'), 'illustrations', volumeId);
@@ -1213,8 +1147,48 @@ export const actions: Actions = {
 		const imageUrl = uploaded?.url || suppliedImageUrl || oldImageUrl || '';
 		if (!imageUrl) return fail(400, { error: 'Необходимо прикрепить изображение или указать URL' });
 
-		const sortOrder = Number.isInteger(sortOrderInput) ? sortOrderInput : 0;
+		const sortOrder = Number.isInteger(sortOrderInput) ? sortOrderInput : (existingSortOrder ?? 0);
 		const id = isUpdate ? idInput : 'ill_' + volumeId + '_' + randomUUID().slice(0, 8);
+
+		const rawTimings: unknown = (() => {
+			try {
+				return JSON.parse(String(form.get('timings') ?? '[]'));
+			} catch {
+				return [];
+			}
+		})();
+		const chapterRows = await db
+			.select({ id: chapters.id, durationSeconds: chapters.durationSeconds })
+			.from(chapters)
+			.where(eq(chapters.volumeId, volumeId));
+		const chapterById = new Map(chapterRows.map((chapter) => [chapter.id, chapter]));
+		const timingRows: Array<{
+			illustrationId: string;
+			chapterId: string;
+			showAtSeconds: number;
+			sortOrder: number;
+		}> = [];
+		if (Array.isArray(rawTimings)) {
+			const seen = new Set<string>();
+			for (const item of rawTimings.slice(0, 50)) {
+				if (!item || typeof item !== 'object') continue;
+				const row = item as { chapterId?: unknown; showAtSeconds?: unknown };
+				const chapterId = String(row.chapterId ?? '').trim();
+				const chapter = chapterById.get(chapterId);
+				if (!chapter || seen.has(chapterId)) continue;
+				seen.add(chapterId);
+				const seconds = Number(row.showAtSeconds);
+				timingRows.push({
+					illustrationId: id,
+					chapterId,
+					showAtSeconds: Math.max(
+						0,
+						Math.min(chapter.durationSeconds, Number.isFinite(seconds) ? seconds : 0)
+					),
+					sortOrder: timingRows.length
+				});
+			}
+		}
 
 		try {
 			if (isUpdate) {
@@ -1229,6 +1203,10 @@ export const actions: Actions = {
 				if (oldImageUrl && oldImageUrl !== imageUrl) {
 					await deleteFromStorage(oldImageUrl).catch(() => {});
 				}
+				await db.delete(chapterIllustrations).where(eq(chapterIllustrations.illustrationId, id));
+				if (timingRows.length) {
+					await db.insert(chapterIllustrations).values(timingRows);
+				}
 				return { success: true, illustrationId: id };
 			}
 
@@ -1240,6 +1218,9 @@ export const actions: Actions = {
 				caption,
 				sortOrder
 			});
+			if (timingRows.length) {
+				await db.insert(chapterIllustrations).values(timingRows);
+			}
 			return { success: true, illustrationId: id };
 		} catch (e) {
 			if (uploaded) await deleteFromStorage(uploaded.url).catch(() => {});
@@ -1289,15 +1270,57 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
+	illustrationReorder: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const form = await request.formData();
+		const volumeId = text(form, 'volumeId');
+		const submitted: unknown = (() => {
+			try {
+				return JSON.parse(String(form.get('order') ?? '[]'));
+			} catch {
+				return [];
+			}
+		})();
+		if (!volumeId || !Array.isArray(submitted)) {
+			return fail(400, { error: 'Некорректный запрос' });
+		}
+
+		const rows = await db
+			.select({ id: illustrations.id })
+			.from(illustrations)
+			.where(eq(illustrations.volumeId, volumeId))
+			.orderBy(asc(illustrations.sortOrder), asc(illustrations.createdAt), asc(illustrations.id));
+		const timedRows = await db
+			.select({ illustrationId: chapterIllustrations.illustrationId })
+			.from(chapterIllustrations)
+			.innerJoin(chapters, eq(chapterIllustrations.chapterId, chapters.id))
+			.where(eq(chapters.volumeId, volumeId));
+		const timedIds = new Set(timedRows.map((row) => row.illustrationId));
+		const editableIds = rows.map((row) => row.id).filter((id) => !timedIds.has(id));
+		const editableSet = new Set(editableIds);
+		const ordered = submitted
+			.map((value) => String(value))
+			.filter((id, index, list) => editableSet.has(id) && list.indexOf(id) === index);
+		for (const id of editableIds) {
+			if (!ordered.includes(id)) ordered.push(id);
+		}
+
+		await db.transaction(async (tx) => {
+			for (const [order, id] of ordered.entries()) {
+				await tx.update(illustrations).set({ sortOrder: order }).where(eq(illustrations.id, id));
+			}
+		});
+		return { success: true };
+	},
+
 	bookDelete: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const form = await request.formData();
 		const id = text(form, 'id');
 		if (!id) return fail(400, { error: 'ID обязателен' });
 		try {
-			const media = await collectBookMedia(id);
+			// R2 objects are intentionally preserved when a book is deleted.
 			await db.delete(books).where(eq(books.id, id));
-			await cleanupMedia(media.images, media.audio);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {
@@ -1312,9 +1335,8 @@ export const actions: Actions = {
 		const id = text(form, 'id');
 		if (!id) return fail(400, { error: 'ID обязателен' });
 		try {
-			const media = await collectVolumeMedia(id);
+			// R2 objects are intentionally preserved when a volume is deleted.
 			await db.delete(volumes).where(eq(volumes.id, id));
-			await cleanupMedia(media.images, media.audio);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {
@@ -1329,9 +1351,8 @@ export const actions: Actions = {
 		const id = text(form, 'id');
 		if (!id) return fail(400, { error: 'ID обязателен' });
 		try {
-			const media = await collectChapterMedia(id);
+			// R2 objects are intentionally preserved when a chapter is deleted.
 			await db.delete(chapters).where(eq(chapters.id, id));
-			await cleanupMedia(media.images, media.audio);
 			return { success: true };
 		} catch (e) {
 			return fail(500, {

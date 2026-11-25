@@ -321,6 +321,7 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								title: chapter.title,
 								audioUrl: chapter.audioUrl,
 								durationSeconds: chapter.durationSeconds,
+								published: true,
 								telegramPostUrl: chapter.telegramPostUrl
 							})
 							.onConflictDoNothing({ target: chapters.id })

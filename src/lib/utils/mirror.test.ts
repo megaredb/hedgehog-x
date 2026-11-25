@@ -9,8 +9,10 @@ import {
 	getActiveMirrorHost,
 	MIRROR_STORAGE_KEY,
 	PRIMARY_CDN_HOST,
-	RU_CDN_HOST
+	RU_CDN_HOST,
+	configureMirrors
 } from './mirror';
+import { DEFAULT_SITE_MIRRORS } from '$lib/types/site';
 
 describe('mirror resolver utility', () => {
 	const originalWindow = globalThis.window;
@@ -208,5 +210,73 @@ describe('mirror resolver utility', () => {
 			assert.equal(getFallbackMediaUrl('/audio/local.mp3'), null);
 			assert.equal(getFallbackMediaUrl('https://example.com/audio.mp3'), null);
 		});
+	});
+});
+
+describe('dynamic mirror configuration', () => {
+	afterEach(() => {
+		configureMirrors(DEFAULT_SITE_MIRRORS);
+	});
+
+	const custom = [
+		{
+			id: 'eu',
+			label: 'EU',
+			description: '',
+			host: 'eu.example.com',
+			enabled: true,
+			autoRole: 'default' as const
+		},
+		{
+			id: 'ru2',
+			label: 'RU 2',
+			description: '',
+			host: 'ru2.example.com',
+			enabled: true,
+			autoRole: 'ru' as const
+		},
+		{
+			id: 'off',
+			label: 'Off',
+			description: '',
+			host: 'off.example.com',
+			enabled: false,
+			autoRole: 'none' as const
+		}
+	];
+
+	it('auto uses the default mirror and the RU role on RU hosts', () => {
+		configureMirrors(custom);
+		// @ts-expect-error test mock
+		globalThis.window = { location: { hostname: 'hedgehog-inc.one' } };
+		assert.equal(getActiveMirrorHost('auto'), 'eu.example.com');
+		// @ts-expect-error test mock
+		globalThis.window = { location: { hostname: 'ru.hedgehog-inc.one' } };
+		assert.equal(getActiveMirrorHost('auto'), 'ru2.example.com');
+	});
+
+	it('uses an explicitly selected enabled custom mirror', () => {
+		configureMirrors(custom);
+		// @ts-expect-error test mock
+		globalThis.window = { location: { hostname: 'hedgehog-inc.one' } };
+		assert.equal(getActiveMirrorHost('ru2'), 'ru2.example.com');
+	});
+
+	it('falls back to auto when preference is disabled or missing', () => {
+		configureMirrors(custom);
+		// @ts-expect-error test mock
+		globalThis.window = { location: { hostname: 'hedgehog-inc.one' } };
+		assert.equal(getActiveMirrorHost('off'), 'eu.example.com');
+		assert.equal(getActiveMirrorHost('deleted-mirror'), 'eu.example.com');
+	});
+
+	it('rewrites known mirror hosts to the active custom host', () => {
+		configureMirrors(custom);
+		// @ts-expect-error test mock
+		globalThis.window = { location: { hostname: 'hedgehog-inc.one' } };
+		assert.equal(
+			resolveMediaUrl('https://ru2.example.com/audio/a.mp3', 'eu'),
+			'https://eu.example.com/audio/a.mp3'
+		);
 	});
 });

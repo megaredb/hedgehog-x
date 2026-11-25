@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Radio } from '@lucide/svelte';
 	import { audioStore } from '$lib/audio-store.svelte.js';
-	import { htmlAudio, formatDuration } from '$lib/html-audio.js';
+	import { htmlAudio } from '$lib/html-audio.js';
 	import { cn } from '$lib/utils.js';
 
 	interface Props {
@@ -14,8 +14,17 @@
 
 	const isLiveStream = $derived(htmlAudio.isLive(audioStore.duration));
 
-	const formattedCurrentTime = $derived(formatDuration(audioStore.currentTime));
-	const formattedRemaining = $derived(formatDuration(audioStore.duration - audioStore.currentTime));
+	function formatPlayerTime(seconds: number): string {
+		const safe = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+		const hours = Math.floor(safe / 3600);
+		const minutes = Math.floor((safe % 3600) / 60);
+		return `${hours}:${String(minutes).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+	}
+
+	const formattedCurrentTime = $derived(formatPlayerTime(audioStore.currentTime));
+	const formattedRemaining = $derived(
+		formatPlayerTime(audioStore.duration - audioStore.currentTime)
+	);
 
 	const timeValue = $derived.by(() => {
 		if (isLiveStream && remaining) return 'LIVE';

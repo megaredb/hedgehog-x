@@ -5,6 +5,7 @@
 	import type { OfflineBook, OfflineVolume, OfflineChapter } from '$lib/client/db';
 	import { buildShareUrl, buildShareText, formatShareTime } from './share.js';
 	import { strings } from '$lib/constants/strings';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { Share2, Copy, Check, Clock, BookOpen, Radio } from '@lucide/svelte';
 
 	interface Props {
@@ -16,6 +17,7 @@
 					title: string;
 					volumeNumber?: number;
 					coverUrl?: string;
+					blurhash?: string | null;
 					description?: string | null;
 					bookId?: string;
 			  }
@@ -203,10 +205,11 @@
 		{#if volume}
 			<div class="flex items-center gap-3 rounded-2xl border border-border/50 bg-muted/30 p-3">
 				{#if volume.coverUrl}
-					<img
+					<BlurhashImage
 						src={volume.coverUrl}
+						blurhash={volume.blurhash}
 						alt={volume.title}
-						class="h-14 w-10 shrink-0 rounded-lg object-cover shadow-xs"
+						class="h-14 w-10 shrink-0 rounded-lg shadow-xs"
 					/>
 				{/if}
 				<div class="min-w-0 flex-1">

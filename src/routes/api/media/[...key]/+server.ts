@@ -1,10 +1,11 @@
-import { error, type RequestHandler } from '@sveltejs/kit';
+import { error, redirect, type RequestHandler } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { getMediaObject } from '$lib/server/storage/r2';
+import { directMediaUrl, loadMediaSettings } from '$lib/server/site-settings';
 
 const CACHE_DIR = process.env.MEDIA_CACHE_DIR ?? '/tmp/hedgehog-media';
 
@@ -77,6 +78,10 @@ async function cacheImage(key: string, bytes: Uint8Array): Promise<void> {
 export const GET: RequestHandler = async ({ params, request }) => {
 	const key = params.key?.trim();
 	if (!key) throw error(404, 'Not found');
+
+	const mediaSettings = await loadMediaSettings();
+	const directUrl = directMediaUrl(mediaSettings, key);
+	if (directUrl) throw redirect(302, directUrl);
 
 	const target = cachePath(key);
 	if (target) {

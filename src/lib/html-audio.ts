@@ -4,6 +4,8 @@ export type Track = {
 	title?: string;
 	artist?: string;
 	artwork?: string;
+	/** Optional BlurHash for the artwork placeholder. */
+	blurhash?: string | null;
 	images?: string[];
 	duration?: number;
 	album?: string;
@@ -312,6 +314,24 @@ class HtmlAudio {
 			const audio = this.ensureAudio();
 			audio.pause();
 		});
+	}
+
+	/** Stop and detach the current source so a deleted track cannot resume. */
+	stop(): void {
+		if (this.isClient() && this.audio) {
+			this.audio.pause();
+			this.audio.removeAttribute('src');
+			this.audio.load();
+		}
+		if (this.fadeTimeout) {
+			clearTimeout(this.fadeTimeout);
+			this.fadeTimeout = null;
+		}
+		if (this.currentBlobUrl) {
+			URL.revokeObjectURL(this.currentBlobUrl);
+			this.currentBlobUrl = null;
+		}
+		this.playPromise = null;
 	}
 
 	setVolume(params: SetVolumeParams): void {

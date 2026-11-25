@@ -127,9 +127,9 @@
 		</div>
 
 		<ImageField
-			fileField="coverFile"
 			urlField="coverUrl"
 			value={volume?.coverUrl ?? null}
+			blurhash={volume?.blurhash}
 			label="Обложка тома"
 			aspect="cover"
 			hint="WebP + BlurHash, до 15 МБ"

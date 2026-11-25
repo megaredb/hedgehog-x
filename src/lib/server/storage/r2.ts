@@ -2,7 +2,8 @@ import {
 	S3Client,
 	PutObjectCommand,
 	DeleteObjectCommand,
-	GetObjectCommand
+	GetObjectCommand,
+	ListObjectsV2Command
 } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { encode } from 'blurhash';
@@ -10,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '$lib/logger';
+import { loadMediaSettings } from '$lib/server/site-settings';
 
 const dynamicPrivate = await import('$env/dynamic/private').catch(() => ({ env: process.env }));
 const env = dynamicPrivate.env;
@@ -94,6 +96,13 @@ export async function getMediaObject(key: string, range?: string) {
 			...(range ? { Range: range } : {})
 		})
 	);
+}
+
+async function publicMediaUrl(publicUrl: string, key: string): Promise<string> {
+	const media = await loadMediaSettings();
+	const base =
+		!media.mediaProxyEnabled && media.mediaDirectBaseUrl ? media.mediaDirectBaseUrl : publicUrl;
+	return `${base.replace(/\/$/, '')}/${key}`;
 }
 
 export function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
@@ -185,7 +194,7 @@ export async function uploadImage(
 			})
 		);
 		return {
-			url: `${r2.publicUrl}/${key}`,
+			url: await publicMediaUrl(r2.publicUrl, key),
 			key,
 			blurhash,
 			themeColor,
@@ -249,7 +258,7 @@ export async function uploadAudio(
 			})
 		);
 		return {
-			url: `${r2.publicUrl}/${key}`,
+			url: await publicMediaUrl(r2.publicUrl, key),
 			key
 		};
 	}
@@ -305,7 +314,7 @@ export async function uploadVideo(
 			})
 		);
 		return {
-			url: `${r2.publicUrl}/${key}`,
+			url: await publicMediaUrl(r2.publicUrl, key),
 			key
 		};
 	}
@@ -323,6 +332,112 @@ export async function uploadVideo(
 	return {
 		url: `/uploads/${key}`,
 		key
+	};
+}
+
+export type MediaType = 'image' | 'audio' | 'video';
+
+export interface MediaLibraryFile {
+	key: string;
+	url: string;
+	name: string;
+	size: number;
+	lastModified: string | null;
+	type: MediaType;
+}
+
+const IMAGE_EXTENSIONS = new Set(['.webp', '.jpg', '.jpeg', '.png', '.gif', '.avif']);
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.ogg', '.opus', '.wav', '.aac']);
+const VIDEO_EXTENSIONS = new Set(['.webm', '.mp4', '.mov', '.m4v']);
+
+export function mediaTypeForKey(key: string): MediaType | null {
+	const ext = path.extname(key).toLowerCase();
+	if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+	if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
+	if (ext === '.mp4' && key.startsWith('audio/')) return 'audio';
+	if (VIDEO_EXTENSIONS.has(ext)) return 'video';
+	return null;
+}
+
+export async function getMediaUrl(key: string): Promise<string> {
+	const r2 = getS3Client();
+	if (!r2) return `/uploads/${key}`;
+	return publicMediaUrl(r2.publicUrl, key);
+}
+
+async function localMediaFiles(root: string, prefix = ''): Promise<MediaLibraryFile[]> {
+	const current = path.join(root, prefix);
+	let entries: import('node:fs').Dirent[];
+	try {
+		entries = await fs.readdir(current, { withFileTypes: true });
+	} catch {
+		return [];
+	}
+	const files: MediaLibraryFile[] = [];
+	for (const entry of entries) {
+		const relative = path.join(prefix, entry.name);
+		if (entry.isDirectory()) {
+			files.push(...(await localMediaFiles(root, relative)));
+			continue;
+		}
+		const type = mediaTypeForKey(relative);
+		if (!type) continue;
+		const stat = await fs.stat(path.join(root, relative)).catch(() => null);
+		files.push({
+			key: relative.split(path.sep).join('/'),
+			url: `/uploads/${relative.split(path.sep).join('/')}`,
+			name: entry.name,
+			size: stat?.size ?? 0,
+			lastModified: stat?.mtime?.toISOString() ?? null,
+			type
+		});
+	}
+	return files;
+}
+
+export async function listMediaFiles(options: {
+	type: MediaType;
+	cursor?: string | null;
+}): Promise<{ files: MediaLibraryFile[]; nextCursor: string | null; source: 'r2' | 'local' }> {
+	const r2 = getS3Client();
+	if (!r2) {
+		const root = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads');
+		const all = await localMediaFiles(root);
+		return {
+			files: all
+				.filter((file) => file.type === options.type)
+				.sort((a, b) => (b.lastModified ?? '').localeCompare(a.lastModified ?? '')),
+			nextCursor: null,
+			source: 'local'
+		};
+	}
+
+	const result = await r2.client.send(
+		new ListObjectsV2Command({
+			Bucket: r2.bucket,
+			MaxKeys: 1000,
+			ContinuationToken: options.cursor || undefined
+		})
+	);
+	const files: MediaLibraryFile[] = [];
+	for (const object of result.Contents ?? []) {
+		if (!object.Key) continue;
+		const type = mediaTypeForKey(object.Key);
+		if (type !== options.type) continue;
+		files.push({
+			key: object.Key,
+			url: await publicMediaUrl(r2.publicUrl, object.Key),
+			name: decodeURIComponent(object.Key.split('/').pop() ?? object.Key),
+			size: object.Size ?? 0,
+			lastModified: object.LastModified?.toISOString() ?? null,
+			type
+		});
+	}
+	files.sort((a, b) => (b.lastModified ?? '').localeCompare(a.lastModified ?? ''));
+	return {
+		files,
+		nextCursor: result.IsTruncated ? (result.NextContinuationToken ?? null) : null,
+		source: 'r2'
 	};
 }
 
