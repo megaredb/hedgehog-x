@@ -3,6 +3,7 @@
 	import type { OfflineBook, OfflineBookmark, OfflineChapter, OfflineVolume } from '$lib/client/db';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { Button } from '$lib/components/ui/button';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import ConfirmModal from '$lib/components/overlay/ConfirmModal.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
@@ -64,7 +65,11 @@
 				? audioStore.currentTrack.versionId
 				: 'default';
 
-		if (audioStore.currentTrack?.id === bookmark.chapterId && currentVersion === versionId) {
+		if (
+			audioStore.currentTrack?.id === bookmark.chapterId &&
+			!audioStore.currentTrack.broadcastId &&
+			currentVersion === versionId
+		) {
 			audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 			audioStore.seek(bookmark.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
@@ -86,6 +91,7 @@
 						duration: version.durationSeconds,
 						versionId,
 						artwork: volume?.coverUrl,
+						blurhash: volume?.blurhash,
 						album: volume?.title,
 						artist: book?.title || 'Hedgehog X',
 						volumeId: volume?.id,
@@ -106,6 +112,7 @@
 			duration: chapter.durationSeconds,
 			versionId: 'default',
 			artwork: volume?.coverUrl,
+			blurhash: volume?.blurhash,
 			album: volume?.title,
 			artist: book?.title || 'Hedgehog X',
 			volumeId: volume?.id,
@@ -178,13 +185,14 @@
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div class="flex min-w-0 items-start gap-3">
 							{#if volume?.coverUrl}
-								<img
+								<BlurhashImage
 									src={volume.coverUrl}
+									blurhash={volume.blurhash}
 									alt={volume.title}
 									width={48}
 									height={64}
 									loading="lazy"
-									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm"
+									class="h-16 w-12 shrink-0 rounded-lg shadow-sm"
 								/>
 							{:else}
 								<div

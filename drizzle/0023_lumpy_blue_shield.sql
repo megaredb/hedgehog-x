@@ -1,0 +1,1 @@
+ALTER TABLE "translators" ADD COLUMN "links" jsonb DEFAULT '[]'::jsonb NOT NULL;

@@ -27,8 +27,8 @@
 	}
 
 	let currentIndex = $state(initialIndex);
-	// Video backgrounds are opt-in: autoplay pulls multi-megabyte media and delays LCP.
-	let isVideoPlaying = $state(false);
+	// Video backgrounds play by default; a saved user preference can disable them.
+	let isVideoPlaying = $state(true);
 	let scrollContainer: HTMLDivElement | null = $state(null);
 	let isProgrammaticScroll = $state(false);
 	let scrollTimeoutId: number | undefined;
@@ -148,7 +148,7 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
+			class="showcase-scroll-indicator pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Previous"
 		>
 			<ChevronUp class="h-8 w-8" />
@@ -157,7 +157,7 @@
 
 	<a
 		href={resolve('/books')}
-		class="pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
+		class="showcase-all-books pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
 	>
 		{strings.common.allBooks}
 	</a>
@@ -172,7 +172,7 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
+			class="showcase-scroll-indicator pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Next"
 		>
 			<ChevronDown class="h-8 w-8" />
@@ -203,5 +203,12 @@
 	.no-scrollbar {
 		-ms-overflow-style: none;
 		scrollbar-width: none;
+	}
+
+	@media (orientation: landscape) and (max-height: 500px) and (max-width: 1100px) {
+		.showcase-all-books,
+		.showcase-scroll-indicator {
+			display: none;
+		}
 	}
 </style>

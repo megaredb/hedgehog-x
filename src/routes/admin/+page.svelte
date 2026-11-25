@@ -15,6 +15,7 @@
 		Disc3,
 		Image as ImageIcon,
 		Users,
+		Crown,
 		Plus,
 		ArrowRight
 	} from '@lucide/svelte';
@@ -61,6 +62,14 @@
 			icon: Users,
 			href: '/admin/users',
 			color: 'text-rose-500'
+		},
+		{
+			label: 'Подписчиков',
+			count: data.counts.subscribers,
+			subtext: 'Активный доступ',
+			icon: Crown,
+			href: '/admin/users',
+			color: 'text-emerald-500'
 		}
 	]);
 </script>
@@ -75,7 +84,7 @@
 	</div>
 
 	<!-- Stats Grid -->
-	<div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+	<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
 		{#each stats as stat (stat.label)}
 			{@const Icon = stat.icon}
 			<Button

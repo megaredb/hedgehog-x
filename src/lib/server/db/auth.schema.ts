@@ -18,8 +18,9 @@ export const user = pgTable('user', {
 	// Discord provider details
 	discordAvatar: text('discord_avatar'),
 	discordUsername: text('discord_username'),
-	// User role: 'user' | 'admin'
-	role: text('role').default('user').notNull()
+	// User role: 'user' | 'admin' | 'author'
+	role: text('role').default('user').notNull(),
+	includeInStats: boolean('include_in_stats').default(true).notNull()
 });
 
 export const session = pgTable(
@@ -62,7 +63,10 @@ export const account = pgTable(
 			.$onUpdate(() => /* @__PURE__ */ new Date())
 			.notNull()
 	},
-	(table) => [index('account_userId_idx').on(table.userId)]
+	(table) => [
+		index('account_userId_idx').on(table.userId),
+		index('account_provider_account_idx').on(table.providerId, table.accountId)
+	]
 );
 
 export const verification = pgTable(

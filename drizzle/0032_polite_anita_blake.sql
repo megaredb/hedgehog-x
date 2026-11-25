@@ -1,0 +1,1 @@
+ALTER TABLE "broadcast_messages" ADD COLUMN "tagged_illustration_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

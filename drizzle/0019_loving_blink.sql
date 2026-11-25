@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "include_in_stats" boolean DEFAULT true NOT NULL;

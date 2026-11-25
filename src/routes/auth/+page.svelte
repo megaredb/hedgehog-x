@@ -30,6 +30,14 @@
 	$effect(() => {
 		if (session.user) return;
 		const params = page.url.searchParams;
+		if (params.get('blocked')) {
+			errorMessage = 'Аккаунт заблокирован администратором. Вход временно недоступен.';
+			errorModalOpen = true;
+			const url = new URL(window.location.href);
+			url.searchParams.delete('blocked');
+			window.history.replaceState({}, '', url);
+			return;
+		}
 		const err = params.get('error') ?? params.get('error_description');
 		if (err) {
 			errorMessage =

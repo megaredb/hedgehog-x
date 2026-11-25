@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { books, volumes, chapters } from '$lib/server/db/schema';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -17,7 +17,7 @@ export const load: PageServerLoad = async () => {
 		})
 		.from(books)
 		.leftJoin(volumes, sql`${volumes.bookId} = ${books.id}`)
-		.leftJoin(chapters, sql`${chapters.volumeId} = ${volumes.id}`)
+		.leftJoin(chapters, and(eq(chapters.volumeId, volumes.id), eq(chapters.published, true)))
 		.groupBy(books.id)
 		.orderBy(books.sortOrder, books.title);
 

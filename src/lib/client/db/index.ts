@@ -52,6 +52,14 @@ export interface OfflineIllustration {
 
 export interface OfflineProgress {
 	chapterId: string;
+	broadcastId?: string;
+	broadcastLive?: boolean;
+	broadcastTitle?: string;
+	broadcastBookTitle?: string;
+	broadcastVolumeTitle?: string;
+	broadcastCoverUrl?: string;
+	broadcastHref?: string;
+	broadcastDurationSeconds?: number;
 	/** Actual chapter ID when chapterId is a version-qualified local key. */
 	baseChapterId?: string;
 	versionId?: string;
@@ -72,11 +80,49 @@ export interface OfflineChapterLike {
 export interface OfflineBookmark {
 	id: string;
 	chapterId: string;
+	broadcastId?: string;
+	broadcastLive?: boolean;
+	broadcastTitle?: string;
+	broadcastBookTitle?: string;
+	broadcastVolumeTitle?: string;
+	broadcastCoverUrl?: string;
+	broadcastHref?: string;
 	versionId?: string;
 	timestampSeconds: number;
 	endTimestampSeconds?: number | null;
 	note: string;
 	createdAt: number;
+}
+
+export interface OfflineBroadcastChatMessage {
+	id: string;
+	userId: string | null;
+	name: string;
+	avatar: string | null;
+	body: string;
+	createdAt: string;
+	offsetSeconds: number;
+	subscription: 'none' | 'active' | 'lifetime';
+	replyToId?: string | null;
+	replyToName?: string | null;
+	replyToBody?: string | null;
+	linkUrl?: string | null;
+	linkTitle?: string | null;
+	linkDescription?: string | null;
+	linkImage?: string | null;
+	reactions?: Record<string, number>;
+}
+
+export interface OfflineBroadcastChat {
+	broadcastId: string;
+	chapterId: string;
+	title: string;
+	bookTitle?: string;
+	volumeTitle?: string;
+	coverUrl?: string | null;
+	href: string;
+	messages: OfflineBroadcastChatMessage[];
+	savedAt: number;
 }
 
 export interface OfflineMeta {
@@ -131,6 +177,7 @@ const db = new Dexie('HedgehogDB') as Dexie & {
 	meta: EntityTable<OfflineMeta, 'key'>;
 
 	downloads: EntityTable<OfflineDownload, 'chapterId'>;
+	broadcastChats: EntityTable<OfflineBroadcastChat, 'broadcastId'>;
 
 	syncQueue: EntityTable<SyncItem, 'id'>;
 };
@@ -177,6 +224,24 @@ db.version(3).stores({
 // v4: per-chapter audio versions (OLD VERSION tracks).
 db.version(4).stores({
 	chapterAudioVersions: 'id, chapterId, versionId'
+});
+
+// v5: downloaded broadcast chat history.
+db.version(5).stores({
+	broadcastChats: 'broadcastId, chapterId, savedAt'
+});
+
+// v6: broadcast replay progress must never share a key with chapter progress.
+db.version(6).upgrade(async (tx) => {
+	const table = tx.table('progress');
+	const rows = await table.toArray();
+	for (const row of rows) {
+		if (!row.broadcastId || row.chapterId.startsWith('broadcast-progress:')) continue;
+		const key = 'broadcast-progress:' + row.broadcastId;
+		const existing = await table.get(key);
+		if (!existing) await table.put({ ...row, chapterId: key });
+		await table.delete(row.chapterId);
+	}
 });
 
 export { db };

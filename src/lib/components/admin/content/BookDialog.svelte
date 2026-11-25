@@ -141,12 +141,12 @@
 			</div>
 
 			<ImageField
-				fileField="coverFile"
 				urlField="coverUrl"
 				value={book?.coverUrl ?? null}
+				blurhash={book?.blurhash}
 				label="Обложка книги"
 				aspect="cover"
-				hint="Загрузите обложку или укажите прямой URL"
+				hint="Обложка выбирается из R2 storage."
 			/>
 
 			<div class="space-y-3 rounded-xl border border-border/50 bg-muted/20 p-3">
@@ -157,15 +157,13 @@
 					</p>
 				</div>
 				<ImageField
-					fileField="homeImageFile"
 					urlField="homeImageUrl"
 					value={book?.homeImageUrl ?? null}
 					label="Изображение на главной"
 					aspect="wide"
-					hint="Фон витрины. Загрузите отдельное изображение или укажите URL"
+					hint="Фон витрины выбирается из R2 storage."
 				/>
 				<VideoField
-					fileField="homeVideoFile"
 					urlField="homeVideoUrl"
 					value={book?.homeVideoUrl ?? null}
 					label="Видео на главной"

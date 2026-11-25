@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { Video } from '@lucide/svelte';
-	import { Input } from '$lib/components/ui/input';
+	import { Expand, FolderOpen, Video, X } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
+	import MediaLightbox from './MediaLightbox.svelte';
+	import R2FilePicker from './R2FilePicker.svelte';
+	import type { MediaLibraryFile } from '$lib/server/storage/r2';
 
 	interface Props {
-		fileField: string;
 		urlField: string;
 		value?: string | null;
 		label?: string;
@@ -12,41 +14,40 @@
 	}
 
 	let {
-		fileField,
 		urlField,
-		value = null,
+		value = $bindable(null),
 		label = 'Видеофон',
 		hint = 'WebM или MP4, до 100 МБ'
 	}: Props = $props();
 
-	let objectUrl = $state<string | null>(null);
-	let fileName = $state('');
-	let preview = $derived(objectUrl ?? value ?? '');
+	let pickerOpen = $state(false);
+	let lightboxOpen = $state(false);
+	let selectedUrl = $state(value ?? '');
 
 	$effect(() => {
-		const url = objectUrl;
-		return () => {
-			if (url) URL.revokeObjectURL(url);
-		};
+		const next = value ?? '';
+		if (next !== selectedUrl) selectedUrl = next;
 	});
 
-	function formatBytes(bytes: number): string {
-		if (!Number.isFinite(bytes) || bytes <= 0) return '0 Б';
-		const megabytes = bytes / (1024 * 1024);
-		if (megabytes >= 1) return megabytes.toFixed(megabytes >= 10 ? 0 : 1) + ' МБ';
-		return Math.max(1, Math.round(bytes / 1024)) + ' КБ';
+	const preview = $derived(selectedUrl);
+
+	function selectFile(file: MediaLibraryFile) {
+		selectedUrl = file.url;
+		value = file.url;
 	}
 
-	function handleFile(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0] ?? null;
-		if (objectUrl) URL.revokeObjectURL(objectUrl);
-		if (file) {
-			objectUrl = URL.createObjectURL(file);
-			fileName = file.name + ' · ' + formatBytes(file.size);
-		} else {
-			objectUrl = null;
-			fileName = '';
+	function clearSelection() {
+		selectedUrl = '';
+		value = null;
+	}
+
+	function fileLabel(url: string): string {
+		if (!url) return '';
+		try {
+			const parsed = new URL(url, 'http://local');
+			return decodeURIComponent(parsed.pathname.split('/').pop() ?? '') || url;
+		} catch {
+			return url;
 		}
 	}
 </script>
@@ -57,35 +58,62 @@
 			class="flex h-24 w-32 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/50 bg-muted/40"
 		>
 			{#if preview}
-				<video
-					src={preview}
-					class="h-full w-full object-cover"
-					muted
-					playsinline
-					controls
-					preload="metadata"
-				></video>
+				<button
+					type="button"
+					class="group relative h-full w-full cursor-zoom-in"
+					title="Открыть видео"
+					onclick={() => (lightboxOpen = true)}
+				>
+					<video
+						src={preview}
+						class="h-full w-full object-cover"
+						muted
+						playsinline
+						preload="metadata"
+					></video>
+					<span
+						class="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"
+					>
+						<Expand class="h-4 w-4" />
+					</span>
+				</button>
 			{:else}
 				<Video class="h-5 w-5 text-muted-foreground" />
 			{/if}
 		</div>
 		<div class="min-w-0 flex-1 space-y-2">
 			<Label class="text-xs font-semibold">{label}</Label>
-			<input
-				name={fileField}
-				type="file"
-				accept="video/webm,video/mp4,video/quicktime"
-				class="block w-full cursor-pointer text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1 file:text-xs file:font-semibold file:text-primary-foreground hover:file:opacity-90"
-				onchange={handleFile}
-			/>
-			<p class="text-[11px] text-muted-foreground">
-				{fileName || hint}
+			<div class="flex flex-wrap items-center gap-1.5">
+				<Button
+					type="button"
+					size="sm"
+					variant="outline"
+					class="gap-1.5"
+					onclick={() => (pickerOpen = true)}
+				>
+					<FolderOpen class="h-3.5 w-3.5" />
+					{preview ? 'Заменить в R2' : 'Выбрать в R2'}
+				</Button>
+				{#if preview}
+					<Button
+						type="button"
+						size="icon-xs"
+						variant="ghost"
+						title="Убрать видео"
+						aria-label="Убрать видео"
+						onclick={clearSelection}
+					>
+						<X class="h-3.5 w-3.5" />
+					</Button>
+				{/if}
+			</div>
+			<p class="truncate text-[11px] text-muted-foreground">
+				{preview ? fileLabel(preview) : hint || 'Видео выбирается из R2 storage.'}
 			</p>
+			<input type="hidden" name={urlField} value={selectedUrl} />
 		</div>
 	</div>
-
-	<div class="space-y-1">
-		<Label class="text-[11px] text-muted-foreground">Или прямой URL</Label>
-		<Input name={urlField} value={value ?? ''} placeholder="https://..." class="h-8 text-xs" />
-	</div>
 </div>
+
+<MediaLightbox bind:open={lightboxOpen} src={preview || null} title={label} kind="video" />
+<R2FilePicker bind:open={pickerOpen} type="video" onSelect={selectFile} />

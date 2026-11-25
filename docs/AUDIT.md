@@ -1,6 +1,6 @@
 # AUDIT.md — недочёты, ошибки и расхождения
 
-> Снимок 2026-11-18, dev/5f67c5d. Аудит основан на чтении кода и проверках:
+> Снимок 2026-11-25, ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41` (рабочее дерево). Аудит основан на чтении кода и проверках:
 > сборка, svelte-check, unit/e2e, живая Postgres, применении миграций на scratch-БД,
 > браузерный эксперимент с IndexedDB, HTTP-пробы собранного сервера.
 >
@@ -11,6 +11,11 @@
 > исправлен: `svelte-check` — 0 ошибок. P0-01 исправлен: 401 для гостя,
 > owner-aware sync, guest data загружается при входе; e2e `sync-data-safety` — 7/7.
 > Остальные находки ниже актуальны, если не помечены иначе.
+> **Актуальная проверка 2026-11-25:** unit — 250/250 (35 файлов), e2e — 48/48
+> (9 файлов, `--workers=1`, включая a11y), build/check/lint — зелёные. Покрытие unit:
+> 88.00% строк / 82.89% ветвей / 65.66% функций для загруженных тестами модулей;
+> route handlers, admin/UI, downloadManager/audioStore/audio-provider остаются без unit-тестов.
+> Миграции — 0000–0034 (35 SQL-файлов), схема совпадает с `schema.ts`.
 
 Severity:
 
@@ -40,45 +45,46 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 **P2/P3, реализовано 2026-11-19:** SSR-каталог и поиск; sync API с лимитами,
 валидацией и транзакциями; плеер (Space/repeat/sleep/seek/OPFS); CSP, SW-кэши и
 PWA; пагинация и confirm-модалки админки; роли пользователей; a11y-фокус и
-keyboard; metrics endpoint; 197 unit и 46 e2e; чистка мёртвого кода и словаря.
+keyboard; metrics endpoint; 250 unit и 48 e2e; чистка мёртвого кода и словаря.
 
 ## 2. Проверочная база
 
-| Проверка           | Команда/способ                                            | Результат                                                 |
-| ------------------ | --------------------------------------------------------- | --------------------------------------------------------- |
-| Production build   | vite build                                                | exit 0                                                    |
-| Production image   | docker build -t hedgehog-x:prod .                         | ✅ build 0; runtime-only deps                             |
-| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 14 миграций, seed 2 книги, non-root, health 200        |
-| Graceful shutdown  | docker stop -t 20                                         | ✅ exit 0 (DB pool закрывается)                           |
-| Compose config     | docker compose -f compose.yaml -f compose.prod.yml config | ✅ app + Traefik labels; ошибок нет                       |
-| Dual domain        | Host headers `hedgehog-inc.one` / `ru.hedgehog-inc.one`   | ✅ 200; Telegram redirect_uri на каждом хосте             |
-| SSR/404/OG         | curl /books/* + volume                                    | ✅ title/H1/OG из БД; unknown = 404                       |
-| History clear      | POST /api/user/progress/clear                             | ✅ 401 guest; auth deletes server+queue                   |
-| Analytics batch    | valid+invalid POST                                        | ✅ 200 accepted=1 rejected=1                              |
-| P1 migration       | drizzle 0010 + schema parity                              | ✅ 13 migrations; unique/indexes; generate no-op          |
-| CI                 | .github/workflows/ci.yml                                  | ✅ lint/check/unit/build/migrate/generate-drift/e2e       |
-| Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                          |
-| Prettier           | prettier --check .                                        | OK                                                        |
-| ESLint             | eslint .                                                  | OK                                                        |
-| Unit               | node --import tsx --test "src/**/*.test.ts"               | 197 tests, 0 fail                                         |
-| E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                              |
-| E2E full, 1 worker | playwright test --workers=1                               | ✅ 46/46 (сеть для OAuth-редиректов всё ещё нужна)        |
-| Sync safety e2e    | e2e/sync-data-safety.e2e.ts                               | ✅ 9/9 (guest, offline, owner, switch, consent)           |
-| Bookmark queue e2e | e2e/bookmark-sync.e2e.ts                                  | ✅ 1/1 (offline → online POST)                            |
-| Session isolation  | e2e/session-isolation.e2e.ts                              | ✅ 5/5 (logout, offline, revoked, owner, /bookmarks sync) |
-| Real bookmark sync | Chromium + signed session + PostgreSQL                    | ✅ POST 200, строка в `bookmarks`                         |
-| Real session flow  | register/logout/login/offline + PostgreSQL                | ✅ local clear; DB counts restored; guest decline 0       |
-| E2E integration    | delete-account.integration                                | ✅ 3 pass                                                 |
-| Migrations         | migrate 0000..0007 на чистой БД + seed                    | ✅ 7 миграций; seed 2/4/10/4                              |
-| Schema parity      | DB vs schema.ts + drizzle-kit generate                    | ✅ diff пуст; `No schema changes`                         |
-| Admin SSR          | /admin, /admin/content, /admin/analytics                  | ✅ 200 с подписанной сессией; role/таблицы работают       |
-| Analytics write    | POST /api/analytics/listen на scratch DB                  | ✅ 200; session + daily stats вставлены                   |
-| Guest data wipe    | sync-data-safety.e2e.ts                                   | ✅ данные сохраняются (регрессия закрыта)                 |
-| SSR fallback       | curl /books/overlord                                      | 200, H1 «Загрузка...», OG «Книга / Тома»                  |
-| Unknown content    | curl /books/does-not-exist                                | 200 (не 404)                                              |
-| Admin redirect     | curl /admin                                               | 303 Location: /auth?from=/admin                           |
-| Guest sync API     | curl /api/user/sync                                       | ✅ 401 Unauthorized                                       |
-| Final bookmarks    | DELETE + browser cleanup                                  | ✅ 0 строк; тестовый профиль удалён                       |
+| Проверка           | Команда/способ                                            | Результат                                                  |
+| ------------------ | --------------------------------------------------------- | ---------------------------------------------------------- |
+| Production build   | vite build                                                | exit 0                                                     |
+| Production image   | docker build -t hedgehog-x:prod .                         | ✅ build 0; runtime-only deps                              |
+| Production runtime | scratch Postgres + hedgehog-x:prod                        | ✅ 14 миграций, seed 2 книги, non-root, health 200         |
+| Graceful shutdown  | docker stop -t 20                                         | ✅ exit 0 (DB pool закрывается)                            |
+| Compose config     | docker compose -f compose.yaml -f compose.prod.yml config | ✅ app + Traefik labels; ошибок нет                        |
+| Dual domain        | Host headers `hedgehog-inc.one` / `ru.hedgehog-inc.one`   | ✅ 200; Telegram redirect_uri на каждом хосте              |
+| SSR/404/OG         | curl /books/* + volume                                    | ✅ title/H1/OG из БД; unknown = 404                        |
+| History clear      | POST /api/user/progress/clear                             | ✅ 401 guest; auth deletes server+queue                    |
+| Analytics batch    | valid+invalid POST                                        | ✅ 200 accepted=1 rejected=1                               |
+| P1 migration       | drizzle 0010 + schema parity                              | ✅ 13 migrations; unique/indexes; generate no-op           |
+| CI                 | .github/workflows/ci.yml                                  | ✅ lint/check/unit/build/migrate/generate-drift/e2e        |
+| Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                           |
+| Prettier           | prettier --check .                                        | OK                                                         |
+| ESLint             | eslint .                                                  | OK                                                         |
+| Unit               | node --import tsx --test "src/**/*.test.ts"               | 250 tests, 0 fail                                          |
+| E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                               |
+| E2E full, 1 worker | playwright test --workers=1                               | ✅ 48/48 (a11y + OAuth-моки; сеть для OAuth всё ещё нужна) |
+| Unit coverage      | node --import tsx --test --experimental-test-coverage     | 88.00% строк / 82.89% ветвей                               |
+| Sync safety e2e    | e2e/sync-data-safety.e2e.ts                               | ✅ 9/9 (guest, offline, owner, switch, consent)            |
+| Bookmark queue e2e | e2e/bookmark-sync.e2e.ts                                  | ✅ 1/1 (offline → online POST)                             |
+| Session isolation  | e2e/session-isolation.e2e.ts                              | ✅ 5/5 (logout, offline, revoked, owner, /bookmarks sync)  |
+| Real bookmark sync | Chromium + signed session + PostgreSQL                    | ✅ POST 200, строка в `bookmarks`                          |
+| Real session flow  | register/logout/login/offline + PostgreSQL                | ✅ local clear; DB counts restored; guest decline 0        |
+| E2E integration    | delete-account.integration                                | ✅ 3 pass                                                  |
+| Migrations         | migrate 0000..0034 на чистой БД + seed                    | ✅ 35 миграций; seed 2/4/10/4                              |
+| Schema parity      | DB vs schema.ts + drizzle-kit generate                    | ✅ diff пуст; `No schema changes`                          |
+| Admin SSR          | /admin, /admin/content, /admin/analytics                  | ✅ 200 с подписанной сессией; role/таблицы работают        |
+| Analytics write    | POST /api/analytics/listen на scratch DB                  | ✅ 200; session + daily stats вставлены                    |
+| Guest data wipe    | sync-data-safety.e2e.ts                                   | ✅ данные сохраняются (регрессия закрыта)                  |
+| SSR fallback       | curl /books/overlord                                      | 200, H1 «Загрузка...», OG «Книга / Тома»                   |
+| Unknown content    | curl /books/does-not-exist                                | 200 (не 404)                                               |
+| Admin redirect     | curl /admin                                               | 303 Location: /auth?from=/admin                            |
+| Guest sync API     | curl /api/user/sync                                       | ✅ 401 Unauthorized                                        |
+| Final bookmarks    | DELETE + browser cleanup                                  | ✅ 0 строк; тестовый профиль удалён                        |
 
 Ограничения: реальные OAuth-провайдеры и R2 не проверялись; production не запускался;
 живая БД — локальная dev. Спорные выводы помечены «по коду».
@@ -282,7 +288,7 @@ pnpm check = exit 1. vite build проходит, поэтому ошибка н
 - pnpm test:e2e не стартует без BETTER_AUTH_SECRET (webServer падает).
 - Все тесты выставляют hedgehog-welcome-modal-dismissed, хотя модалки нет.
 - Нет fixtures/page-objects; покрытие — 9 файлов.
-- В текущем прогоне: 46/46 при 1 worker; тесты всё ещё зависят от сети.
+- В текущем прогоне: 48/48 при 1 worker; тесты всё ещё зависят от сети.
   Предыдущий прогон давал 24/26 из-за этих же переходов.
   **Фикс:** мокать https://oauth.telegram.org/** и https://discord.com/** (fulfill
   redirect), задавать env в CI, убрать мёртвый ключ, детерминированные моки.
@@ -331,7 +337,10 @@ localStorage. Любой XSS получает токен (cookie httpOnly не �
 Delete book/volume/chapter/illustration удаляет строки БД (каскады), но не объекты
 R2; update cover/audio не удаляет старый объект. При замене файлов копятся сироты.
 **Фикс:** перед/после update/delete получить старые URL и вызвать deleteFromStorage;
-обрабатывать ошибки; тест.
+
+> **Политика 2026-11-25:** каскадное удаление книги/тома/главы больше не удаляет R2-файлы;
+> deleteFromStorage остаётся для замены и прямых операций удаления.
+> обрабатывать ошибки; тест.
 
 ### P1-08. /admin редиректит с ?redirect=, а /auth читает ?from= — ИСПРАВЛЕНО
 
@@ -667,7 +676,7 @@ same-owner empty replace, pending queue, A→B switch, guest adoption. Исто�
 
 ### 12.3. SSR fallback
 
-curl -s http://localhost:4192/books/overlord | grep -E '<title>|<h1'
+curl -s http://localhost:4173/books/overlord | grep -E '<title>|<h1'
 Результат: title «Книга | Тома», h1 «Загрузка...».
 
 ### 12.4. Typecheck

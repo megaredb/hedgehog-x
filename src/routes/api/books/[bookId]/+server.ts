@@ -19,6 +19,7 @@ export const GET = async ({ params, request }) => {
 				orderBy: (volumes, { asc }) => [asc(volumes.volumeNumber)],
 				with: {
 					chapters: {
+						where: (chapters, { eq }) => eq(chapters.published, true),
 						orderBy: (chapters, { asc }) => [asc(chapters.chapterNumber)]
 					},
 					illustrations: {

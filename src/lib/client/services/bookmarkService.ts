@@ -41,6 +41,12 @@ export const bookmarkService = {
 		timestampSeconds: number;
 		endTimestampSeconds?: number | null;
 		note?: string;
+		broadcastId?: string;
+		broadcastTitle?: string;
+		broadcastBookTitle?: string;
+		broadcastVolumeTitle?: string;
+		broadcastCoverUrl?: string;
+		broadcastHref?: string;
 	}): Promise<OfflineBookmark> {
 		const bookmark: OfflineBookmark = {
 			id: crypto.randomUUID(),
@@ -50,7 +56,17 @@ export const bookmarkService = {
 			endTimestampSeconds:
 				params.endTimestampSeconds != null ? Math.floor(params.endTimestampSeconds) : null,
 			note: params.note?.trim() || '',
-			createdAt: Date.now()
+			createdAt: Date.now(),
+			...(params.broadcastId
+				? {
+						broadcastId: params.broadcastId,
+						broadcastTitle: params.broadcastTitle,
+						broadcastBookTitle: params.broadcastBookTitle,
+						broadcastVolumeTitle: params.broadcastVolumeTitle,
+						broadcastCoverUrl: params.broadcastCoverUrl,
+						broadcastHref: params.broadcastHref
+					}
+				: {})
 		};
 
 		await db.bookmarks.put(bookmark);

@@ -6,8 +6,9 @@
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
 	import { progressSync } from '$lib/client/services/progressSync.svelte.js';
-	import { audioVersionKey } from '$lib/audio-version';
+	import { audioVersionKey, broadcastProgressKey } from '$lib/audio-version';
 	import { listeningTracker } from '$lib/client/services/listeningTracker.svelte.js';
+	import { broadcastProgressSync } from '$lib/client/services/broadcastProgressSync';
 
 	interface Props {
 		tracks?: Track[];
@@ -29,6 +30,7 @@
 	let lastUpdateTime = 0;
 	let prevTrackKey: string | null = null;
 	let lastProgressSaveTime = 0;
+	let lastBroadcastProgressTime = 0;
 	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
 	let wakeLock: WakeLockSentinel | null = null;
 
@@ -131,6 +133,7 @@
 		// Save progress to Dexie every PROGRESS_SAVE_INTERVAL ms
 		if (
 			audioStore.currentTrack?.id &&
+			!audioStore.currentTrack.broadcastLive &&
 			audio.currentTime > 0 &&
 			now - lastProgressSaveTime >= PROGRESS_SAVE_INTERVAL
 		) {
@@ -141,17 +144,56 @@
 				typeof audioStore.currentTrack?.versionId === 'string'
 					? audioStore.currentTrack.versionId
 					: 'default';
+			const track = audioStore.currentTrack;
+			const isReplay = typeof track.broadcastId === 'string';
+			const progressKey = isReplay
+				? broadcastProgressKey(track.broadcastId as string)
+				: audioVersionKey(chapterId, versionId);
 			db.progress
 				.put({
-					chapterId: audioVersionKey(chapterId, versionId),
+					chapterId: progressKey,
 					baseChapterId: chapterId,
 					versionId,
 					progressSeconds,
 					isCompleted: false,
-					updatedAt: now
+					updatedAt: now,
+					...(typeof track.broadcastId === 'string'
+						? {
+								broadcastId: track.broadcastId,
+								broadcastLive: Boolean(track.broadcastLive),
+								broadcastTitle:
+									typeof track.broadcastTitle === 'string' ? track.broadcastTitle : undefined,
+								broadcastBookTitle:
+									typeof track.broadcastBookTitle === 'string'
+										? track.broadcastBookTitle
+										: undefined,
+								broadcastVolumeTitle:
+									typeof track.broadcastVolumeTitle === 'string'
+										? track.broadcastVolumeTitle
+										: undefined,
+								broadcastCoverUrl:
+									typeof track.broadcastCoverUrl === 'string' ? track.broadcastCoverUrl : undefined,
+								broadcastHref:
+									typeof track.broadcastHref === 'string' ? track.broadcastHref : undefined,
+								broadcastDurationSeconds:
+									typeof track.duration === 'number' ? track.duration : undefined
+							}
+						: {})
 				})
 				.catch(() => {});
-			progressSync.recordProgress(chapterId, progressSeconds, false, versionId);
+			if (!isReplay) progressSync.recordProgress(chapterId, progressSeconds, false, versionId);
+		}
+
+		// Persist broadcast position for resume on another device (live and replay).
+		const broadcastTrack = audioStore.currentTrack;
+		if (broadcastTrack?.broadcastId && now - lastBroadcastProgressTime >= PROGRESS_SAVE_INTERVAL) {
+			lastBroadcastProgressTime = now;
+			broadcastProgressSync.record(
+				String(broadcastTrack.broadcastId),
+				broadcastTrack.broadcastLive ? 'live' : 'replay',
+				audio.currentTime,
+				false
+			);
 		}
 
 		// Track listening duration during active playback
@@ -275,6 +317,7 @@
 			audioStore.isBuffering = false;
 			progressSync.flushImmediately();
 			listeningTracker.flush();
+			void broadcastProgressSync.flush();
 		};
 
 		const handleError = async (e: Event) => {
@@ -324,33 +367,59 @@
 			const audioDuration = audio.duration || 0;
 			const isLiveStream = htmlAudio.isLive(audioDuration);
 
-			// Mark chapter as completed in local DB
+			// Mark chapter as completed in local DB, separately from replay progress.
 			if (audioStore.currentTrack?.id && !isLiveStream && audioDuration > 0) {
-				const chapterId = String(audioStore.currentTrack.id);
-				audioStore.lastCompletedTrackId = chapterId;
-				audioStore.lastCompletedTrackAt = Date.now();
-				const versionId =
-					typeof audioStore.currentTrack?.versionId === 'string'
-						? audioStore.currentTrack.versionId
-						: 'default';
+				const track = audioStore.currentTrack;
+				const chapterId = String(track.id);
+				const isReplay = typeof track.broadcastId === 'string';
+				const versionId = typeof track.versionId === 'string' ? track.versionId : 'default';
+				const progressKey = isReplay
+					? broadcastProgressKey(track.broadcastId as string)
+					: audioVersionKey(chapterId, versionId);
+				if (!isReplay) {
+					audioStore.lastCompletedTrackId = chapterId;
+					audioStore.lastCompletedTrackAt = Date.now();
+				}
 				db.progress
 					.put({
-						chapterId: audioVersionKey(chapterId, versionId),
+						chapterId: progressKey,
 						baseChapterId: chapterId,
 						versionId,
 						progressSeconds: Math.floor(audioDuration),
 						isCompleted: true,
-						updatedAt: Date.now()
+						updatedAt: Date.now(),
+						...(isReplay
+							? {
+									broadcastId: String(track.broadcastId),
+									broadcastLive: false,
+									broadcastHref:
+										typeof track.broadcastHref === 'string' ? track.broadcastHref : undefined,
+									broadcastTitle:
+										typeof track.broadcastTitle === 'string' ? track.broadcastTitle : undefined
+								}
+							: {})
 					})
 					.catch(() => {});
-				progressSync.recordProgress(chapterId, Math.floor(audioDuration), true, versionId);
-				progressSync.flushImmediately();
+				if (!isReplay) {
+					progressSync.recordProgress(chapterId, Math.floor(audioDuration), true, versionId);
+					progressSync.flushImmediately();
+				}
 			}
 
 			if (audioStore.currentTrack && isLiveStream) {
 				audioStore.isError = true;
 				audioStore.errorMessage = 'Live stream connection lost';
 				return;
+			}
+
+			if (audioStore.currentTrack?.broadcastId && !audioStore.currentTrack.broadcastLive) {
+				broadcastProgressSync.record(
+					String(audioStore.currentTrack.broadcastId),
+					'replay',
+					audioDuration,
+					true
+				);
+				void broadcastProgressSync.flush();
 			}
 
 			if (audioStore.sleepTimerEndOnTrack) {
@@ -483,13 +552,15 @@
 			: null;
 		if (!track || trackKey === prevTrackKey) return;
 		listeningTracker.flush();
+		void broadcastProgressSync.flush();
 		prevTrackKey = trackKey;
 
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
 
-		// Reset progress save timer for new track
+		// Reset progress save timers for new track
 		lastProgressSaveTime = 0;
+		lastBroadcastProgressTime = 0;
 
 		const startTime = track.startTime ?? 0;
 

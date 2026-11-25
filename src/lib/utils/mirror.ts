@@ -1,9 +1,42 @@
-export type MirrorPreference = 'auto' | 'primary' | 'ru';
+import { DEFAULT_SITE_MIRRORS, type SiteMirror } from '$lib/types/site';
+
+export type MirrorPreference = string;
 
 export const MIRROR_STORAGE_KEY = 'hedgehog:mirror_preference';
 
 export const PRIMARY_CDN_HOST = 'files.hedgehog-inc.one';
 export const RU_CDN_HOST = 'ru-files.hedgehog-inc.one';
+
+let configuredMirrors: SiteMirror[] = structuredClone(DEFAULT_SITE_MIRRORS);
+
+/** Applies mirrors loaded from site settings for the current app session. */
+export function configureMirrors(mirrors: SiteMirror[] | null | undefined): void {
+	configuredMirrors =
+		Array.isArray(mirrors) && mirrors.length > 0
+			? mirrors.map((mirror) => ({ ...mirror }))
+			: structuredClone(DEFAULT_SITE_MIRRORS);
+}
+
+export function getMirrorOptions(): Array<{
+	value: 'auto' | string;
+	label: string;
+	description: string;
+}> {
+	return [
+		{
+			value: 'auto',
+			label: 'Автоматически',
+			description: 'Определение по домену + авто-fallback при сбоях'
+		},
+		...configuredMirrors
+			.filter((mirror) => mirror.enabled)
+			.map((mirror) => ({
+				value: mirror.id,
+				label: mirror.label,
+				description: mirror.description || mirror.host
+			}))
+	];
+}
 
 /**
  * Checks if the current browser hostname belongs to the Russian domain/mirror.
@@ -14,6 +47,25 @@ export function isRuHost(): boolean {
 	return hostname.startsWith('ru.') || hostname.includes('ru-files') || hostname.endsWith('.ru');
 }
 
+function autoMirror(): SiteMirror | null {
+	const enabled = configuredMirrors.filter((mirror) => mirror.enabled);
+	if (enabled.length === 0) return null;
+	if (isRuHost()) {
+		return (
+			enabled.find((mirror) => mirror.autoRole === 'ru') ??
+			enabled.find((mirror) => mirror.autoRole === 'default') ??
+			enabled[0]
+		);
+	}
+	return enabled.find((mirror) => mirror.autoRole === 'default') ?? enabled[0];
+}
+
+function activeMirror(preference?: MirrorPreference): SiteMirror | null {
+	const pref = preference ?? getMirrorPreference();
+	if (pref === 'auto') return autoMirror();
+	return configuredMirrors.find((mirror) => mirror.id === pref && mirror.enabled) ?? autoMirror();
+}
+
 /**
  * Retrieves the user's mirror preference from localStorage (or 'auto' by default).
  */
@@ -21,7 +73,7 @@ export function getMirrorPreference(): MirrorPreference {
 	if (typeof localStorage === 'undefined') return 'auto';
 	try {
 		const stored = localStorage.getItem(MIRROR_STORAGE_KEY);
-		if (stored === 'primary' || stored === 'ru' || stored === 'auto') {
+		if (stored && (stored === 'auto' || configuredMirrors.some((mirror) => mirror.id === stored))) {
 			return stored;
 		}
 	} catch {
@@ -46,9 +98,7 @@ export function setMirrorPreference(preference: MirrorPreference): void {
  * Returns the currently active mirror CDN host according to the preference and domain detection.
  */
 export function getActiveMirrorHost(preference?: MirrorPreference): string {
-	const pref = preference ?? getMirrorPreference();
-	const isRu = pref === 'ru' || (pref === 'auto' && isRuHost());
-	return isRu ? RU_CDN_HOST : PRIMARY_CDN_HOST;
+	return activeMirror(preference)?.host ?? PRIMARY_CDN_HOST;
 }
 
 /**
@@ -57,9 +107,8 @@ export function getActiveMirrorHost(preference?: MirrorPreference): string {
  * Rules:
  * - Empty/null/undefined returns empty string.
  * - Relative URLs (e.g. `/audio/...`) or third-party URLs pass through unmodified.
- * - In 'auto' mode: switches to RU mirror if on RU host; switches to primary mirror otherwise.
- * - In 'ru' mode: switches to RU mirror (`ru-files.hedgehog-inc.one`).
- * - In 'primary' mode: switches to primary mirror (`files.hedgehog-inc.one`).
+ * - Any known mirror host is replaced with the active mirror host.
+ * - In 'auto' mode the RU mirror is preferred on RU domains, otherwise the default mirror.
  */
 export function resolveMediaUrl(
 	url: string | null | undefined,
@@ -70,25 +119,20 @@ export function resolveMediaUrl(
 		return url;
 	}
 
-	const pref = preference ?? getMirrorPreference();
-	const isRu = pref === 'ru' || (pref === 'auto' && isRuHost());
+	const active = activeMirror(preference);
+	if (!active) return url;
 
-	if (isRu) {
-		if (url.includes(PRIMARY_CDN_HOST) && !url.includes(RU_CDN_HOST)) {
-			return url.replace(PRIMARY_CDN_HOST, RU_CDN_HOST);
-		}
-	} else {
-		if (url.includes(RU_CDN_HOST)) {
-			return url.replace(RU_CDN_HOST, PRIMARY_CDN_HOST);
-		}
+	const source = configuredMirrors
+		.filter((mirror) => mirror.host && url.includes(mirror.host))
+		.sort((a, b) => b.host.length - a.host.length)[0];
+	if (source && source.host !== active.host) {
+		return url.replace(source.host, active.host);
 	}
-
 	return url;
 }
 
 /**
- * Returns the fallback mirror URL for a given media URL, or null if not a Hedgehog CDN URL.
- * Toggles between `files.hedgehog-inc.one` and `ru-files.hedgehog-inc.one`.
+ * Returns the fallback mirror URL for a given media URL, or null if not a known CDN URL.
  */
 export function getFallbackMediaUrl(url: string | null | undefined): string | null {
 	if (!url) return null;
@@ -96,13 +140,12 @@ export function getFallbackMediaUrl(url: string | null | undefined): string | nu
 		return null;
 	}
 
-	if (url.includes(PRIMARY_CDN_HOST) && !url.includes(RU_CDN_HOST)) {
-		return url.replace(PRIMARY_CDN_HOST, RU_CDN_HOST);
-	}
-
-	if (url.includes(RU_CDN_HOST)) {
-		return url.replace(RU_CDN_HOST, PRIMARY_CDN_HOST);
-	}
-
-	return null;
+	const enabled = configuredMirrors.filter((mirror) => mirror.enabled);
+	const source = enabled
+		.filter((mirror) => mirror.host && url.includes(mirror.host))
+		.sort((a, b) => b.host.length - a.host.length)[0];
+	if (!source) return null;
+	const fallback = enabled.find((mirror) => mirror.host !== source.host);
+	if (!fallback) return null;
+	return url.replace(source.host, fallback.host);
 }

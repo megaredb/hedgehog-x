@@ -32,5 +32,5 @@ test('strings: contains valid translation namespaces and keys', () => {
 	assert.ok(strings.settings.title);
 	assert.ok(strings.settings.audioSection);
 	assert.equal(strings.support.cardQrAriaLabel, 'QR-код карты');
-	assert.equal(strings.support.tonQrAriaLabel, 'QR-код TON');
+	assert.equal(strings.support.tonQrAriaLabel, 'QR-код GRAM');
 });

@@ -2,6 +2,7 @@
 	import type { PageData } from './$types';
 	import { resolve } from '$app/paths';
 	import { Search, BookOpen, Layers } from '@lucide/svelte';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { strings } from '$lib/constants/strings';
 
 	let { data }: { data: PageData } = $props();
@@ -64,12 +65,14 @@
 				>
 					<div class="relative aspect-[16/9] overflow-hidden bg-muted">
 						{#if book.coverUrl}
-							<img
+							<BlurhashImage
 								src={book.coverUrl}
+								blurhash={book.blurhash}
 								alt={book.title}
 								width={640}
 								height={360}
-								class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+								class="absolute inset-0"
+								imgClass="transition-transform duration-300 group-hover:scale-[1.02]"
 								loading={i < 2 ? 'eager' : 'lazy'}
 								fetchpriority={i === 0 ? 'high' : 'auto'}
 							/>

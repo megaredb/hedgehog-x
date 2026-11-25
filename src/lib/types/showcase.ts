@@ -3,5 +3,6 @@ export interface ShowcaseBook {
 	title: string;
 	description: string;
 	bgImage: string | null;
+	bgBlurhash?: string | null;
 	bgVideo: string | null;
 }

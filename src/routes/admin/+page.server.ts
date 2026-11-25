@@ -2,6 +2,8 @@ import { db } from '$lib/server/db';
 import { books, volumes, chapters, illustrations } from '$lib/server/db/schema';
 import { user as userTable } from '$lib/server/db/auth.schema';
 import { count, desc, eq } from 'drizzle-orm';
+import { countActiveSubscribers } from '$lib/server/subscriptions/reports';
+import { isAdminRole } from '$lib/server/admin';
 import { dev } from '$app/environment';
 import { redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -11,21 +13,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw redirect(303, '/auth?from=/admin');
 	}
 
-	if (locals.user.role !== 'admin') {
+	if (!isAdminRole(locals.user.role)) {
 		return {
 			notAdmin: true,
-			counts: { books: 0, volumes: 0, chapters: 0, illustrations: 0, users: 0 },
+			counts: { books: 0, volumes: 0, chapters: 0, illustrations: 0, users: 0, subscribers: 0 },
 			recentBooks: []
 		};
 	}
 
-	const [[booksC], [volumesC], [chaptersC], [illustrationsC], [usersC]] = await Promise.all([
-		db.select({ count: count() }).from(books),
-		db.select({ count: count() }).from(volumes),
-		db.select({ count: count() }).from(chapters),
-		db.select({ count: count() }).from(illustrations),
-		db.select({ count: count() }).from(userTable)
-	]);
+	const [[booksC], [volumesC], [chaptersC], [illustrationsC], [usersC], subscribers] =
+		await Promise.all([
+			db.select({ count: count() }).from(books),
+			db.select({ count: count() }).from(volumes),
+			db.select({ count: count() }).from(chapters),
+			db.select({ count: count() }).from(illustrations),
+			db.select({ count: count() }).from(userTable),
+			countActiveSubscribers()
+		]);
 
 	const recentBooks = await db.select().from(books).orderBy(desc(books.updatedAt)).limit(5);
 
@@ -36,7 +40,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			volumes: volumesC?.count ?? 0,
 			chapters: chaptersC?.count ?? 0,
 			illustrations: illustrationsC?.count ?? 0,
-			users: usersC?.count ?? 0
+			users: usersC?.count ?? 0,
+			subscribers
 		},
 		recentBooks
 	};

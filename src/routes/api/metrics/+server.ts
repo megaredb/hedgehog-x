@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { RequestHandler } from './$types';
 import { renderPrometheus } from '$lib/server/metrics';
+import { isAdminRole } from '$lib/server/admin';
 
 const startedAt = Date.now();
 
@@ -18,7 +19,7 @@ function matchesBearerToken(headerValue: string | null, expectedToken: string): 
 export const GET: RequestHandler = async ({ locals, request }) => {
 	const token = process.env.METRICS_TOKEN;
 	const authorized =
-		locals.user?.role === 'admin' ||
+		isAdminRole(locals.user?.role) ||
 		(!!token && matchesBearerToken(request.headers.get('authorization'), token));
 	if (!authorized) return new Response('Forbidden', { status: 403 });
 

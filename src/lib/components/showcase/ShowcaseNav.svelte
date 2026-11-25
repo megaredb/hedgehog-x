@@ -22,7 +22,7 @@
 </script>
 
 <div
-	class="pointer-events-auto absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col items-center gap-4 md:right-8"
+	class="showcase-nav pointer-events-auto absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col items-center gap-4 md:right-8"
 >
 	<!-- Navigation controls -->
 	<div
@@ -71,3 +71,22 @@
 		<span class="sr-only">Переключить видео</span>
 	</Button>
 </div>
+
+<style>
+	@media (orientation: landscape) and (max-height: 500px) and (max-width: 1100px) {
+		:global(.showcase-nav) {
+			right: 0.5rem;
+			gap: 0.5rem;
+		}
+
+		:global(.showcase-nav button) {
+			width: 2.5rem;
+			height: 2.5rem;
+		}
+
+		:global(.showcase-nav button svg) {
+			width: 1.25rem;
+			height: 1.25rem;
+		}
+	}
+</style>

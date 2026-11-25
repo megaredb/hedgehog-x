@@ -76,9 +76,18 @@
 		}
 	);
 	const volume = $derived(volumeQuery.data ?? serverData.volume);
-	const chapters = $derived(
-		chaptersQuery.data.length > 0 ? chaptersQuery.data : (serverData.chapters ?? [])
-	);
+	const chapters = $derived.by(() => {
+		if (chaptersQuery.data.length === 0) return serverData.chapters ?? [];
+		const authoritative = new Map(
+			(serverData.chapters ?? []).map((chapter) => [chapter.id, chapter.durationSeconds])
+		);
+		return chaptersQuery.data.map((chapter) => {
+			const durationSeconds = authoritative.get(chapter.id);
+			return durationSeconds != null && durationSeconds > 0
+				? { ...chapter, durationSeconds }
+				: chapter;
+		});
+	});
 	const volumeBookmarksQuery = useDexie(
 		() => {
 			const chapterIds = chapters.map((chapter) => chapter.id);
@@ -186,13 +195,14 @@
 			title: c.title,
 			duration: c.durationSeconds,
 			artwork: volume.coverUrl,
+			blurhash: volume.blurhash,
 			album: volume.title,
 			volumeId: volume.id,
 			bookId: data.bookId,
 			startTime: c.id === targetChapter.id ? seekTime : 0
 		}));
 
-		if (audioStore.currentTrack?.id === targetChapter.id) {
+		if (audioStore.currentTrack?.id === targetChapter.id && !audioStore.currentTrack.broadcastId) {
 			if (seekTime > 0) {
 				audioStore.seek(seekTime, false);
 			}
@@ -346,6 +356,7 @@
 				{selectedVersionId}
 				{chapterVersions}
 				{chapterVersionLikes}
+				serverProgress={data.serverProgress}
 			/>
 		</Tabs.Content>
 
@@ -363,7 +374,11 @@
 
 		<!-- Tab 3: Illustrations -->
 		<Tabs.Content value="illustrations" class="outline-none">
-			<VolumeIllustrationsTab volumeId={data.volumeId} />
+			<VolumeIllustrationsTab
+				volumeId={data.volumeId}
+				timings={data.chapterIllustrationTimings}
+				serverProgress={data.serverProgress}
+			/>
 		</Tabs.Content>
 
 		<!-- Tab 3: Volume Discussion -->
@@ -393,5 +408,6 @@
 	bind:open={isCompletionModalOpen}
 	currentVolume={volume}
 	{nextVolume}
+	support={data.support}
 	onPlayNextVolume={handlePlayNextVolume}
 />

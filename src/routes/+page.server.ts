@@ -11,7 +11,8 @@ export const load: PageServerLoad = async () => {
 			title: books.title,
 			description: books.description,
 			homeImageUrl: books.homeImageUrl,
-			homeVideoUrl: books.homeVideoUrl
+			homeVideoUrl: books.homeVideoUrl,
+			blurhash: books.blurhash
 		})
 		.from(books)
 		.orderBy(asc(books.sortOrder), asc(books.title));
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async () => {
 		title: book.title,
 		description: book.description ?? '',
 		bgImage: book.homeImageUrl,
+		bgBlurhash: book.blurhash,
 		bgVideo: book.homeVideoUrl
 	}));
 
