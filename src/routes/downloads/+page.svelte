@@ -6,7 +6,7 @@
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
-	import { Trash2, XCircle, HardDriveDownload, Clock } from '@lucide/svelte';
+	import { Trash2, XCircle, HardDriveDownload, Clock, Radio, MessageCircle } from '@lucide/svelte';
 	import * as Accordion from '$lib/components/ui/accordion';
 	import { Item } from '$lib/components/ui/item';
 	import { Empty } from '$lib/components/ui/empty';
@@ -16,8 +16,12 @@
 	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { formatBytes } from '$lib/utils/format';
+	import type { OfflineDownload } from '$lib/client/db';
 
+	let { data } = $props();
 	const manager = useDownloads();
+	const replayChapterIds = $derived(new Set(data.replayChapterIds ?? []));
+	const replayChatChapterIds = $derived(new Set(data.replayChatChapterIds ?? []));
 
 	const volumesQuery = useDexie(
 		() => db.volumes.toArray(),
@@ -179,6 +183,22 @@
 	}
 </script>
 
+{#snippet replayBadge(download: OfflineDownload, hasChat: boolean)}
+	{@const chapterId = download.baseChapterId ?? download.chapterId}
+	{#if replayChapterIds.has(chapterId)}
+		<span
+			class="ml-2 inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-500"
+			title={hasChat
+				? 'Replay: доступно офлайн-прослушивание и чат записи'
+				: 'Replay: доступно офлайн-прослушивание'}
+		>
+			<Radio class="h-3 w-3" />
+			replay
+			{#if hasChat}<MessageCircle class="h-3 w-3" />{/if}
+		</span>
+	{/if}
+{/snippet}
+
 <svelte:head>
 	<title>Менеджер загрузок | Hedgehog.inc</title>
 	<meta name="description" content="Скачанные главы аудиокниг для офлайн-прослушивания." />
@@ -304,10 +324,11 @@
 													href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
 													class="inline-block w-fit max-w-full truncate text-sm font-medium hover:text-primary hover:underline"
 													>{download.title || chapter.title}</a
-												>{#if hasBroadcastChat}<span
-														class="ml-2 inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
-														>чат</span
-													>{/if}
+												>{@render replayBadge(
+													download,
+													hasBroadcastChat ||
+														replayChatChapterIds.has(download.baseChapterId ?? download.chapterId)
+												)}
 												{#if download.status === 'downloading'}
 													{@const stats = manager.getProgress(download.chapterId)}
 													<div class="mt-1.5 flex items-center gap-3">
@@ -457,10 +478,11 @@
 												href={`/books/${group.book?.id ?? group.volume?.bookId}/${group.volumeId}?chapter=${encodeURIComponent(download.baseChapterId ?? chapter.id)}&version=${encodeURIComponent(download.versionId ?? 'default')}`}
 												class="inline-block w-fit max-w-full truncate text-sm font-medium hover:text-primary hover:underline"
 												>{download.title || chapter.title}</a
-											>{#if hasBroadcastChat}<span
-													class="ml-2 inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
-													>чат</span
-												>{/if}
+											>{@render replayBadge(
+												download,
+												hasBroadcastChat ||
+													replayChatChapterIds.has(download.baseChapterId ?? download.chapterId)
+											)}
 											<p class="mt-1 text-xs text-muted-foreground">
 												Размер: {stats.totalBytes > 0
 													? formatBytes(stats.totalBytes)
