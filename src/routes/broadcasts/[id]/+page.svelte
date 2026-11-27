@@ -1847,6 +1847,7 @@
 										in:fly={{ y: 8, duration: 180 }}
 										class="chat-message-row flex w-full min-w-0 items-start gap-2.5"
 										class:blurred={taggedSpoiler}
+										class:has-reply={Boolean(message.replyToId)}
 									>
 										<div class="relative shrink-0 pt-0.5">
 											<div
@@ -2214,6 +2215,11 @@
 		height: auto;
 		min-height: 0;
 		contain: layout paint;
+	}
+
+	.chat-message-row.has-reply {
+		max-height: 10rem;
+		overflow: hidden;
 	}
 
 	.chat-message-bubble {
