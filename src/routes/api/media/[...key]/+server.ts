@@ -11,23 +11,7 @@ const CACHE_DIR = process.env.MEDIA_CACHE_DIR ?? '/tmp/hedgehog-media';
 const MAX_CACHE_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CACHE_TOTAL_BYTES = Number(process.env.MEDIA_CACHE_MAX_BYTES ?? 100 * 1024 * 1024);
 
-const ALLOWED_KEY_PREFIXES = [
-	'books/',
-	'volumes/',
-	'chapters/',
-	'illustrations/',
-	'home/',
-	'broadcasts/',
-	'audio/',
-	'video/',
-	'images/',
-	'library/',
-	'site/',
-	'uploads/',
-	'avatars/',
-	'covers/',
-	'legacy/'
-];
+const MAX_MEDIA_KEY_LENGTH = 2048;
 
 const ALLOWED_IMAGE_MIME = new Set([
 	'image/webp',
@@ -65,8 +49,15 @@ function hasControlChars(value: string): boolean {
 }
 
 function isAllowedMediaKey(key: string): boolean {
-	if (!key || key.includes('\\') || hasControlChars(key)) return false;
-	if (!ALLOWED_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))) return false;
+	if (
+		!key ||
+		key.length > MAX_MEDIA_KEY_LENGTH ||
+		key.startsWith('/') ||
+		key.includes('\\') ||
+		key.includes('://') ||
+		hasControlChars(key)
+	)
+		return false;
 	const segments = key.split('/');
 	if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) return false;
 	return true;

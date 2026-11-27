@@ -98,21 +98,21 @@
 
 ### 4.1. Контент, пользователь, служебное
 
-| Метод и путь                    | Auth             | Ограничения                                               | Ответ                                                                                                    |
-| ------------------------------- | ---------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `GET /api/books`                | нет              | —                                                         | Все книги, `created_at DESC`, без кэша                                                                   |
-| `GET /api/books/[bookId]`       | нет              | —                                                         | Дерево книги; только `chapters.published=true`; ETag SHA1; 304/404; `public, max-age=0, must-revalidate` |
-| `GET /api/user/sync`            | обязательна      | —                                                         | Личные лайки/прогресс/закладки; `isNewUser`; `private, no-store`                                         |
-| `POST /api/user/sync`           | обязательна      | body ≤1 МиБ; 4 массива ≤100; 120/мин; транзакция          | counts, `skipped/rejected/errors`; 400/413/429/500                                                       |
-| `POST /api/user/delete`         | обязательна      | `Origin`/`Sec-Fetch-Site`                                 | Удаляет user, сессии, обнуляет ссылки админа; аналитика и донаты обезличиваются; cookie чистятся         |
-| `GET /api/user/delete`          | —                | —                                                         | 405                                                                                                      |
-| `POST /api/user/progress/clear` | обязательна      | —                                                         | Удаляет `listening_progress`; `private, no-store`                                                        |
-| `POST /api/analytics/listen`    | гость допустим   | batch ≤100; 60/мин; 1..300 с; окно `startedAt`            | Частичный приём, `accepted/rejected`                                                                     |
-| `GET /api/media/[...key]`       | нет              | allowlist префиксов/MIME; Range; 10 МиБ/файл, 100 МиБ кэш | 200/206/302/416; кэш изображений                                                                         |
-| `GET /api/metrics`              | admin или Bearer | `timingSafeEqual`                                         | Prometheus                                                                                               |
-| `GET /health`                   | нет              | `select 1`                                                | 200/503                                                                                                  |
-| `GET /sitemap.xml`              | нет              | —                                                         | XML, 1 час                                                                                               |
-| `GET /feedback`                 | нет              | —                                                         | 302                                                                                                      |
+| Метод и путь                    | Auth             | Ограничения                                                             | Ответ                                                                                                    |
+| ------------------------------- | ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET /api/books`                | нет              | —                                                                       | Все книги, `created_at DESC`, без кэша                                                                   |
+| `GET /api/books/[bookId]`       | нет              | —                                                                       | Дерево книги; только `chapters.published=true`; ETag SHA1; 304/404; `public, max-age=0, must-revalidate` |
+| `GET /api/user/sync`            | обязательна      | —                                                                       | Личные лайки/прогресс/закладки; `isNewUser`; `private, no-store`                                         |
+| `POST /api/user/sync`           | обязательна      | body ≤1 МиБ; 4 массива ≤100; 120/мин; транзакция                        | counts, `skipped/rejected/errors`; 400/413/429/500                                                       |
+| `POST /api/user/delete`         | обязательна      | `Origin`/`Sec-Fetch-Site`                                               | Удаляет user, сессии, обнуляет ссылки админа; аналитика и донаты обезличиваются; cookie чистятся         |
+| `GET /api/user/delete`          | —                | —                                                                       | 405                                                                                                      |
+| `POST /api/user/progress/clear` | обязательна      | —                                                                       | Удаляет `listening_progress`; `private, no-store`                                                        |
+| `POST /api/analytics/listen`    | гость допустим   | batch ≤100; 60/мин; 1..300 с; окно `startedAt`                          | Частичный приём, `accepted/rejected`                                                                     |
+| `GET /api/media/[...key]`       | нет              | safe-key (без traversal/control), MIME; Range; 10 МиБ/файл, 100 МиБ кэш | 200/206/302/416; кэш изображений                                                                         |
+| `GET /api/metrics`              | admin или Bearer | `timingSafeEqual`                                                       | Prometheus                                                                                               |
+| `GET /health`                   | нет              | `select 1`                                                              | 200/503                                                                                                  |
+| `GET /sitemap.xml`              | нет              | —                                                                       | XML, 1 час                                                                                               |
+| `GET /feedback`                 | нет              | —                                                                       | 302                                                                                                      |
 
 ### 4.2. Трансляции
 
@@ -448,4 +448,5 @@ register:false, allowedHosts, `ssr.noExternal:['bits-ui']`), `playwright.config.
 13. `/api/user/delete` обезличивает аналитику/донаты, удаляя сессии и ссылки
     администратора.
 14. Блокировка подписки удаляет сессии и редиректит на `/auth?blocked=1`.
-15. `/api/media` при выключенном проксировании отдаёт 302 на direct URL.
+15. Новые загрузки хранятся как `/api/media/...`; при выключенном проксировании
+    `/api/media` отдаёт 302 на direct URL, при включённом — стримит.

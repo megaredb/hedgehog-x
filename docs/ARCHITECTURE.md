@@ -337,8 +337,10 @@ manual_expires_at > now || telegram.active || discord.active)`.
 - `site_settings.mirrors`: список CDN с ролями default/ru/none; root layout
   отдаёт его клиенту, `mirror.ts` применяет; auto выбирает RU на RU-домене.
 - `/feedback` 302 на `about.data.feedbackUrl` (http/https/tg).
-- Media proxy: allowlist key-префиксов/MIME, Range/416, кэш 10 МиБ/файл и
-  100 МиБ total, обрезка кэша.
+- Media proxy: safe key (без traversal/control), MIME, Range/416, кэш
+  10 МиБ/файл и 100 МиБ total. Новые загрузки всегда получают канонический
+  `/api/media/...`; режим проксирования решает, отдать файл сайтом или 302 на
+  direct-base.
 
 ## 12. UI, роутинг, темы, PWA, SEO
 

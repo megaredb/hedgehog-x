@@ -80,7 +80,9 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5173"
 
 - Без R2 в dev файлы пишутся в `static/uploads`; в production загрузки
   запрещены (fail-fast).
-- `R2_PUBLIC_URL` — публичный CDN или `/api/media`.
+- `R2_PUBLIC_URL` — база медиа; для работы переключателя используйте
+  относительный `/api/media`. Новые загрузки сохраняются как `/api/media/...`
+  независимо от режима; absolute CDN-URL не запекается в контент.
 - `/admin/site` → «Настройки»: `mediaProxyEnabled` и `mediaDirectBaseUrl`.
   При выключенном proxy `/api/media` отдаёт 302 на direct URL; иначе стримит
   Range и кэширует изображения (10 МиБ/файл, 100 МиБ total).
