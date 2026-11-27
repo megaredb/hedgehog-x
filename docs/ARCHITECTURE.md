@@ -340,7 +340,8 @@ manual_expires_at > now || telegram.active || discord.active)`.
 - Media proxy: safe key (без traversal/control), MIME, Range/416, кэш
   10 МиБ/файл и 100 МиБ total. Новые загрузки всегда получают канонический
   `/api/media/...`; режим проксирования решает, отдать файл сайтом или 302 на
-  direct-base.
+  direct-base. В direct-режиме route делает HEAD к CDN; если объекта там нет,
+  отдаёт 302 на signed R2 URL (6 ч, no-store), чтобы не было 404.
 
 ## 12. UI, роутинг, темы, PWA, SEO
 

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { getMediaObject } from '$lib/server/storage/r2';
+import { getMediaObject, getPresignedMediaUrl } from '$lib/server/storage/r2';
 import { directMediaUrl, loadMediaSettings } from '$lib/server/site-settings';
 
 const CACHE_DIR = process.env.MEDIA_CACHE_DIR ?? '/tmp/hedgehog-media';
@@ -61,6 +61,36 @@ function isAllowedMediaKey(key: string): boolean {
 	const segments = key.split('/');
 	if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) return false;
 	return true;
+}
+
+const DIRECT_PROBE_TTL_MS = 5 * 60_000;
+const DIRECT_PROBE_TIMEOUT_MS = 1500;
+const directProbeCache = new Map<string, { available: boolean; expiresAt: number }>();
+
+/**
+ * Direct mode redirects to the public CDN. Some dev uploads only exist in the
+ * R2 bucket (the CDN can point at a different bucket), so probe the object
+ * first and fall back to a short-lived signed R2 URL instead of a hard 404.
+ */
+async function isDirectMediaAvailable(url: string): Promise<boolean> {
+	const cached = directProbeCache.get(url);
+	if (cached && cached.expiresAt > Date.now()) return cached.available;
+	let available = false;
+	try {
+		const response = await fetch(url, {
+			method: 'HEAD',
+			redirect: 'manual',
+			cache: 'no-store',
+			signal: AbortSignal.timeout(DIRECT_PROBE_TIMEOUT_MS)
+		});
+		available =
+			response.ok || response.status === 304 || (response.status >= 300 && response.status < 400);
+	} catch {
+		available = false;
+	}
+	if (directProbeCache.size > 4096) directProbeCache.clear();
+	directProbeCache.set(url, { available, expiresAt: Date.now() + DIRECT_PROBE_TTL_MS });
+	return available;
 }
 
 function isAllowedMime(rawMime: string): boolean {
@@ -259,7 +289,16 @@ export const GET: RequestHandler = async ({ params, request }) => {
 
 	const mediaSettings = await loadMediaSettings();
 	const directUrl = directMediaUrl(mediaSettings, key);
-	if (directUrl) throw redirect(302, directUrl);
+	if (directUrl) {
+		if (await isDirectMediaAvailable(directUrl)) throw redirect(302, directUrl);
+		const signedUrl = await getPresignedMediaUrl(key);
+		if (signedUrl) {
+			return new Response(null, {
+				status: 302,
+				headers: { Location: signedUrl, 'Cache-Control': 'private, no-store' }
+			});
+		}
+	}
 
 	const target = cachePath(key);
 	if (target) {

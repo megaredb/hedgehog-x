@@ -84,8 +84,10 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5173"
   относительный `/api/media`. Новые загрузки сохраняются как `/api/media/...`
   независимо от режима; absolute CDN-URL не запекается в контент.
 - `/admin/site` → «Настройки»: `mediaProxyEnabled` и `mediaDirectBaseUrl`.
-  При выключенном proxy `/api/media` отдаёт 302 на direct URL; иначе стримит
-  Range и кэширует изображения (10 МиБ/файл, 100 МиБ total).
+  При выключенном proxy `/api/media` отдаёт 302 на direct URL, но сначала
+  проверяет CDN через HEAD; если объекта там нет — 302 на signed R2 URL
+  (6 ч, no-store). Иначе стримит Range и кэширует изображения
+  (10 МиБ/файл, 100 МиБ total).
 - `site_settings.mirrors` — CDN-хосты с ролями default/ru/none; клиент
   применяет их автоматически.
 
