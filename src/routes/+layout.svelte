@@ -104,7 +104,16 @@
 		};
 		void sendHeartbeat();
 		timer = setInterval(() => void sendHeartbeat(), 10_000);
-		return () => stop();
+		return () => {
+			stop();
+			// The page itself keeps presence while it is open. If playback is paused
+			// elsewhere, remove the listener immediately instead of waiting 30s.
+			if (page.url.pathname === `/broadcasts/${broadcastId}`) return;
+			void fetch(`/api/broadcasts/${broadcastId}/leave`, {
+				method: 'POST',
+				keepalive: true
+			}).catch(() => {});
+		};
 	});
 
 	// Load server-side personal data as soon as a user signs in, regardless of

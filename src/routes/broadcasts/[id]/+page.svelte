@@ -1076,6 +1076,9 @@
 			if (leaveSent || !canWatch) return;
 			const currentKind = untrack(() => kind);
 			if (currentKind !== 'live' && currentKind !== 'scheduled') return;
+			const stillPlaying =
+				audioStore.isPlaying && audioStore.currentTrack?.broadcastId === currentId;
+			if (stillPlaying) return;
 			leaveSent = true;
 			try {
 				navigator.sendBeacon('/api/broadcasts/' + currentId + '/leave');
