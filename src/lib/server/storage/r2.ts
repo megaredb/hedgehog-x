@@ -135,11 +135,19 @@ export async function getMediaObject(key: string, range?: string) {
 	);
 }
 
+const MEDIA_PROXY_BASE = '/api/media';
+
+/**
+ * Stores media as canonical /api/media URLs so the admin "Через сайт" toggle
+ * can switch existing files between the proxy and a direct CDN redirect.
+ * A relative R2_PUBLIC_URL (e.g. /api/media) is kept as the base; an absolute
+ * CDN URL is intentionally not baked into stored content because that would
+ * bypass the toggle for every later request.
+ */
 async function publicMediaUrl(publicUrl: string, key: string): Promise<string> {
-	const media = await loadMediaSettings();
-	const base =
-		!media.mediaProxyEnabled && media.mediaDirectBaseUrl ? media.mediaDirectBaseUrl : publicUrl;
-	return `${base.replace(/\/$/, '')}/${key}`;
+	const base = publicUrl.startsWith('/') ? publicUrl.replace(/\/$/, '') : MEDIA_PROXY_BASE;
+	const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+	return `${base}/${encodedKey}`;
 }
 
 export function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {

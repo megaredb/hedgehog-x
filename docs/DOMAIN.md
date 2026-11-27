@@ -53,7 +53,7 @@
 | **Translator**                           | Переводчик с соцсетями; связь с user.                            |
 | **Site settings**                        | `media` (proxy/direct) и `mirrors` (CDN-хосты).                  |
 | **Mirror**                               | CDN-хост с ролью default/ru/none; auto выбирает RU на RU-домене. |
-| **Media proxy**                          | `/api/media`: Range, кэш, allowlist; может 302 на direct.        |
+| **Media proxy**                          | `/api/media`: safe key, Range, кэш; может 302 на direct.         |
 | **OPFS**                                 | Хранилище скачанного аудио; безопасные имена версий.             |
 | **Sleep timer / Undo seek / Clip range** | Таймер сна, отмена seek, диапазон закладки.                      |
 | **R2**                                   | Cloudflare R2 для медиа.                                         |
