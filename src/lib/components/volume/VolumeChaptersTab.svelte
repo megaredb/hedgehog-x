@@ -13,21 +13,79 @@
 	import GuestAuthModal from '$lib/components/auth/GuestAuthModal.svelte';
 	import type { Track } from '$lib/html-audio';
 	import { formatDuration } from '$lib/utils/time';
+	import { audioVersionKey, isBroadcastProgressKey } from '$lib/audio-version';
 	import DownloadButton from '$lib/components/audio/Download.svelte';
 	import ChapterCommentsDrawer from '$lib/components/comments/ChapterCommentsDrawer.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Play, Pause, MessageSquare, Check, Heart } from '@lucide/svelte';
+	import { Play, Pause, Loader2, MessageSquare, Check, Heart } from '@lucide/svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+
+	interface ChapterAudioVersion {
+		id: string;
+		chapterId: string;
+		versionId: string;
+		title: string;
+		audioUrl: string;
+		durationSeconds: number;
+		chapterStart: number;
+		chapterEnd: number;
+	}
 
 	interface Props {
 		volume: OfflineVolume | undefined;
 		chapters: OfflineChapter[];
 		bookId: string;
 		isLoading?: boolean;
+		selectedVersionId?: string;
+		chapterVersions?: ChapterAudioVersion[];
+		chapterVersionLikes?: Array<{ chapterId: string; versionId: string; count: number }>;
+		serverProgress?: Array<{
+			chapterId: string;
+			versionId: string;
+			progressSeconds: number;
+			isCompleted: boolean | null;
+			updatedAt: Date | string | null;
+		}>;
 	}
 
-	let { volume, chapters, bookId, isLoading = false }: Props = $props();
+	let {
+		volume,
+		chapters,
+		bookId,
+		isLoading = false,
+		selectedVersionId = 'default',
+		chapterVersions = [],
+		chapterVersionLikes = [],
+		serverProgress = []
+	}: Props = $props();
+
+	const activeVersionId = $derived(selectedVersionId || 'default');
+	const isDefaultVersion = $derived(activeVersionId === 'default');
+	const versionTracks = $derived(
+		chapterVersions.filter((version) => version.versionId === activeVersionId)
+	);
+	const versionTrackMap = $derived(
+		new Map(versionTracks.map((version) => [version.chapterId, version]))
+	);
+
+	function versionTrackFor(chapterId: string): ChapterAudioVersion | undefined {
+		return isDefaultVersion ? undefined : versionTrackMap.get(chapterId);
+	}
+
+	function isChapterAvailable(chapter: OfflineChapter): boolean {
+		return isDefaultVersion || !!versionTrackFor(chapter.id);
+	}
+
+	const versionLikesMap = $derived(
+		new Map(
+			chapterVersionLikes.map((item) => [
+				audioVersionKey(item.chapterId, item.versionId),
+				item.count
+			])
+		)
+	);
+	let likeCountOverrides = $state<Record<string, number>>({});
 
 	const session = useSession();
 	let isGuestModalOpen = $state(false);
@@ -41,8 +99,21 @@
 
 	const progressMap = $derived.by(() => {
 		const map = new SvelteMap<string, OfflineProgress>();
+		for (const p of serverProgress) {
+			const key = audioVersionKey(p.chapterId, p.versionId);
+			map.set(key, {
+				chapterId: key,
+				baseChapterId: p.chapterId,
+				versionId: p.versionId,
+				progressSeconds: p.progressSeconds,
+				isCompleted: Boolean(p.isCompleted),
+				updatedAt: p.updatedAt ? new Date(p.updatedAt).getTime() : 0
+			});
+		}
 		for (const p of progressQuery.data) {
-			map.set(p.chapterId, p);
+			if (p.broadcastId || isBroadcastProgressKey(p.chapterId)) continue;
+			const current = map.get(p.chapterId);
+			if (!current || (p.updatedAt ?? 0) >= (current.updatedAt ?? 0)) map.set(p.chapterId, p);
 		}
 		return map;
 	});
@@ -68,52 +139,116 @@
 			isGuestModalOpen = true;
 			return;
 		}
-		await likeService.toggleChapterLike(chapter.id, chapter.likesCount);
+		const key = audioVersionKey(chapter.id, activeVersionId);
+		const baseCount =
+			likeCountOverrides[key] ??
+			versionLikesMap.get(key) ??
+			(activeVersionId === 'default' ? chapter.likesCount : 0);
+		const result = await likeService.toggleChapterLike(chapter.id, baseCount, activeVersionId);
+		likeCountOverrides[key] = result.likesCount;
+	}
+
+	function likesFor(chapter: OfflineChapter): number {
+		const key = audioVersionKey(chapter.id, activeVersionId);
+		return (
+			likeCountOverrides[key] ??
+			versionLikesMap.get(key) ??
+			(activeVersionId === 'default' ? chapter.likesCount : 0)
+		);
 	}
 
 	let selectedChapterForComments = $state<OfflineChapter | null>(null);
 	let isCommentsDrawerOpen = $state(false);
 	let seekingChapterId = $state<string | null>(null);
 
-	async function handlePlayChapter(chapter: OfflineChapter, index: number) {
-		if (audioStore.currentTrack?.id === chapter.id) {
+	function savedStartTime(chapterId: string): number {
+		const saved = progressMap.get(audioVersionKey(chapterId, activeVersionId));
+		return saved && !saved.isCompleted && saved.progressSeconds > 0 ? saved.progressSeconds : 0;
+	}
+
+	function buildSelectedVersionTracks(): Track[] {
+		if (isDefaultVersion) {
+			return chapters.map((chapter) => ({
+				id: chapter.id,
+				url: chapter.audioUrl,
+				title: chapter.title,
+				duration: chapter.durationSeconds,
+				versionId: 'default',
+				artwork: volume?.coverUrl,
+				blurhash: volume?.blurhash,
+				album: volume?.title,
+				volumeId: volume?.id,
+				bookId,
+				startTime: savedStartTime(chapter.id)
+			}));
+		}
+
+		return versionTracks.flatMap((version) => {
+			const chapter = chapters.find((item) => item.id === version.chapterId);
+			if (!chapter) return [];
+			return [
+				{
+					id: chapter.id,
+					url: version.audioUrl,
+					title: version.title || chapter.title,
+					duration: version.durationSeconds,
+					versionId: activeVersionId,
+					artwork: volume?.coverUrl,
+					blurhash: volume?.blurhash,
+					album: volume?.title,
+					volumeId: volume?.id,
+					bookId,
+					startTime: savedStartTime(chapter.id)
+				}
+			];
+		});
+	}
+
+	async function handlePlayChapter(chapter: OfflineChapter) {
+		if (!isChapterAvailable(chapter)) return;
+
+		const tracks = buildSelectedVersionTracks();
+		const trackIndex = tracks.findIndex((track) => track.id === chapter.id);
+		if (trackIndex === -1) return;
+
+		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
+		if (
+			audioStore.currentTrack?.id === chapter.id &&
+			currentVersion === activeVersionId &&
+			!audioStore.currentTrack.broadcastId
+		) {
 			audioStore.togglePlay();
 			return;
 		}
 
-		const savedProgress = progressMap.get(chapter.id);
+		const savedProgress = progressMap.get(audioVersionKey(chapter.id, activeVersionId));
 		const startTime =
 			savedProgress && !savedProgress.isCompleted && savedProgress.progressSeconds > 0
 				? savedProgress.progressSeconds
 				: 0;
 
-		const tracks: Track[] = chapters.map((c) => ({
-			id: c.id,
-			url: c.audioUrl,
-			title: c.title,
-			duration: c.durationSeconds,
-			artwork: volume?.coverUrl,
-			album: volume?.title,
-			volumeId: volume?.id,
-			bookId,
-			startTime: c.id === chapter.id ? startTime : 0
-		}));
-
-		audioStore.setQueueAndPlay(tracks, index);
+		tracks[trackIndex] = { ...tracks[trackIndex], startTime };
+		audioStore.setQueueAndPlay(tracks, trackIndex);
 	}
 
 	function seekAtClientX(clientX: number, row: HTMLElement, chapter: OfflineChapter) {
 		const rect = row.getBoundingClientRect();
 		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
-		audioStore.seek(targetSeconds);
+		const duration =
+			audioStore.duration ||
+			versionTrackFor(chapter.id)?.durationSeconds ||
+			chapter.durationSeconds ||
+			0;
+		audioStore.seek(ratio * duration);
 	}
 
 	function handleChapterPointerDown(e: PointerEvent, chapter: OfflineChapter) {
 		if (e.button !== 0) return;
 		const target = e.target as HTMLElement;
 		if (target.closest('button, a, input, textarea, select')) return;
-		if (audioStore.currentTrack?.id !== chapter.id) return;
+		if (!isChapterAvailable(chapter)) return;
+		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
+		if (audioStore.currentTrack?.id !== chapter.id || currentVersion !== activeVersionId) return;
 
 		e.preventDefault();
 		seekingChapterId = chapter.id;
@@ -133,11 +268,16 @@
 		if (row.hasPointerCapture(e.pointerId)) row.releasePointerCapture(e.pointerId);
 	}
 
-	function handleChapterRowClick(e: MouseEvent, chapter: OfflineChapter, index: number) {
-		const isCurrent = audioStore.currentTrack?.id === chapter.id;
+	function handleChapterRowClick(e: MouseEvent, chapter: OfflineChapter) {
+		if (!isChapterAvailable(chapter)) return;
+		const currentVersion = audioStore.currentTrack?.versionId ?? 'default';
+		const isCurrent =
+			audioStore.currentTrack?.id === chapter.id &&
+			currentVersion === activeVersionId &&
+			!audioStore.currentTrack.broadcastId;
 
 		if (!isCurrent) {
-			handlePlayChapter(chapter, index);
+			handlePlayChapter(chapter);
 			return;
 		}
 
@@ -147,8 +287,12 @@
 		const clickX = e.clientX - rect.left;
 		const ratio = Math.max(0, Math.min(1, clickX / rect.width));
 
-		const targetSeconds = ratio * (audioStore.duration || chapter.durationSeconds || 0);
-		audioStore.seek(targetSeconds);
+		const duration =
+			audioStore.duration ||
+			versionTrackFor(chapter.id)?.durationSeconds ||
+			chapter.durationSeconds ||
+			0;
+		audioStore.seek(ratio * duration);
 	}
 
 	function openComments(e: MouseEvent, chapter: OfflineChapter) {
@@ -182,26 +326,35 @@
 		</div>
 	{:else}
 		<ul class="divide-y divide-border/40">
-			{#each chapters as chapter, index (chapter.id)}
-				{@const isCurrent = audioStore.currentTrack?.id === chapter.id}
+			{#each chapters as chapter (chapter.id)}
+				{@const versionTrack = versionTrackFor(chapter.id)}
+				{@const isAvailable = isDefaultVersion || !!versionTrack}
+				{@const currentVersion = audioStore.currentTrack?.versionId ?? 'default'}
+				{@const isCurrent =
+					audioStore.currentTrack?.id === chapter.id &&
+					currentVersion === activeVersionId &&
+					!audioStore.currentTrack.broadcastId}
 				{@const isPlaying = isCurrent && audioStore.isPlaying}
-				{@const saved = progressMap.get(chapter.id)}
+				{@const isLoading = isCurrent && (audioStore.isLoading || audioStore.isBuffering)}
+				{@const saved = progressMap.get(audioVersionKey(chapter.id, activeVersionId))}
 				{@const currentTrackTime = isCurrent
 					? audioStore.currentTime
 					: (saved?.progressSeconds ?? 0)}
 				{@const effectiveDuration = isCurrent
-					? audioStore.duration || chapter.durationSeconds
-					: chapter.durationSeconds}
+					? audioStore.duration || versionTrack?.durationSeconds || chapter.durationSeconds
+					: versionTrack?.durationSeconds || chapter.durationSeconds}
+				{@const displayTitle = versionTrack?.title || chapter.title}
 				{@const progressPercent =
 					effectiveDuration > 0
 						? Math.min(100, Math.max(0, (currentTrackTime / effectiveDuration) * 100))
 						: 0}
 
-				<li class="relative">
+				<li class="relative" id={`chapter-${chapter.id}`}>
 					<div
 						role="button"
-						tabindex="0"
-						onclick={(e) => handleChapterRowClick(e, chapter, index)}
+						tabindex={isAvailable ? 0 : -1}
+						aria-disabled={!isAvailable}
+						onclick={(e) => handleChapterRowClick(e, chapter)}
 						onpointerdown={(e) => handleChapterPointerDown(e, chapter)}
 						onpointermove={(e) => handleChapterPointerMove(e, chapter)}
 						onpointerup={(e) => handleChapterPointerUp(e, chapter)}
@@ -209,17 +362,21 @@
 						onkeydown={(e) => {
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
-								handlePlayChapter(chapter, index);
+								handlePlayChapter(chapter);
 							}
 						}}
-						class="group relative flex cursor-pointer touch-pan-y items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
+						class="group relative flex touch-pan-y items-center justify-between p-3.5 transition-colors select-none focus:outline-none focus-visible:bg-muted/40 {isCurrent
 							? 'bg-primary/5'
-							: 'hover:bg-muted/30'}"
+							: isAvailable
+								? 'cursor-pointer hover:bg-muted/30'
+								: 'cursor-not-allowed opacity-50 grayscale'}"
 					>
-						<!-- Interactive background progress for active chapter -->
-						{#if isCurrent}
+						<!-- Row fill is the chapter progress; the whole row remains the seek target. -->
+						{#if isAvailable && progressPercent > 0}
 							<div
-								class="pointer-events-none absolute inset-y-0 left-0 bg-primary/10 transition-all duration-150"
+								class="pointer-events-none absolute inset-y-0 left-0 transition-all duration-150 {isCurrent
+									? 'bg-primary/10'
+									: 'bg-primary/5'}"
 								style="width: {progressPercent}%;"
 							></div>
 						{/if}
@@ -229,18 +386,28 @@
 							<!-- Play / Pause Button -->
 							<button
 								type="button"
+								disabled={!isAvailable}
 								onclick={(e) => {
 									e.stopPropagation();
-									handlePlayChapter(chapter, index);
+									handlePlayChapter(chapter);
 								}}
 								class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-all duration-200 {isCurrent
 									? 'scale-105 bg-primary text-primary-foreground shadow-sm'
-									: 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground'}"
+									: isAvailable
+										? 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground'
+										: 'bg-muted text-muted-foreground'}"
 								aria-label={isPlaying
 									? `Пауза: ${chapter.chapterNumber}. ${chapter.title}`
 									: `Воспроизвести: ${chapter.chapterNumber}. ${chapter.title}`}
 							>
-								{#if isPlaying}
+								{#if isLoading}
+									<Loader2 class="h-4 w-4 animate-spin group-hover:hidden" />
+									{#if isPlaying}
+										<Pause class="hidden h-4 w-4 fill-current group-hover:block" />
+									{:else}
+										<Play class="ml-0.5 hidden h-4 w-4 fill-current group-hover:block" />
+									{/if}
+								{:else if isPlaying}
 									<Pause class="h-4 w-4 fill-current" />
 								{:else if isCurrent}
 									<Play class="ml-0.5 h-4 w-4 fill-current" />
@@ -257,11 +424,20 @@
 										? 'font-bold text-primary'
 										: 'text-foreground'}"
 								>
-									{chapter.title}
+									{displayTitle}
+									{#if !isAvailable}
+										<span
+											class="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+										>
+											Нет новой озвучки
+										</span>
+									{/if}
 								</h2>
 
 								<div class="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-									{#if isCurrent}
+									{#if !isAvailable}
+										<span>{formatDuration(chapter.durationSeconds)}</span>
+									{:else if isCurrent}
 										<span class="font-mono font-semibold text-primary">
 											{formatDuration(audioStore.currentTime)} / {formatDuration(effectiveDuration)}
 										</span>
@@ -274,22 +450,10 @@
 										</span>
 									{:else if saved && saved.progressSeconds > 0}
 										<span class="font-mono">
-											{formatDuration(saved.progressSeconds)} / {formatDuration(
-												chapter.durationSeconds
-											)}
+											{formatDuration(saved.progressSeconds)} / {formatDuration(effectiveDuration)}
 										</span>
 									{:else}
-										<span class="font-mono">{formatDuration(chapter.durationSeconds)}</span>
-									{/if}
-
-									<!-- Progress bar for non-active chapters -->
-									{#if !isCurrent && saved && !saved.isCompleted && saved.progressSeconds > 0}
-										<div class="h-1 w-12 overflow-hidden rounded-full bg-muted">
-											<div
-												class="h-full rounded-full bg-primary/60"
-												style="width: {progressPercent}%;"
-											></div>
-										</div>
+										<span class="font-mono">{formatDuration(effectiveDuration)}</span>
 									{/if}
 								</div>
 							</div>
@@ -301,23 +465,27 @@
 							<Button
 								variant="ghost"
 								size="sm"
-								class="h-8 gap-1 px-2 text-xs transition-colors {likedChapterIds.has(chapter.id)
+								class="h-8 gap-1 px-2 text-xs transition-colors {likedChapterIds.has(
+									audioVersionKey(chapter.id, activeVersionId)
+								)
 									? 'text-rose-500 hover:text-rose-600'
 									: 'text-muted-foreground hover:text-foreground'}"
 								onclick={(e) => handleToggleChapterLike(e, chapter)}
-								title={likedChapterIds.has(chapter.id) ? 'Убрать лайк' : 'Поставить лайк'}
-								aria-label={(likedChapterIds.has(chapter.id)
+								title={likedChapterIds.has(audioVersionKey(chapter.id, activeVersionId))
+									? 'Убрать лайк'
+									: 'Поставить лайк'}
+								aria-label={(likedChapterIds.has(audioVersionKey(chapter.id, activeVersionId))
 									? `Убрать лайк с ${chapter.title}`
-									: `Лайкнуть ${chapter.title}`) + ` ${chapter.likesCount || 0}`}
+									: `Лайкнуть ${chapter.title}`) + ` ${likesFor(chapter)}`}
 							>
 								<Heart
 									class="h-3.5 w-3.5 transition-transform active:scale-125 {likedChapterIds.has(
-										chapter.id
+										audioVersionKey(chapter.id, activeVersionId)
 									)
 										? 'fill-rose-500 text-rose-500'
 										: ''}"
 								/>
-								<span class="font-medium">{chapter.likesCount || 0}</span>
+								<span class="font-medium">{likesFor(chapter)}</span>
 							</Button>
 
 							<!-- Comments button for chapter -->
@@ -331,8 +499,21 @@
 								<MessageSquare class="h-4 w-4" />
 							</Button>
 
-							<!-- Chapter download button -->
-							<DownloadButton {chapter} class="h-8 w-8" />
+							<!-- Chapter download button for the selected audio version. -->
+							{#if isAvailable}
+								<DownloadButton
+									{chapter}
+									version={versionTrack
+										? {
+												versionId: activeVersionId,
+												title: versionTrack.title,
+												audioUrl: versionTrack.audioUrl,
+												durationSeconds: versionTrack.durationSeconds
+											}
+										: undefined}
+									class="h-8 w-8"
+								/>
+							{/if}
 						</div>
 					</div>
 				</li>

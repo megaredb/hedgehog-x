@@ -18,7 +18,11 @@
   для гостей.
 - Вход через Telegram (OIDC) и Discord; привязка нескольких способов входа.
 - Админка: книги, тома, главы, иллюстрации; загрузка медиа в Cloudflare R2
-  (WebP + BlurHash + theme color), аналитика прослушиваний.
+  (WebP + BlurHash + theme color), аналитика прослушиваний, пользователи и подписки.
+- Управление сайтом из админки: тексты страниц, обратная связь, медиа-прокси,
+  динамические CDN-зеркала и привязка аккаунтов к разработчикам/переводчикам.
+- Прямые трансляции глав: расписание, синхронизированное аудио, чат с антифлудом,
+  запись/replay с чатом по таймингу, иллюстрации на фоне и live-аналитика.
 - Тёмная/светлая тема, адаптивный интерфейс, PWA-установка.
 
 ## Стек
@@ -40,7 +44,7 @@
 cp .env.example .env          # заполнить BETTER_AUTH_SECRET и провайдеров
 pnpm install
 docker compose up -d db       # или pnpm dev:all
-pnpm db:migrate               # собрать схему из миграций (0000–0008)
+pnpm db:migrate               # собрать схему из миграций (0000–0034)
 pnpm db:seed                  # опционально; сервер выполняет seed сам при старте
 pnpm dev
 ```
@@ -62,11 +66,12 @@ pnpm dev
 | pnpm check                                                       | svelte-check (проходит)               |
 | pnpm lint / pnpm format                                          | prettier + eslint / автоформат        |
 | pnpm test:unit                                                   | unit-тесты (node:test)                |
+| pnpm test:coverage                                               | unit + покрытие Node                  |
 | pnpm test:e2e                                                    | Playwright (нужен BETTER_AUTH_SECRET) |
 | pnpm test:docker                                                 | e2e в Docker (tmpfs Postgres)         |
 | pnpm db:push                                                     | dev-shortcut (может удалять колонки)  |
 | pnpm db:seed / db:studio                                         | сид / Drizzle Studio                  |
-| pnpm db:migrate                                                  | применить миграции 0000–0008          |
+| pnpm db:migrate                                                  | применить миграции 0000–0034          |
 | docker build -t hedgehog-x:prod .                                | production-образ                      |
 | docker compose -f compose.yaml -f compose.prod.yml up -d --build | production-стек                       |
 
@@ -81,7 +86,7 @@ src/
     components/      UI (shadcn) + плеер + контент
     audio-store...   глобальный store плеера
     html-audio.ts    HTMLAudioElement + OPFS
-drizzle/             миграции 0000–0008 (0005 — no-op, 0006 — catch-up)
+drizzle/             миграции 0000–0034 (0005 — no-op, 0006 — catch-up)
 e2e/                 Playwright
 static/              медиа и PWA-ассеты
 docs/                архитектура, карта, аудит, операции
@@ -100,11 +105,12 @@ docs/                архитектура, карта, аудит, опера�
 
 ## Статус
 
-Снимок 2026-11-18 (dev/5f67c5d):
+Снимок 2026-11-25 (ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41`; рабочее дерево без коммита):
 
-- pnpm build — проходит; pnpm lint — чисто; pnpm test:unit — 197/197.
+- pnpm build — проходит; pnpm lint — чисто; pnpm test:unit — 250/250 (35 файлов).
+- `pnpm test:coverage` — 88.00% строк / 82.89% ветвей / 65.66% функций для модулей, загруженных unit-тестами (не весь проект).
 - pnpm check — **зелёный** (0 ошибок).
-- E2E — 46/46 при `--workers=1` (тесты внешних OAuth-редиректов всё ещё зависят от сети), интеграционный — 3/3.
+- E2E — 48/48 при `--workers=1` (тесты внешних OAuth-редиректов всё ещё зависят от сети), интеграционный — 3/3.
 - db:migrate — **работает**; БД пересобрана из миграций, схема совпадает с schema.ts.
 - production-деплой собран: `Dockerfile`, app-сервис в `compose.prod.yml`, миграции при старте, `/health`, graceful shutdown — проверено на чистой БД.
 - Гость больше не теряет прогресс/закладки при заходе в книгу — **P0-01 исправлен**, есть e2e.

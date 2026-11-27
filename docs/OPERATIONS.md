@@ -1,7 +1,7 @@
 # OPERATIONS.md — запуск, окружение, тесты, деплой
 
-> Снимок 2026-11-18. Все команды проверены в worktree `dsh-d6a6b302-2f83`
-> (ветка dev, коммит 5f67c5d), кроме отмеченных «не проверено».
+> Снимок 2026-11-25. Все команды проверены в worktree `dsh-da32b3f2-1fd5`
+> (ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41`, рабочее дерево), кроме отмеченных «не проверено».
 
 ## 1. Требования
 
@@ -54,6 +54,39 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5192"
 - Для локального HTTPS: mkcert создаёт сертификаты в `certs/`, Traefik берёт
   `dynamic/dev.yaml`; без сертификатов dev-прокси не поднимется.
 
+### 2.2.1. Подписки и Boosty
+
+Переменные (все опциональны, без них приложение работает, но источники не активны):
+
+- `SUBSCRIPTION_PRICE_PER_DAY_RUB` — стартовая цена дня, по умолчанию 7. После
+  первого изменения в `/admin/users` источник истины — `subscription_settings`;
+  цена меняется в модалке «Цена дня» с режимом `new`/`all`.
+- `TELEGRAM_SUBSCRIPTION_CHAT_ID` — ID закрытой Telegram-группы (например
+  `-1001234567890`). Бот `TELEGRAM_BOT_TOKEN` должен быть **администратором**
+  группы, иначе `getChatMember` вернёт 400/403. Если обычная группа стала
+  супергруппой, Telegram возвращает `migrate_to_chat_id`; код повторяет проверку
+  по новому ID, но для webhook обновите `TELEGRAM_SUBSCRIPTION_CHAT_ID`.
+- `TELEGRAM_WEBHOOK_SECRET` — случайная строка. Используется как
+  `secret_token` в `setWebhook` и проверяется по заголовку
+  `X-Telegram-Bot-Api-Secret-Token`. URL webhook:
+  `https://<host>/api/telegram/webhook`. Telegram требует публичный HTTPS;
+  для локальной проверки используйте туннель (ngrok/cloudflared) или кнопку
+  «Настроить webhook» на `/admin/users/integrations` в production. В тестовом
+  окружении можно запустить `node --env-file=.env scripts/serveo-webhook.mjs`:
+  скрипт поднимает Serveo-туннель и автоматически переустанавливает webhook
+  при переподключении. Serveo — временный адрес; для production нужен постоянный домен.
+- `DISCORD_GUILD_ID` — ID сервера; `DISCORD_SUBSCRIBER_ROLE_IDS` — ID ролей
+  через запятую. Роль — единственный сигнал подписки.
+- `DISCORD_BOT_TOKEN` — опционально. Если задан, роли проверяются REST-ботом
+  (`GET /guilds/{guild}/members/{user}`). Если пуст, используется OAuth-токен
+  пользователя; Discord-приложение должно запрашивать scope
+  `guilds.members.read`, а redirect URI — `https://<host>/api/auth/callback/discord`.
+
+Telegram-источник можно обновить лениво кнопкой «Проверить статус» на
+`/subscription` или «Проверить источники» в карточке пользователя. Webhook
+обновляет кэш сразу при входе/выходе из группы. Ошибка проверки не сбрасывает
+уже известный активный статус.
+
 ### 2.3. R2 (медиа)
 
 `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`,
@@ -63,7 +96,8 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5192"
 Для локальной разработки с закрытым бакетом задайте
 `R2_PUBLIC_URL="/api/media"`: [media proxy](../../src/routes/api/media/%5B...key%5D/+server.ts)
 стримит объекты из R2 и поддерживает HTTP Range (перемотка аудио). В production
-используйте публичный CDN-домен, а не `/api/media`.
+Режим доставки (прокси или прямой CDN) переключается в админке: **Сайт → Настройки → Сеть и зеркала**.
+При выключенном проксировании используется основное включённое зеркало; `mediaDirectBaseUrl` вычисляется автоматически.
 
 ### 2.4. Umami (опционально)
 
@@ -78,7 +112,7 @@ BETTER_AUTH_FALLBACK_URL="http://localhost:5192"
 cp .env.example .env      # заполнить секреты
 pnpm install
 docker compose up -d      # Postgres + Traefik + Umami + dbgate
-pnpm db:migrate           # первый запуск: 0000–0008
+pnpm db:migrate           # первый запуск: 0000–0034
 pnpm db:seed              # первый запуск: демо-контент
 pnpm dev                  # Vite на 5192
 ```
@@ -94,7 +128,7 @@ pnpm dev                  # Vite на 5192
 ```bash
 docker compose up -d db
 pnpm install
-pnpm db:migrate           # собрать схему из миграций 0000–0008
+pnpm db:migrate           # собрать схему из миграций 0000–0034
 pnpm db:seed              # опционально; сервер выполняет seed сам при старте
 pnpm dev
 ```
@@ -118,17 +152,94 @@ pnpm dev
   - `0000`–`0004` — исходная схема и провайдерские поля;
   - `0005` — **намеренный no-op** (legacy-колонки уже удалены в `0004`);
   - `0006` — catch-up: `user.role`, `volumes.status`, `listening_sessions`,
-    `daily_listening_stats`, длины varchar 1024.
+    `daily_listening_stats`, длины varchar 1024;
+  - `0015` — подписки: `subscriptions`, `subscription_sources`,
+    `subscription_events`, индекс `account(provider_id, account_id)`;
+  - `0016` — цена дня: `subscription_settings`, `subscription_price_changes`,
+    `subscription_price_notices`, `subscription_events.price_per_day`;
+  - `0017` — пауза/блокировка: `subscriptions.revoked_at`,
+    `subscriptions.revoked_remaining_ms`, `subscriptions.blocked_remaining_ms`;
+  - `0018` — `donation_ledger` для сохранения донатов после удаления пользователя;
+  - `0019` — `user.include_in_stats` для роли автора;
+  - `0020` — обезличенная аналитика при удалении пользователя (`user_id ON DELETE SET NULL`);
+  - `0021` — `site_pages` и `translators`;
+  - `0022` — `site_pages.data` для структурированных ссылок и реквизитов;
+  - `0023` — `translators.links` для соцсетей переводчиков;
+  - `0024` — `translators.enabled` для скрытия переводчика;
+  - `0025` — `translators.user_id` для привязки к пользователю;
+  - `0026` — `site_settings` для проксирования медиа и CDN-зеркал;
+  - `0027` — `chapters.published` и таблицы трансляций/чата/слушателей/иллюстраций/просмотров;
+  - `0028` — `broadcast_reactions` для быстрых эмодзи-реакций;
+  - `0029` — `broadcasts.cover_blurhash` для blurhash-фона;
+  - `0030` — OG-превью ссылок в сообщениях чата;
+  - `0031` — ответы на сообщения (`reply_to_*`);
+  - `0032` — теги иллюстраций в сообщениях чата;
+  - `0033` — привязка иллюстраций к главам (`chapter_illustrations`);
+  - `0034` — `broadcast_progress` (live/replay resume per user).
 - Текущая dev-БД **пересобрана через `db:migrate`** (`drizzle.__drizzle_migrations`
-  содержит 7 записей), затем `db:seed`; пользовательские данные восстановлены из
+  содержит все записи `0000`–`0034`), затем `db:seed`; пользовательские данные восстановлены из
   предварительного бэкапа.
-- Схема БД и `schema.ts` совпадают; `drizzle-kit generate` отвечает
-  `No schema changes, nothing to migrate`.
+- После применения `0034` схема и `schema.ts` совпадают; `drizzle-kit generate`
+  отвечает `No schema changes, nothing to migrate`. Для существующей БД просто
+  примените `pnpm db:migrate`; для проверки используйте отдельную
+  `hedgehog_x_test` (§4.1.1).
 - `db:push` — только dev-shortcut; он может удалять колонки и не является
   источником истины. Не используйте его как основной путь.
 - Если БД была создана старым `db:push` и в ней нет таблицы миграций, не запускайте
   `db:migrate` поверх неё: пересоберите БД из миграций (см. §4.3) или осознанно
   сделайте baseline. Перед этим — `pg_dump`.
+
+### 4.1.1. Глобальные настройки сайта
+
+На `/admin/site` вкладка **«Настройки»** хранит `site_settings`:
+
+- `media` — режим доставки медиа/аудио (`mediaProxyEnabled`, вычисляемый
+  `mediaDirectBaseUrl`). При включённом режиме файлы идут через `/api/media`
+  с дисковым кешем изображений; при выключенном — через основное CDN-зеркало.
+- `mirrors` — список CDN-зеркал с полями `label`, `host`, `description`,
+  `enabled`, `autoRole` (`default`/`ru`/`none`). «Автоматически» на публичной
+  странице настроек выбирает RU-зеркало на RU-домене, иначе основное.
+
+Изменения применяются к новым запросам сразу после сохранения; root layout
+передаёт mirrors в клиентский резолвер, а `/api/media` может отвечать `302`
+на прямой адрес зеркала.
+
+### 4.1.2. Трансляции и load test
+
+Админ-страница `/admin/broadcasts` создаёт эфир для главы, хранит обложку, тайминги
+иллюстраций, настройки записи/публикации и показывает live-слушателей и replay-просмотры.
+Публичные страницы `/broadcasts` и `/broadcasts/[id]` требуют входа и активной подписки
+(кроме admin). Чат: 500 символов, 5 сообщений за 10 секунд, только разрешённые ссылки
+(Telegram/Boosty/Discord/домены HEDGEHOG.INC).
+
+Нагрузочный тест без зависимостей:
+
+```bash
+node scripts/load-test-broadcast.mjs \
+  --url http://127.0.0.1:5180 \
+  --concurrency 50 --duration 10 --interval 2000
+```
+
+Результаты локального прогона (dev Vite, live-трансляция): 50 клиентов/2с —
+250 запросов, 0 ошибок, p95 ≈136 мс; 100 — p95 ≈339 мс; 200 — p95 ≈264 мс.
+Для авторизованного state endpoint передайте cookie через `--cookie 'session=...'`.
+Это проверяет polling; реальные аудиопотоки идут напрямую с CDN/`/api/media`, а не через
+один Node-процесс.
+
+### 4.1.3. Изолированная тестовая БД для подписок
+
+Чтобы проверять миграции/выдачу подписок, не трогая текущую `local`:
+
+```bash
+docker exec hedgehog-x-db-1 createdb -U root hedgehog_x_test
+DATABASE_URL='postgres://root:mysecretpassword@localhost:5432/hedgehog_x_test' \
+  pnpm db:migrate
+```
+
+Затем запускайте dev-сервер с `DATABASE_URL` тестовой БД (или отдельным
+`.env`). Проверка: `select count(*) from drizzle.__drizzle_migrations` и
+`select tablename from pg_tables where schemaname='public' and tablename like 'subscription%'`.
+Не применяйте миграции к `local`, если не хотите менять рабочую БД.
 
 ### 4.2. Команды
 
@@ -136,7 +247,7 @@ pnpm dev
 | ------------------ | ------------------------------------------ | ---------------------------------- |
 | `pnpm db:push`     | dev-shortcut, может удалять колонки        | только осознанно, не основной путь |
 | `pnpm db:generate` | генерирует SQL-миграцию + snapshot из diff | после правки schema                |
-| `pnpm db:migrate`  | применяет 0000–0008                        | **рабочий способ**                 |
+| `pnpm db:migrate`  | применяет 0000–0034                        | **рабочий способ**                 |
 | `pnpm db:seed`     | идемпотентный сид                          | вручную/тест                       |
 | `pnpm db:studio`   | Drizzle Studio                             | отладка                            |
 | `pnpm auth:schema` | перегенерирует auth.schema.ts              | после изменения auth-конфига       |
@@ -144,6 +255,26 @@ pnpm dev
 **Правило:** после `db:generate` проверьте SQL глазами, закоммитьте `.sql` +
 `meta/*_snapshot.json` + `meta/_journal.json`. Не редактируйте уже применённые
 миграции; `0005` специально оставлен no-op.
+
+### 4.2.1. Нормализация R2 и архивных озвучек
+
+Скрипт `scripts/normalize-storage.mjs` приводит dev-бакет к структуре production
+(`<book>/<volume>/<file>`, `OLD VERSION/`, `preview.jpg`), обновляет URL в БД и
+импортирует архивные треки в `audio_versions` / `chapter_audio_versions`.
+
+```bash
+# dry-run: только отчёт
+node scripts/normalize-storage.mjs
+
+# копирование, обновление БД и импорт версий
+node scripts/normalize-storage.mjs --apply
+
+# после проверки — удалить старые hash-based объекты
+node scripts/normalize-storage.mjs --apply --delete-old
+```
+
+Перед `--apply` сделайте `pg_dump` таблиц `chapters`, `volumes`, `books` и
+`audio_versions`; `--delete-old` запускайте только после проверки медиа-URL.
 
 ### 4.3. Сброс БД
 
@@ -158,7 +289,7 @@ docker exec hedgehog-x-db-1 pg_dump -U root -d local -Fc -f /tmp/hedgehog_before
 ```bash
 docker compose down -v      # удалит volume pgdata — все данные!
 docker compose up -d db
-pnpm db:migrate             # 0000–0008
+pnpm db:migrate             # 0000–0034
 pnpm db:seed
 ```
 
@@ -172,6 +303,8 @@ pnpm db:seed
 
 ```sql
 UPDATE "user" SET role = 'admin' WHERE email = '<email>';
+-- автор: только один пользователь, назначается через /admin/users
+UPDATE "user" SET role = 'author', include_in_stats = false WHERE id = '<id>';
 ```
 
 В dev: войти → `/admin` → карточка «Доступ ограничен» → кнопка
@@ -183,7 +316,7 @@ UPDATE "user" SET role = 'admin' WHERE email = '<email>';
 pnpm build
 node server.js                  # compression + cache headers; env: DATABASE_URL, BETTER_AUTH_SECRET, PORT
 # или
-pnpm preview                   # Vite preview на 4192
+pnpm preview                   # Vite preview на 4173
 ```
 
 - `build/index.js` — adapter-node handler; production запускается через `server.js`.
@@ -243,11 +376,22 @@ curl http://127.0.0.1:3000/health
 pnpm test:unit
 ```
 
-- 26 файлов, 197 тестов; в снимке — все зелёные.
+- 37 файлов, 268 тестов; в снимке — все зелёные.
 - `r2.test.ts` пишет файлы в `static/uploads/test*` (или в R2, если env настроен)
   и пытается удалить; побочный эффект.
 - `listeningTracker.test.ts` использует Dexie без браузера; часть проверок
   проглатывает отсутствие IndexedDB.
+
+### 6.1.1. Покрытие
+
+```bash
+pnpm test:coverage
+```
+
+- 88.00% строк / 82.89% ветвей / 65.66% функций для модулей, реально загруженных
+  unit-тестами. Это не покрытие всего приложения.
+- Не покрыты: `downloadManager`, `audioStore`, `audio-provider`, admin form actions,
+  большинство route handlers и UI; e2e не покрывает плеер/историю/загрузки/настройки/админку/live.
 
 ### 6.2. Typecheck и lint
 
@@ -265,24 +409,25 @@ pnpm format
 ```bash
 # ВАЖНО: webServer (vite preview) падает без секрета
 export BETTER_AUTH_SECRET='test-secret-at-least-32-characters-long-key'
-export BETTER_AUTH_ALLOWED_HOSTS='localhost,localhost:4192'
-export BETTER_AUTH_FALLBACK_URL='http://localhost:4192'
+export BETTER_AUTH_ALLOWED_HOSTS='localhost,localhost:4173'
+export BETTER_AUTH_FALLBACK_URL='http://localhost:4173'
 
 pnpm exec playwright install      # если браузеров нет
 pnpm test:e2e                    # или: pnpm exec playwright test
 pnpm exec playwright test --workers=1   # стабильнее
 ```
 
-- Конфиг сам поднимает `pnpm preview -- --host 0.0.0.0 --port 4192`
+- Конфиг сам поднимает `pnpm preview -- --host 0.0.0.0 --port 4173`
   (`reuseExistingServer` вне CI), поэтому перед запуском не нужно вручную
   поднимать preview.
 - Без `BETTER_AUTH_SECRET` webServer падает: `BetterAuthError: default secret`.
 - Тесты Telegram/Discord редиректов мокают провайдерские домены
   (`oauth.telegram.org`, `discord.com`), поэтому e2e не ходят в сеть.
-  В текущем прогоне: **46/46** при `--workers=1`;
+  В текущем прогоне: **48/48** при `--workers=1` (все зелёные);
   `e2e/sync-data-safety.e2e.ts` покрывает P0-01 (9 сценариев, включая consent),
   `e2e/bookmark-sync.e2e.ts` — P0-03 (offline → online flush),
   `e2e/session-isolation.e2e.ts` — P0-05 (logout/owner).
+- `migration-safety.test.ts` проверяет отсутствие кошельков/карт/ключей/паролей/токенов в `drizzle/*.sql`.
 - `delete-account.integration.e2e.ts` использует реальную Postgres и
   `BETTER_AUTH_SECRET`; без секрета skip. Тест создаёт и удаляет тестового
   пользователя; ожидает cookie `__Secure-better-auth.session_token` (production
@@ -374,7 +519,7 @@ node ./node_modules/vite/bin/vite.js build
 | `pnpm check` падает                                              | раньше была `auth.ts:47` (исправлено); проверьте новую ошибку и `svelte-kit sync`        |
 | `db:migrate`: column "telegram_id" ... does not exist            | у вас старая ревизия с дублем в `0005`; обновите `drizzle/` (текущий `0005` — no-op)     |
 | `db:migrate` → relation ... already exists                       | БД создана `db:push` без истории; пересоберите из миграций (§4.3) или сделайте baseline  |
-| `db:seed` → column "status" of relation "volumes" does not exist | БД неполная/старая; пересоберите из `0000–0008`                                          |
+| `db:seed` → column "status" of relation "volumes" does not exist | БД неполная/старая; пересоберите из `0000–0034`                                          |
 | `db:generate` снова создаёт миграцию                             | `schema.ts` и snapshot разошлись; проверьте и закоммитьте новую миграцию                 |
 | Страница вечно «Загрузка...»                                     | нет данных в Dexie: API/БД недоступны, книга не существует, или JS не загрузился         |
 | `/admin` после входа ведёт на `/`                                | redirect= vs from= (AUDIT P1-08); откройте `/admin` снова                                |
@@ -406,23 +551,23 @@ node ./node_modules/vite/bin/vite.js build
 - **Пользовательские локальные данные** (Dexie/OPFS) не бэкапятся сервером;
   потеря браузера = потеря локальных закладок/скачанного.
 
-## 11. Проверочный снимок (2026-11-18)
+## 11. Проверочный снимок (2026-11-25)
 
 | Проверка            | Команда                                       | Результат                                                           |
 | ------------------- | --------------------------------------------- | ------------------------------------------------------------------- |
 | Build               | `node vite build`                             | ✅ exit 0                                                           |
 | Typecheck           | `svelte-check`                                | ✅ 0 errors                                                         |
 | Lint                | prettier + eslint                             | ✅                                                                  |
-| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 197 pass                                                         |
+| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 268 pass                                                         |
 | E2E (3 файла)       | `playwright test auth profile navigation`     | ✅ 23/23 (в текущем прогоне)                                        |
-| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 46/46 (сеть для OAuth-редиректов всё ещё нужна)                  |
+| E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 48/48 (включая a11y; сеть для OAuth-редиректов всё ещё нужна)    |
 | Sync safety e2e     | `e2e/sync-data-safety.e2e.ts`                 | ✅ 9/9 (P0-01 + guest consent)                                      |
 | Bookmark queue e2e  | `e2e/bookmark-sync.e2e.ts`                    | ✅ 1/1 (P0-03)                                                      |
 | Session isolation   | `e2e/session-isolation.e2e.ts`                | ✅ 5/5 (P0-05)                                                      |
 | E2E integration     | `delete-account.integration.e2e.ts`           | ✅ 3 pass                                                           |
-| Migrations          | migrate 0000..0007 на чистой БД + seed        | ✅ 7 миграций, seed 2/4/10/4                                        |
+| Migrations          | migrate 0000..0034 на чистой БД + seed        | ✅ 35 миграций, seed 2/4/10/4                                       |
 | Schema parity       | DB vs schema.ts / generate                    | ✅ diff пуст; `No schema changes`                                   |
-| Admin SSR           | /admin, /admin/books, /admin/analytics        | ✅ 200 с подписанной сессией                                        |
+| Admin SSR           | /admin, /admin/content, /admin/analytics      | ✅ 200 с подписанной сессией; старые content-URL редиректят         |
 | Analytics write     | POST /api/analytics/listen на scratch DB      | ✅ 200; session + daily stats вставлены                             |
 | Guest data loss     | Playwright + IndexedDB                        | ❌ progress/bookmarks/likes стёрты после перехода на страницу книги |
 

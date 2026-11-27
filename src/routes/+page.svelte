@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
-	import { showcaseBooks } from '$lib/data/mockShowcase';
+	import type { ShowcaseBook } from '$lib/types/showcase';
 	import { strings } from '$lib/constants/strings';
 
 	import ShowcaseBackground from '$lib/components/showcase/ShowcaseBackground.svelte';
@@ -10,21 +10,25 @@
 	import ShowcaseNav from '$lib/components/showcase/ShowcaseNav.svelte';
 	import { resolve } from '$app/paths';
 	import { ChevronUp, ChevronDown } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { fade } from 'svelte/transition';
+
+	let { data }: { data: { books: ShowcaseBook[] } } = $props();
+	const showcaseBooks = $derived(data.books);
 
 	// Initialize start index at declaration to avoid hydration mismatch
 	let initialIndex = 0;
 	const initialBookId = page.url.searchParams.get('book');
 	if (initialBookId) {
-		const foundIndex = showcaseBooks.findIndex((b) => b.id === initialBookId);
+		const foundIndex = untrack(() => data.books.findIndex((b) => b.id === initialBookId));
 		if (foundIndex !== -1) {
 			initialIndex = foundIndex;
 		}
 	}
 
 	let currentIndex = $state(initialIndex);
-	// Video backgrounds are opt-in: autoplay pulls multi-megabyte media and delays LCP.
-	let isVideoPlaying = $state(false);
+	// Video backgrounds play by default; a saved user preference can disable them.
+	let isVideoPlaying = $state(true);
 	let scrollContainer: HTMLDivElement | null = $state(null);
 	let isProgrammaticScroll = $state(false);
 	let scrollTimeoutId: number | undefined;
@@ -112,6 +116,18 @@
 <div class="relative isolate flex w-full flex-1 flex-col overflow-hidden">
 	<ShowcaseBackground books={showcaseBooks} {currentIndex} {isVideoPlaying} />
 
+	{#if showcaseBooks.length === 0}
+		<div class="relative z-10 flex flex-1 items-center justify-center px-6 text-center">
+			<div class="max-w-md space-y-3">
+				<h1 class="text-3xl font-extrabold tracking-tight">Скоро здесь появятся книги</h1>
+				<p class="text-sm text-muted-foreground">
+					Добавьте книги и видеофон в панели управления контентом.
+				</p>
+				<Button href={resolve('/books')} variant="outline">Перейти в каталог</Button>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Showcase scroll viewport -->
 	<div
 		bind:this={scrollContainer}
@@ -132,7 +148,7 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
+			class="showcase-scroll-indicator pointer-events-auto absolute top-20 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Previous"
 		>
 			<ChevronUp class="h-8 w-8" />
@@ -141,7 +157,7 @@
 
 	<a
 		href={resolve('/books')}
-		class="pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
+		class="showcase-all-books pointer-events-auto absolute top-5 left-5 z-20 rounded-full border border-border/40 bg-background/60 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-background/90"
 	>
 		{strings.common.allBooks}
 	</a>
@@ -156,7 +172,7 @@
 				updateUrl(showcaseBooks[currentIndex].id);
 				scrollToIndex(currentIndex);
 			}}
-			class="pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
+			class="showcase-scroll-indicator pointer-events-auto absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 animate-bounce cursor-pointer flex-col items-center gap-1 text-foreground/60 transition-colors duration-300 select-none hover:text-foreground"
 			title="Next"
 		>
 			<ChevronDown class="h-8 w-8" />
@@ -164,17 +180,19 @@
 	{/if}
 
 	<!-- Navigation controls -->
-	<ShowcaseNav
-		books={showcaseBooks}
-		{currentIndex}
-		{isVideoPlaying}
-		onToggleVideo={toggleVideo}
-		onScrollTo={(idx) => {
-			currentIndex = idx;
-			updateUrl(showcaseBooks[idx].id);
-			scrollToIndex(idx);
-		}}
-	/>
+	{#if showcaseBooks.length > 0}
+		<ShowcaseNav
+			books={showcaseBooks}
+			{currentIndex}
+			{isVideoPlaying}
+			onToggleVideo={toggleVideo}
+			onScrollTo={(idx) => {
+				currentIndex = idx;
+				updateUrl(showcaseBooks[idx].id);
+				scrollToIndex(idx);
+			}}
+		/>
+	{/if}
 </div>
 
 <style>
@@ -185,5 +203,12 @@
 	.no-scrollbar {
 		-ms-overflow-style: none;
 		scrollbar-width: none;
+	}
+
+	@media (orientation: landscape) and (max-height: 500px) and (max-width: 1100px) {
+		.showcase-all-books,
+		.showcase-scroll-indicator {
+			display: none;
+		}
 	}
 </style>

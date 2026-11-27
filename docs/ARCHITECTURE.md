@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — как реально устроен Hedgehog X
 
-> Снимок 2026-11-18 (dev / 5f67c5d). Документ объясняет **поведение системы**,
+> Снимок 2026-11-25 (`dsh-da32b3f2-1fd5`, последний коммит `183aa41`, рабочее дерево). Документ объясняет **поведение системы**,
 > а не перечисляет файлы (для файлов — [PROJECT_MAP.md](PROJECT_MAP.md)).
 > Все обнаруженные дефекты и расхождения — в [AUDIT.md](AUDIT.md).
 
@@ -16,7 +16,7 @@ Hedgehog X — SvelteKit-приложение с **клиентским кэше
 телеметрируется heartbeat'ами. Админка — SSR-панель с form actions и загрузкой
 медиа в R2. PWA кэширует страницы (NetworkFirst) и аудио (CacheFirst), а также
 регистрирует собственный service worker. Авторизация — better-auth (Telegram OIDC,
-Discord), роли — в user.role. Главная — статичная витрина, не каталог из БД.
+Discord), роли — в user.role. Главная — SSR-витрина из БД: отдельные изображение, видеофон и порядок книг управляются в админке.
 
 ## 1. Контекст и топология
 
@@ -106,15 +106,23 @@ lib/*.svelte.ts, lib/*.ts     # плеер, логгер, утилиты
 Полная схема — [PROJECT_MAP.md §7](PROJECT_MAP.md#7-база-данных). Ключевое:
 
 - Контент: books → volumes → chapters/illustrations (FK cascade).
+- Версии озвучки: audio_versions + chapter_audio_versions (архивные треки и
+  диапазоны объединённых глав; для активной версии UI использует отдельный URL/длительность).
 - Активность: listening_progress, volume_likes, chapter_likes, bookmarks
-  (PK по user+сущность).
+  (PK по user+сущность; у прогресса/лайков/закладок версия входит в ключ).
 - Аналитика: listening_sessions (сырые сессии) и daily_listening_stats
   (агрегат по дате/книге/главе/пользователю).
 - Auth: user/session/account/verification; user.role.
 - ID — строки; контентные ID генерируются админкой/сидом; bookmarks.id — UUID.
 - **Миграции соответствуют схеме** (после P0-02): 0000–0004 — история, 0005 —
   намеренный no-op, 0006 — catch-up (role/status/listening-таблицы/длины). Текущая
-  БД пересобрана через db:migrate; `drizzle-kit generate` — no-op.
+  БД пересобрана через db:migrate; `drizzle-kit generate` — no-op. Для версий
+  озвучки добавлены 0009 (audio_versions/chapter_audio_versions), 0010
+  (audio_url до 2048 символов), 0011 (version_id в активности), 0012–0014 (видео/порядок книг, точная длительность, отдельное изображение главной),
+  0015–0020 (подписки, донаты, аналитика при удалении пользователя), 0021–0024
+  (`site_pages`, `translators`, соцсети и видимость), 0025 (`translators.user_id`),
+  0026 (`site_settings`: медиа-прокси и CDN-зеркала), 0027–0033 (трансляции/чат,
+  реакции, blurhash, OG-превью, ответы, теги иллюстраций, `chapter_illustrations`).
 
 ### 4.2. API-стиль
 
@@ -160,8 +168,8 @@ Dexie  ◄──── useDexie(liveQuery) ◄──── страницы/ко
   - 200 → гидрирует книгу, тома по bookId, главы/иллюстрации по всем volumeId
     (существующим + новым), удаляя осиротевшие;
   - ошибка сети → тихо оставляет кэш.
-- syncBooks (список книг) **не вызывается**; каталог не гидрируется. Главная
-  использует mockShowcase, поэтому новые книги не видны (AUDIT P2).
+- syncBooks (список книг) **не вызывается**; каталог и главная рендерятся SSR из БД.
+  Новые книги и порядок витрины видны сразу после сохранения в админке.
 
 ### 5.2. Поток пользовательских данных
 
@@ -374,9 +382,12 @@ src/lib/server/auth.ts:
 
 ```text
 /admin/+layout.server.ts: нет user → redirect /auth?from=/admin
-                           user → { user, isAdmin: role==='admin', isDev }
-/admin overview/analytics: if role!=='admin' → { notAdmin:true, пустые данные }
-/admin/{books,volumes,chapters,illustrations}: requireAdmin(locals) → throw 401/403
+                           user → { user, isAdmin: role in (admin, author), isDev }
+/admin overview/analytics: isAdminRole(role) — admin и author
+/admin/content: requireAdmin(locals) → throw 401/403
+Author: единственный пользователь с role='author'; автор получает админ-доступ,
+        но его строка в /admin/users не показывает роли, донаты, выдачу и карточку.
+/admin/{books,volumes,chapters,versions,illustrations}: 303 → /admin/content
 ```
 
 Несогласованность: overview/analytics рисуют карточку «Доступ ограничен» в layout,
@@ -391,10 +402,132 @@ src/lib/server/auth.ts:
   ожидает {data:{url}} → window.location.href.
 - unlink(providerId) → authClient.unlinkAccount({providerId, accountId}); запрет
   отвязки последнего способа (клиент + allowUnlinkingAll:false).
-- deleteAccount() → POST /api/user/delete; сервер удаляет user (каскады);
-  cookie не чистится на сервере, клиент делает signOut.
+- deleteAccount() → POST /api/user/delete; сервер удаляет user (каскады),
+  сессии и ссылки на админа, чистит cookie; клиент делает signOut.
+  Донаты и аналитика прослушивания сохраняются обезличенными (`user_id = NULL`),
+  чтобы не уменьшать административную статистику.
+  При удалении подписки обнуляются, но активная Boosty-подписка после
+  повторного входа снова активирует источник.
 - /profile показывает провайдерские аватары/username; «Последний вход» — эвристика
   по совпадению user.image с аватаром провайдера.
+
+### 7.5. Подписки и Boosty
+
+Подписка — это **доступ к закрытому сообществу**, а не гейт контента. В MVP
+контент не блокируется; статус показывается на /subscription и в карточке
+/profile, а администратор управляет им из /admin/users.
+
+**Модель.** Одна строка subscriptions на пользователя:
+
+- manual_expires_at — ручная подписка (дни/сумма);
+- is_lifetime — «вечная» подписка;
+- revoked_at / revoked_remaining_ms — отзыв приостанавливает подписку,
+  сохраняя неиспользованные дни; восстановление возвращает остаток;
+- blocked_at / blocked_reason / blocked_remaining_ms — полная блокировка
+  важнее всех источников; сессии удаляются, остаток дней замораживается.
+
+**Источники Boosty** (subscription_sources, PK user_id+provider):
+
+- telegram — пользователь состоит в закрытой группе; проверка
+  getChatMember(chat_id, telegram_id). Бот должен быть администратором группы.
+- discord — у пользователя есть роль DISCORD_SUBSCRIBER_ROLE_IDS на сервере
+  DISCORD_GUILD_ID. Если задан DISCORD_BOT_TOKEN, используется REST бота;
+  иначе — OAuth-токен пользователя со scope guilds.members.read
+  (GET /users/@me/guilds/{guild}/member).
+- Один неактивный источник не сбрасывает другой. Ошибка проверки (сеть, 401,
+  бот не админ) не делает источник неактивным: сохраняется прежний active и
+  last_error.
+
+**Эффективный доступ:**
+
+active = !blocked && !revoked && (is_lifetime || manual_expires_at > now
+|| telegram.active || discord.active)
+
+**Ручная выдача.** 7 ₽ = 1 день; сумма → floor(amount / 7). Продление
+считается от max(now, manual_expires_at), раннее продление не сгорает.
+«Вечная» перекрывает дату, блокировка перекрывает всё. Каждое изменение
+пишется в subscription_events (до/после, дни, сумма, админ, комментарий).
+После входа/регистрации источники проверяются автоматически
+(`databaseHooks.session.create.after`), не на каждом запросе.
+
+**Админ-страница интеграций.** `/admin/users/integrations` загружает только
+конфигурацию; Telegram/Discord проверяются после рендера через
+`/api/admin/integrations`, чтобы недоступный внешний API не блокировал переход.
+
+**Telegram webhook.** POST /api/telegram/webhook принимает chat_member
+(и my_chat_member), проверяет X-Telegram-Bot-Api-Secret-Token и обновляет
+источник по Telegram ID. Для локальной разработки нужен публичный HTTPS-туннель;
+без webhook источник обновляется лениво кнопкой «Проверить статус».
+
+**Discord.** Роль — единственный сигнал; бот Boosty выдаёт её при оплате.
+Приложение не хранит токены Boosty и не вызывает Boosty API. Для production
+рекомендуется DISCORD_BOT_TOKEN (OAuth-токены пользователей истекают).
+
+**Админка.** На /admin/users — сводка, фильтр по подписке, выдача/отзыв/
+блокировка, карточка и аудит. /admin/users/integrations показывает состояние
+Telegram/Discord и позволяет поставить webhook. Отдельной страницы «Подписки» нет.
+
+**Контент страниц.** `/admin/site` редактирует `site_pages` для `/about`,
+`/support` и `/community` и управляет списком `translators`. Публичные
+страницы читают эти данные через `+page.server.ts`; при отсутствии строки
+используются дефолты из `$lib/server/site-content.ts`. Ссылки, разработчики,
+переводчики, ссылки сообщества и платежные реквизиты также хранятся в БД;
+`BOOSTY_BLOG_URL` больше не используется. TON переименован в GRAM; в поддержке хранятся несколько карт, кошельков (сеть + несколько монет, включая XAUT) и Telegram Wallet. Соцсети разработчиков хранятся в
+`site_pages.data`, переводчиков — в `translators.links`. Миграции — `0021`–`0027`.
+
+**Глобальные настройки сайта.** Вкладка «Настройки» на `/admin/site` хранит
+`site_settings` с ключами `media` и `mirrors`. `media.mediaProxyEnabled` управляет
+проксированием медиа/аудио через `/api/media`; при выключении прямые ссылки строятся
+от основного включённого зеркала. `mirrors` — редактируемый список CDN-хостов с
+ролями `default`/`ru`/`none`; root layout применяет его к клиентскому резолверу,
+а `/api/media` редиректит на прямой URL. «Автоматически» выбирает RU-зеркало на
+RU-домене или основное зеркало. Разработчики и переводчики могут быть связаны с
+аккаунтом (`site_pages.data.developers[].userId` / `translators.user_id`); публичная
+страница подставляет аватар пользователя.
+
+**Трансляции.** `/admin/broadcasts` создаёт эфир для главы. Глава по умолчанию
+published=false; при старте эфира она публикуется. Состояние (scheduled/live/ended/published)
+вычисляется лениво из scheduled_start_at, started_at, ended_at и длительности главы.
+Клиент не получает отдельный аудиопоток: все слушают тот же chapter audio, а страница
+синхронизирует позицию по startedAt и serverNow (коррекция при дрейфе >5 сек).
+Root layout отправляет heartbeat, пока играет broadcastId, поэтому прослушивание
+продолжается после ухода со страницы. Пока в плеере есть broadcastId, layout раз в
+5 секунд проверяет `GET /api/broadcasts/[id]/status`; явный 404 означает удаление —
+плеер останавливается, очередь и локальный прогресс этой трансляции очищаются. Чат хранится в broadcast_messages, доступен
+только авторизованным с активной подпиской; лимит 500 символов, 5 сообщений/10 секунд
+и allowlist ссылок (Telegram/Boosty/Discord/домены сайта). save_recording управляет
+сохранением чата и replay; publish_after_end — автопубликацией после конца. Replay
+показывает сообщения по таймингу («Чат по записи») и иллюстрации broadcast_illustrations
+по show_at_seconds. Live-статистика и просмотры — broadcast_listeners/broadcast_views.
+Позиция live/replay сохраняется в `broadcast_progress` (user+broadcast, GREATEST + OR completed).
+Replay на другом устройстве продолжается с этой позиции; live всегда стартует с текущего края эфира.
+
+**Цена дня.** Стартовое значение — `SUBSCRIPTION_PRICE_PER_DAY_RUB` (7 ₽),
+но после первого изменения источник истины — `subscription_settings.price_per_day`.
+Админ на `/admin/users` меняет цену и выбирает режим:
+
+- **только для новых** — уже выданные дни и суммы донатов сохраняют старую цену;
+  новые ручные выдачи/донаты считаются по новой;
+- **для всех ранее выданных** — оставшийся срок активных ручных подписок
+  пересчитывается пропорционально (`remainingMs * oldPrice / newPrice`);
+  lifetime не меняется.
+
+Каждое изменение пишется в `subscription_price_changes`, старые уведомления
+помечаются `superseded`, активным подписчикам создаётся
+`subscription_price_notices`. Пользователь видит уведомление на `/subscription`,
+может закрыть его; при следующей ручной выдаче уведомление автоматически
+закрывается (`dismissed_reason='renewal'`).
+
+**Доходы.** Ручной донат фиксируется в `subscription_events.amount_rub` и
+`price_per_day`; исторические донаты без выдачи дней имеют тип `donation`.
+Финансовая статистика читается из неизменяемого `donation_ledger`:
+`user_id` там nullable с `ON DELETE SET NULL`, а `donor_key` остаётся после
+удаления пользователя. Сумма по пользователю/дате считается в
+`server/subscriptions/reports.ts`. На `/admin` показывается число активных
+подписчиков, на `/admin/analytics` — общий доход, доход за 30 дней, донатеры и
+последние донаты, в карточке пользователя — сумма и дата последнего доната.
+Boosty-платежи не импортируются: revenue — только ручные донаты, по которым
+администратор выдал подписку.
 
 ## 8. Аналитика прослушивания
 
@@ -463,11 +596,22 @@ uploadImage(buffer,{folder,filenamePrefix}):
 6. Возвращает {url,key,blurhash,themeColor,width,height} (width/height не используются).
 
 uploadAudio — без конвертации, расширение из имени файла, content-type из браузера.
+uploadVideo — WebM/MP4 без конвертации, до 100 МБ, хранится в R2 и используется на главной.
+Отдельное изображение главной загружается через uploadImage в папку home и не заменяет обложку.
 
-deleteFromStorage(keyOrUrl) — есть, но **не вызывается** из admin CRUD. При
-удалении/замене обложки/аудио старый объект остаётся в R2 (утечка). Локальный
-fallback для production не работает: adapter-node не раздаёт файлы, записанные в
-static/uploads после сборки.
+deleteFromStorage(keyOrUrl) — вызывается админкой (`/admin/content`) при замене
+обложек/аудио/иллюстраций и при прямом удалении отдельной иллюстрации/аудио.
+При удалении книги, тома или главы R2-объекты **не удаляются**: медиа остаётся
+в bucket как резерв. Аудио удаляется при замене только если на него больше никто
+не ссылается.
+
+R2-пикер файлов использует `ListObjectsV2` **без Prefix**: R2/S3 — плоское
+пространство ключей, поэтому возвращаются объекты из всех «папок» и подпапок.
+Список идёт по 1000 объектов, внизу окна есть «Показать ещё файлы»; поиск
+фильтрует уже загруженную страницу, а не весь bucket. Локальный fallback
+(`static/uploads`) обходится рекурсивно.
+Локальный fallback для production не работает: adapter-node не раздаёт файлы,
+записанные в static/uploads после сборки.
 
 ### 9.3. Ограничения
 
@@ -489,6 +633,9 @@ static/uploads после сборки.
 - /books — редирект; /books/:bookId — universal layout + sync; /books/:bookId/:volumeId
   — страница тома.
 - /admin — вложенный layout; остальные — плоские страницы.
+- Иллюстрации главы на странице тома заблокированы и размыты, пока у главы нет
+  прогресса (серверного или локального). После начала прослушивания они открываются;
+  внутри играющей главы дополнительно действует тайминг показа (`show_at_seconds`).
 - Нет +error.svelte; дефолтная ошибка SvelteKit.
 
 ### 10.2. Темизация
@@ -538,7 +685,7 @@ static/uploads после сборки.
   runtime-only deps; entrypoint применяет миграции, `/health` проверяет БД;
   Traefik-роутер на `${APP_HOST}`/`${APP_HOST_RU}`, non-root, graceful shutdown. Подробности —
   OPERATIONS §5.1.
-- **Миграции**: db:migrate — рабочий способ (0000–0008); db:push — dev-shortcut,
+- **Миграции**: db:migrate — рабочий способ (0000–0034); db:push — dev-shortcut,
   может удалять колонки. Перед reset/migrate — pg_dump.
 - **R2**: без кредов — локальный fallback (dev only).
 - **Traefik dev**: dynamic/dev.yaml ссылается на /certs/*.pem, которых нет в
@@ -546,33 +693,38 @@ static/uploads после сборки.
 
 ## 13. Тестирование и проверка
 
-- Unit — node:test + tsx; 197 тестов; включают policy P0-01, но не покрывают
-  downloadManager/audioStore/API.
-- E2E — Playwright; 9 файлов; 46 тестов; включая `sync-data-safety` (9),
-  `bookmark-sync` (offline → online flush) и `session-isolation` (5).
+- Unit — node:test + tsx; **268 тестов в 37 файлах**; `pnpm test:coverage` даёт
+  **88.00% строк / 82.89% ветвей / 65.66% функций** для модулей, загруженных тестами
+  (не для всего приложения). Не покрыты downloadManager/audioStore/audio-provider,
+  admin form actions и большинство route handlers/UI.
+- E2E — Playwright; **9 файлов, 48/48 passed** при `--workers=1`, включая
+  `sync-data-safety` (9), `bookmark-sync`, `session-isolation` (5), каталог, статическую
+  поддержку и a11y (serious/critical = 0).
 - pnpm check — 0 ошибок; pnpm build — зелёный; pnpm lint — зелёный.
 - pnpm test:e2e требует BETTER_AUTH_SECRET; тесты внешних OAuth-редиректов
-  ходят в реальный интернет и флапают.
-- Нет CI-конфигурации (нет .github/), нет pre-commit hook'ов, нет проверки миграций.
+  ходят в реальный интернет и могут флапать.
+- CI есть: `.github/workflows/ci.yml` (lint/check/unit/migrate/generate-drift/seed/build/e2e);
+  pre-commit hook'ов нет.
 - r2.test.ts имеет побочные эффекты (пишет в static/uploads/R2).
 
 ## 14. Решения и компромиссы (и где они расходятся с реализацией)
 
-| Решение                         | Замысел                                | Фактическое состояние                                                         |
-| ------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------- |
-| Offline-first                   | страницы читают Dexie, сервер — истина | P0-01 исправлен (401/owner/guard); каталог всё ещё не гидрируется             |
-| ETag/304 для книги              | экономия трафика                       | сервер готов, клиент не шлёт If-None-Match                                    |
-| Универсальная syncQueue         | журнал всех мутаций                    | owner на элементе; все consumer'ы фильтруют по текущему владельцу             |
-| Session isolation               | одна активная локальная сессия         | logout/expiry/switch очищают данные; guest import только с consent            |
-| R2 + fallback                   | медиа в R2, локально без кредов        | fallback не работает в prod; старые объекты не удаляются                      |
-| better-auth + linking           | Telegram/Discord, связывание           | safe redirect; token не кэшируется; OAuth redirects проверены                 |
-| Админка SSR                     | простота, form actions                 | нет очистки полей/файлов, нет unique-констрейнтов, роли только dev            |
-| Плеер с queue                   | полноценный плеер                      | queue/repeat/shuffle без UI; дублирующий Space; sleep/repeat конфликт         |
-| Публичная аналитика             | гость тоже слушает                     | нет rate limit; пачка отклоняется целиком; id может переполниться             |
-| «Единый словарь строк»          | i18n-заготовка                         | половина UI хардкодит русский, словарь частично не используется               |
-| «Индексы на FK, enum/check»     | дисциплина схемы                       | индексов на контентные FK нет; status/theme — свободный текст                 |
-| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0008 проходят на чистой БД; 0005 no-op, 0006 catch-up; generate no-op |
-| «SSR/SEO»                       | OG для соцсетей                        | книги/тома SSR + OG; unknown → 404                                            |
+| Решение                         | Замысел                                | Фактическое состояние                                                                                                                           |
+| ------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Offline-first                   | страницы читают Dexie, сервер — истина | P0-01 исправлен (401/owner/guard); каталог всё ещё не гидрируется                                                                               |
+| ETag/304 для книги              | экономия трафика                       | сервер готов, клиент не шлёт If-None-Match                                                                                                      |
+| Универсальная syncQueue         | журнал всех мутаций                    | owner на элементе; все consumer'ы фильтруют по текущему владельцу                                                                               |
+| Session isolation               | одна активная локальная сессия         | logout/expiry/switch очищают данные; guest import только с consent                                                                              |
+| R2 + fallback                   | медиа в R2, локально без кредов        | fallback не работает в prod; старые объекты не удаляются                                                                                        |
+| better-auth + linking           | Telegram/Discord, связывание           | safe redirect; token не кэшируется; OAuth redirects проверены                                                                                   |
+| Админка SSR                     | простота, form actions                 | нет очистки полей/файлов, нет unique-констрейнтов, роли только dev                                                                              |
+| Плеер с queue                   | полноценный плеер                      | queue/repeat/shuffle без UI; дублирующий Space; sleep/repeat конфликт                                                                           |
+| Публичная аналитика             | гость тоже слушает                     | нет rate limit; пачка отклоняется целиком; id может переполниться                                                                               |
+| «Единый словарь строк»          | i18n-заготовка                         | половина UI хардкодит русский, словарь частично не используется                                                                                 |
+| «Индексы на FK, enum/check»     | дисциплина схемы                       | индексов на контентные FK нет; status/theme — свободный текст                                                                                   |
+| «Миграции обязаны накатываться» | воспроизводимость                      | ✅ 0000–0034 проходят на чистой БД; 0005 no-op, 0006 catch-up; 0015–0034 subscriptions/site settings/broadcasts/reactions/chapter illustrations |
+| «Подписка — доступ, не гейт»    | Boosty-сообщество                      | manual/lifetime/block + Telegram/Discord sources; контент не блокируется                                                                        |
+| «SSR/SEO»                       | OG для соцсетей                        | книги/тома SSR + OG; unknown → 404                                                                                                              |
 
 Исторический ARCHITECTURE.md (коммит fd70f92, не в текущем дереве) описывал
 Boosty-вход, rate-limit, route-titles.ts, page-object e2e и +error.svelte —
@@ -588,7 +740,7 @@ Boosty-вход, rate-limit, route-titles.ts, page-object e2e и +error.svelte �
    db:push как основной путь и не правь применённые миграции задним числом.
 3. api/books/[bookId]/+server.ts — поле попадёт автоматически через select.
 4. mappers.ts + OfflineBook — добавить поле.
-5. admin/books/+page.server.ts — create/update; +page.svelte — input.
+5. admin/content/+page.server.ts — create/update; +page.svelte — input.
 6. Проверить seed (если поле обязательное) и тесты.
 
 ### Добавить новый тип мутации
@@ -615,3 +767,5 @@ Boosty-вход, rate-limit, route-titles.ts, page-object e2e и +error.svelte �
 - Дефекты и приоритеты — [AUDIT.md](AUDIT.md).
 - Запуск/деплой — [OPERATIONS.md](OPERATIONS.md).
 - Термины — [DOMAIN.md](DOMAIN.md).
+
+- **OG-метаданные:** публичные страницы получают og/twitter-теги в корневом layout; книги, тома и эфиры переопределяют их своей обложкой; /admin исключён.

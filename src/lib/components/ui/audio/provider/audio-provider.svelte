@@ -6,7 +6,9 @@
 	import { audioStore, calculateNextIndex } from '$lib/audio-store.svelte.js';
 	import { db } from '$lib/client/db';
 	import { progressSync } from '$lib/client/services/progressSync.svelte.js';
+	import { audioVersionKey, broadcastProgressKey } from '$lib/audio-version';
 	import { listeningTracker } from '$lib/client/services/listeningTracker.svelte.js';
+	import { broadcastProgressSync } from '$lib/client/services/broadcastProgressSync';
 
 	interface Props {
 		tracks?: Track[];
@@ -26,8 +28,10 @@
 	let errorRetryCount = 0;
 	let lastSeekTime = 0;
 	let lastUpdateTime = 0;
-	let prevTrackId: string | number | undefined = undefined;
+	let prevTrackKey: string | null = null;
+	let loadSeq = 0;
 	let lastProgressSaveTime = 0;
+	let lastBroadcastProgressTime = 0;
 	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
 	let wakeLock: WakeLockSentinel | null = null;
 
@@ -100,7 +104,10 @@
 	function forceTimeUpdate() {
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
-		audioStore.syncTime(audio.currentTime, audio.duration || 0);
+		audioStore.syncTime(
+			audio.currentTime,
+			audio.duration > 0 ? audio.duration : audioStore.duration
+		);
 		lastUpdateTime = Date.now();
 	}
 
@@ -110,27 +117,84 @@
 		lastUpdateTime = now;
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
+		if (audioStore.clipEnd !== null && audio.currentTime >= audioStore.clipEnd) {
+			const end = audioStore.clipEnd;
+			const start = audioStore.clipStart;
+			audioStore.clearClipRange();
+			audioStore.pause();
+			audioStore.seek(start ?? end ?? 0, false);
+			return;
+		}
 		if (Math.abs(audioStore.currentTime - audio.currentTime) > MIN_UPDATE_THRESHOLD) {
-			audioStore.syncTime(audio.currentTime, audio.duration || 0);
+			audioStore.syncTime(
+				audio.currentTime,
+				audio.duration > 0 ? audio.duration : audioStore.duration
+			);
 		}
 		// Save progress to Dexie every PROGRESS_SAVE_INTERVAL ms
 		if (
 			audioStore.currentTrack?.id &&
+			!audioStore.currentTrack.broadcastLive &&
 			audio.currentTime > 0 &&
 			now - lastProgressSaveTime >= PROGRESS_SAVE_INTERVAL
 		) {
 			lastProgressSaveTime = now;
 			const chapterId = String(audioStore.currentTrack.id);
 			const progressSeconds = Math.floor(audio.currentTime);
+			const versionId =
+				typeof audioStore.currentTrack?.versionId === 'string'
+					? audioStore.currentTrack.versionId
+					: 'default';
+			const track = audioStore.currentTrack;
+			const isReplay = typeof track.broadcastId === 'string';
+			const progressKey = isReplay
+				? broadcastProgressKey(track.broadcastId as string)
+				: audioVersionKey(chapterId, versionId);
 			db.progress
 				.put({
-					chapterId,
+					chapterId: progressKey,
+					baseChapterId: chapterId,
+					versionId,
 					progressSeconds,
 					isCompleted: false,
-					updatedAt: now
+					updatedAt: now,
+					...(typeof track.broadcastId === 'string'
+						? {
+								broadcastId: track.broadcastId,
+								broadcastLive: Boolean(track.broadcastLive),
+								broadcastTitle:
+									typeof track.broadcastTitle === 'string' ? track.broadcastTitle : undefined,
+								broadcastBookTitle:
+									typeof track.broadcastBookTitle === 'string'
+										? track.broadcastBookTitle
+										: undefined,
+								broadcastVolumeTitle:
+									typeof track.broadcastVolumeTitle === 'string'
+										? track.broadcastVolumeTitle
+										: undefined,
+								broadcastCoverUrl:
+									typeof track.broadcastCoverUrl === 'string' ? track.broadcastCoverUrl : undefined,
+								broadcastHref:
+									typeof track.broadcastHref === 'string' ? track.broadcastHref : undefined,
+								broadcastDurationSeconds:
+									typeof track.duration === 'number' ? track.duration : undefined
+							}
+						: {})
 				})
 				.catch(() => {});
-			progressSync.recordProgress(chapterId, progressSeconds, false);
+			if (!isReplay) progressSync.recordProgress(chapterId, progressSeconds, false, versionId);
+		}
+
+		// Persist broadcast position for resume on another device (live and replay).
+		const broadcastTrack = audioStore.currentTrack;
+		if (broadcastTrack?.broadcastId && now - lastBroadcastProgressTime >= PROGRESS_SAVE_INTERVAL) {
+			lastBroadcastProgressTime = now;
+			broadcastProgressSync.record(
+				String(broadcastTrack.broadcastId),
+				broadcastTrack.broadcastLive ? 'live' : 'replay',
+				audio.currentTime,
+				false
+			);
 		}
 
 		// Track listening duration during active playback
@@ -139,7 +203,8 @@
 			listeningTracker.tick(
 				String(track.id),
 				typeof track.bookId === 'string' ? track.bookId : undefined,
-				typeof track.volumeId === 'string' ? track.volumeId : undefined
+				typeof track.volumeId === 'string' ? track.volumeId : undefined,
+				typeof track.versionId === 'string' ? track.versionId : 'default'
 			);
 		}
 	}
@@ -171,19 +236,24 @@
 
 	async function retryPlayback(audio: HTMLAudioElement): Promise<boolean> {
 		if (errorRetryCount >= MAX_ERROR_RETRIES) return false;
+		const seq = ++loadSeq;
 		errorRetryCount++;
 		const delay = 2 ** (errorRetryCount - 1) * ERROR_RETRY_DELAY;
 		await new Promise((r) => setTimeout(r, delay));
+		if (seq !== loadSeq) return false;
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
 		try {
 			const currentTime = audio.currentTime;
 			const wasPlaying = !audio.paused;
-			if (audioStore.currentTrack) {
+			const track = audioStore.currentTrack;
+			if (track) {
 				await htmlAudio.load({
-					url: audioStore.currentTrack.url,
-					id: audioStore.currentTrack.id,
+					url: track.url,
+					id: track.id,
+					versionId: track.versionId,
 					startTime: currentTime
 				});
+				if (seq !== loadSeq) return false;
 				if (wasPlaying) await htmlAudio.play();
 			}
 			return true;
@@ -253,6 +323,7 @@
 			audioStore.isBuffering = false;
 			progressSync.flushImmediately();
 			listeningTracker.flush();
+			void broadcastProgressSync.flush();
 		};
 
 		const handleError = async (e: Event) => {
@@ -302,27 +373,59 @@
 			const audioDuration = audio.duration || 0;
 			const isLiveStream = htmlAudio.isLive(audioDuration);
 
-			// Mark chapter as completed in local DB
+			// Mark chapter as completed in local DB, separately from replay progress.
 			if (audioStore.currentTrack?.id && !isLiveStream && audioDuration > 0) {
-				const chapterId = String(audioStore.currentTrack.id);
-				audioStore.lastCompletedTrackId = chapterId;
-				audioStore.lastCompletedTrackAt = Date.now();
+				const track = audioStore.currentTrack;
+				const chapterId = String(track.id);
+				const isReplay = typeof track.broadcastId === 'string';
+				const versionId = typeof track.versionId === 'string' ? track.versionId : 'default';
+				const progressKey = isReplay
+					? broadcastProgressKey(track.broadcastId as string)
+					: audioVersionKey(chapterId, versionId);
+				if (!isReplay) {
+					audioStore.lastCompletedTrackId = chapterId;
+					audioStore.lastCompletedTrackAt = Date.now();
+				}
 				db.progress
 					.put({
-						chapterId,
+						chapterId: progressKey,
+						baseChapterId: chapterId,
+						versionId,
 						progressSeconds: Math.floor(audioDuration),
 						isCompleted: true,
-						updatedAt: Date.now()
+						updatedAt: Date.now(),
+						...(isReplay
+							? {
+									broadcastId: String(track.broadcastId),
+									broadcastLive: false,
+									broadcastHref:
+										typeof track.broadcastHref === 'string' ? track.broadcastHref : undefined,
+									broadcastTitle:
+										typeof track.broadcastTitle === 'string' ? track.broadcastTitle : undefined
+								}
+							: {})
 					})
 					.catch(() => {});
-				progressSync.recordProgress(chapterId, Math.floor(audioDuration), true);
-				progressSync.flushImmediately();
+				if (!isReplay) {
+					progressSync.recordProgress(chapterId, Math.floor(audioDuration), true, versionId);
+					progressSync.flushImmediately();
+				}
 			}
 
 			if (audioStore.currentTrack && isLiveStream) {
 				audioStore.isError = true;
 				audioStore.errorMessage = 'Live stream connection lost';
 				return;
+			}
+
+			if (audioStore.currentTrack?.broadcastId && !audioStore.currentTrack.broadcastLive) {
+				broadcastProgressSync.record(
+					String(audioStore.currentTrack.broadcastId),
+					'replay',
+					audioDuration,
+					true
+				);
+				void broadcastProgressSync.flush();
 			}
 
 			if (audioStore.sleepTimerEndOnTrack) {
@@ -332,18 +435,23 @@
 			}
 
 			if (audioStore.repeatMode === 'one' && audioStore.currentTrack) {
+				const seq = ++loadSeq;
+				const track = audioStore.currentTrack;
 				try {
 					await htmlAudio.load({
-						url: audioStore.currentTrack.url,
-						id: audioStore.currentTrack.id,
+						url: track.url,
+						id: track.id,
+						versionId: track.versionId,
 						startTime: 0,
 						isLiveStream
 					});
+					if (seq !== loadSeq) return;
 					await htmlAudio.play();
 					audioStore.currentTime = 0;
 					audioStore.progress = 0;
 					return;
 				} catch {
+					if (seq !== loadSeq) return;
 					/* fall through to next */
 				}
 			}
@@ -361,7 +469,7 @@
 		const handleCanPlay = () => {
 			audioStore.isLoading = false;
 			audioStore.isBuffering = false;
-			audioStore.duration = audio.duration || 0;
+			if (audio.duration > 0) audioStore.duration = audio.duration;
 			audioStore.isError = false;
 			audioStore.errorMessage = null;
 		};
@@ -376,7 +484,7 @@
 			audioStore.isPlaying = true;
 		};
 		const handleDuration = () => {
-			audioStore.duration = audio.duration || 0;
+			if (audio.duration > 0) audioStore.duration = audio.duration;
 		};
 		const handleVolume = () => {
 			audioStore.volume = audio.volume;
@@ -407,20 +515,29 @@
 		// ── Restore persisted state ───────────────────────────────────────────────
 		(async () => {
 			if (!audioStore.currentTrack || audioStore.currentTime <= 0) return;
+			const seq = ++loadSeq;
 			const track = audioStore.currentTrack;
 			const audioDur = audio.duration || audioStore.duration || 0;
 			const isLive = htmlAudio.isLive(audioDur);
 			const startTime = isLive ? 0 : audioStore.currentTime;
-			prevTrackId = track.id; // suppress the track-change effect on restore
+			prevTrackKey = `${track.id}::${typeof track.versionId === 'string' ? track.versionId : 'default'}`; // suppress the track-change effect on restore
 			try {
 				audioStore.isLoading = true;
-				await htmlAudio.load({ url: track.url, id: track.id, startTime, isLiveStream: isLive });
+				await htmlAudio.load({
+					url: track.url,
+					id: track.id,
+					versionId: track.versionId,
+					startTime,
+					isLiveStream: isLive
+				});
+				if (seq !== loadSeq) return;
 				htmlAudio.setVolume({ volume: audioStore.volume });
 				htmlAudio.setMuted(audioStore.isMuted);
 				htmlAudio.setPlaybackRate(audioStore.playbackRate);
 				audioStore.isLoading = false;
 				audioStore.isPlaying = false;
 			} catch {
+				if (seq !== loadSeq) return;
 				audioStore.isError = true;
 				audioStore.errorMessage = 'Error restoring audio state';
 				audioStore.isPlaying = false;
@@ -430,6 +547,7 @@
 		})();
 
 		return () => {
+			loadSeq++;
 			ctrl.abort();
 			htmlAudio.removeEventListener('bufferUpdate', handleBufferUpdate);
 			listeningTracker.flush();
@@ -450,26 +568,39 @@
 	/** Load new track and play when currentTrack changes */
 	$effect(() => {
 		const track = audioStore.currentTrack;
-		const trackId = track?.id;
-		if (!track || trackId === prevTrackId) return;
+		const trackKey = track
+			? `${track.id}::${typeof track.versionId === 'string' ? track.versionId : 'default'}`
+			: null;
+		if (!track || trackKey === prevTrackKey) return;
 		listeningTracker.flush();
-		prevTrackId = trackId;
+		void broadcastProgressSync.flush();
+		prevTrackKey = trackKey;
 
 		const audio = htmlAudio.getAudioElement();
 		if (!audio) return;
 
-		// Reset progress save timer for new track
+		// Reset progress save timers for new track
 		lastProgressSaveTime = 0;
+		lastBroadcastProgressTime = 0;
 
 		const startTime = track.startTime ?? 0;
+		const seq = ++loadSeq;
 
 		htmlAudio
-			.load({ url: track.url, id: track.id, startTime, isLiveStream: false })
+			.load({
+				url: track.url,
+				id: track.id,
+				versionId: track.versionId,
+				startTime,
+				isLiveStream: false
+			})
 			.then(() => {
+				if (seq !== loadSeq) return;
 				audioStore.isLoading = false;
 				if (audioStore.isPlaying) return htmlAudio.play();
 			})
 			.catch(() => {
+				if (seq !== loadSeq) return;
 				audioStore.isLoading = false;
 				audioStore.setError('Error loading track');
 			});

@@ -2,7 +2,8 @@ import {
 	S3Client,
 	PutObjectCommand,
 	DeleteObjectCommand,
-	GetObjectCommand
+	GetObjectCommand,
+	ListObjectsV2Command
 } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { encode } from 'blurhash';
@@ -10,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '$lib/logger';
+import { loadMediaSettings } from '$lib/server/site-settings';
 
 const dynamicPrivate = await import('$env/dynamic/private').catch(() => ({ env: process.env }));
 const env = dynamicPrivate.env;
@@ -18,8 +20,47 @@ const log = createLogger('R2Storage');
 
 export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 export const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.mp4', '.ogg', '.opus', '.wav', '.aac']);
+const ALLOWED_VIDEO_EXTENSIONS = new Set(['.webm', '.mp4', '.mov', '.m4v']);
+
+const AUDIO_CONTENT_TYPES: Record<string, string> = {
+	'.mp3': 'audio/mpeg',
+	'.m4a': 'audio/mp4',
+	'.mp4': 'audio/mp4',
+	'.ogg': 'audio/ogg',
+	'.opus': 'audio/opus',
+	'.wav': 'audio/wav',
+	'.aac': 'audio/aac'
+};
+
+const VIDEO_CONTENT_TYPES: Record<string, string> = {
+	'.webm': 'video/webm',
+	'.mp4': 'video/mp4',
+	'.mov': 'video/quicktime',
+	'.m4v': 'video/x-m4v'
+};
+
+export function audioContentTypeForExt(ext: string): string {
+	return AUDIO_CONTENT_TYPES[ext.toLowerCase()] ?? 'audio/mpeg';
+}
+
+export function videoContentTypeForExt(ext: string): string {
+	return VIDEO_CONTENT_TYPES[ext.toLowerCase()] ?? 'video/mp4';
+}
+
+export function resolveLocalUploadPath(rootDir: string, relativeKey: string): string | null {
+	if (!relativeKey || relativeKey.includes('\0') || relativeKey.includes('\\')) return null;
+	if (path.isAbsolute(relativeKey) || relativeKey.startsWith('/')) return null;
+	const segments = relativeKey.split('/');
+	if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) return null;
+
+	const root = path.resolve(rootDir);
+	const resolved = path.resolve(root, ...segments);
+	if (!resolved.startsWith(root + path.sep)) return null;
+	return resolved;
+}
 
 export class StorageValidationError extends Error {
 	constructor(message: string) {
@@ -67,6 +108,20 @@ export interface UploadAudioResult {
 	key: string;
 }
 
+export interface UploadVideoResult {
+	url: string;
+	key: string;
+}
+
+function isSupportedVideo(buffer: Buffer): boolean {
+	if (buffer.length < 12) return false;
+	const ascii = buffer.subarray(0, 12).toString('ascii');
+	return (
+		(buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) ||
+		ascii.slice(4, 8) === 'ftyp'
+	);
+}
+
 /** Fetches an object for the local media proxy (including byte ranges for audio seeking). */
 export async function getMediaObject(key: string, range?: string) {
 	const r2 = getS3Client();
@@ -78,6 +133,13 @@ export async function getMediaObject(key: string, range?: string) {
 			...(range ? { Range: range } : {})
 		})
 	);
+}
+
+async function publicMediaUrl(publicUrl: string, key: string): Promise<string> {
+	const media = await loadMediaSettings();
+	const base =
+		!media.mediaProxyEnabled && media.mediaDirectBaseUrl ? media.mediaDirectBaseUrl : publicUrl;
+	return `${base.replace(/\/$/, '')}/${key}`;
 }
 
 export function getS3Client(): { client: S3Client; bucket: string; publicUrl: string } | null {
@@ -169,7 +231,7 @@ export async function uploadImage(
 			})
 		);
 		return {
-			url: `${r2.publicUrl}/${key}`,
+			url: await publicMediaUrl(r2.publicUrl, key),
 			key,
 			blurhash,
 			themeColor,
@@ -183,9 +245,12 @@ export async function uploadImage(
 	}
 
 	// Fallback for local development if R2 credentials are not set
-	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
-	await fs.mkdir(localDir, { recursive: true });
-	const localFilePath = path.resolve(localDir, `${prefix}${path.basename(key)}`);
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
 	await fs.writeFile(localFilePath, webpBuffer);
 	log.info(`Saved image locally (fallback): ${localFilePath}`);
 
@@ -219,7 +284,7 @@ export async function uploadAudio(
 		: '.mp3';
 	const safeExt = ALLOWED_AUDIO_EXTENSIONS.has(rawExt) ? rawExt : '.mp3';
 	const key = `${folder}/${randomUUID()}${safeExt}`;
-	const contentType = options.contentType || 'audio/mpeg';
+	const contentType = audioContentTypeForExt(safeExt);
 
 	const r2 = getS3Client();
 	if (r2) {
@@ -233,7 +298,7 @@ export async function uploadAudio(
 			})
 		);
 		return {
-			url: `${r2.publicUrl}/${key}`,
+			url: await publicMediaUrl(r2.publicUrl, key),
 			key
 		};
 	}
@@ -243,9 +308,12 @@ export async function uploadAudio(
 	}
 
 	// Fallback for local development
-	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
-	await fs.mkdir(localDir, { recursive: true });
-	const localFilePath = path.resolve(localDir, path.basename(key));
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
 	await fs.writeFile(localFilePath, buffer);
 	log.info(`Saved audio locally (fallback): ${localFilePath}`);
 
@@ -256,24 +324,221 @@ export async function uploadAudio(
 }
 
 /**
+ * Uploads a background video to Cloudflare R2 (or fallback local directory).
+ */
+export async function uploadVideo(
+	buffer: Buffer,
+	options: { originalFilename?: string; contentType?: string; folder?: string } = {}
+): Promise<UploadVideoResult> {
+	if (buffer.length === 0 || buffer.length > MAX_VIDEO_BYTES) {
+		throw new StorageValidationError('Video must be between 1 byte and 100 MB');
+	}
+	if (!isSupportedVideo(buffer)) {
+		throw new StorageValidationError('Unsupported video format');
+	}
+
+	const folder = options.folder ?? 'video';
+	const rawExt = options.originalFilename
+		? path.extname(options.originalFilename).toLowerCase()
+		: '.mp4';
+	const safeExt = ALLOWED_VIDEO_EXTENSIONS.has(rawExt) ? rawExt : '.mp4';
+	const key = `${folder}/${randomUUID()}${safeExt}`;
+	const contentType = videoContentTypeForExt(safeExt);
+
+	const r2 = getS3Client();
+	if (r2) {
+		log.info(`Uploading video to R2 bucket ${r2.bucket}: ${key}`);
+		await r2.client.send(
+			new PutObjectCommand({
+				Bucket: r2.bucket,
+				Key: key,
+				Body: buffer,
+				ContentType: contentType
+			})
+		);
+		return {
+			url: await publicMediaUrl(r2.publicUrl, key),
+			key
+		};
+	}
+
+	if (isProduction()) {
+		throw new Error('R2 is not configured; uploads are disabled in production');
+	}
+
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
+	await fs.writeFile(localFilePath, buffer);
+	log.info(`Saved video locally (fallback): ${localFilePath}`);
+
+	return {
+		url: `/uploads/${key}`,
+		key
+	};
+}
+
+export type MediaType = 'image' | 'audio' | 'video';
+
+export interface MediaLibraryFile {
+	key: string;
+	url: string;
+	name: string;
+	size: number;
+	lastModified: string | null;
+	type: MediaType;
+}
+
+const IMAGE_EXTENSIONS = new Set(['.webp', '.jpg', '.jpeg', '.png', '.gif', '.avif']);
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.ogg', '.opus', '.wav', '.aac']);
+const VIDEO_EXTENSIONS = new Set(['.webm', '.mp4', '.mov', '.m4v']);
+
+export function mediaTypeForKey(key: string): MediaType | null {
+	const ext = path.extname(key).toLowerCase();
+	if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+	if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
+	if (ext === '.mp4' && key.startsWith('audio/')) return 'audio';
+	if (VIDEO_EXTENSIONS.has(ext)) return 'video';
+	return null;
+}
+
+export async function getMediaUrl(key: string): Promise<string> {
+	const r2 = getS3Client();
+	if (!r2) return `/uploads/${key}`;
+	return publicMediaUrl(r2.publicUrl, key);
+}
+
+async function localMediaFiles(root: string, prefix = ''): Promise<MediaLibraryFile[]> {
+	const current = path.join(root, prefix);
+	let entries: import('node:fs').Dirent[];
+	try {
+		entries = await fs.readdir(current, { withFileTypes: true });
+	} catch {
+		return [];
+	}
+	const files: MediaLibraryFile[] = [];
+	for (const entry of entries) {
+		const relative = path.join(prefix, entry.name);
+		if (entry.isDirectory()) {
+			files.push(...(await localMediaFiles(root, relative)));
+			continue;
+		}
+		const type = mediaTypeForKey(relative);
+		if (!type) continue;
+		const stat = await fs.stat(path.join(root, relative)).catch(() => null);
+		files.push({
+			key: relative.split(path.sep).join('/'),
+			url: `/uploads/${relative.split(path.sep).join('/')}`,
+			name: entry.name,
+			size: stat?.size ?? 0,
+			lastModified: stat?.mtime?.toISOString() ?? null,
+			type
+		});
+	}
+	return files;
+}
+
+export async function listMediaFiles(options: {
+	type: MediaType;
+	cursor?: string | null;
+}): Promise<{ files: MediaLibraryFile[]; nextCursor: string | null; source: 'r2' | 'local' }> {
+	const r2 = getS3Client();
+	if (!r2) {
+		const root = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads');
+		const all = await localMediaFiles(root);
+		return {
+			files: all
+				.filter((file) => file.type === options.type)
+				.sort((a, b) => (b.lastModified ?? '').localeCompare(a.lastModified ?? '')),
+			nextCursor: null,
+			source: 'local'
+		};
+	}
+
+	const result = await r2.client.send(
+		new ListObjectsV2Command({
+			Bucket: r2.bucket,
+			MaxKeys: 1000,
+			ContinuationToken: options.cursor || undefined
+		})
+	);
+	const files: MediaLibraryFile[] = [];
+	for (const object of result.Contents ?? []) {
+		if (!object.Key) continue;
+		const type = mediaTypeForKey(object.Key);
+		if (type !== options.type) continue;
+		files.push({
+			key: object.Key,
+			url: await publicMediaUrl(r2.publicUrl, object.Key),
+			name: decodeURIComponent(object.Key.split('/').pop() ?? object.Key),
+			size: object.Size ?? 0,
+			lastModified: object.LastModified?.toISOString() ?? null,
+			type
+		});
+	}
+	files.sort((a, b) => (b.lastModified ?? '').localeCompare(a.lastModified ?? ''));
+	return {
+		files,
+		nextCursor: result.IsTruncated ? (result.NextContinuationToken ?? null) : null,
+		source: 'r2'
+	};
+}
+
+/**
  * Deletes an object by key or public URL from R2 or fallback local static files.
  */
 export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 	const r2 = getS3Client();
-	let key = keyOrUrl;
+	let key = keyOrUrl.trim();
+	if (!key) return false;
 
-	if (keyOrUrl.startsWith('http')) {
+	if (key.startsWith('http://') || key.startsWith('https://')) {
+		if (!r2) return false;
+		let parsed: URL;
 		try {
-			const u = new URL(keyOrUrl);
-			key = u.pathname.replace(/^\/+/, '');
+			parsed = new URL(key);
 		} catch {
-			key = keyOrUrl;
+			return false;
 		}
-	} else if (keyOrUrl.startsWith('/uploads/')) {
-		key = keyOrUrl.replace(/^\/uploads\//, '');
-	} else if (keyOrUrl.startsWith('/api/media/')) {
-		key = keyOrUrl.replace(/^\/api\/media\//, '');
+		const allowedOrigins = new Set<string>();
+		try {
+			allowedOrigins.add(new URL(r2.publicUrl).origin);
+		} catch {
+			// ignore invalid publicUrl
+		}
+		const media = await loadMediaSettings().catch(() => null);
+		if (media?.mediaDirectBaseUrl) {
+			try {
+				allowedOrigins.add(new URL(media.mediaDirectBaseUrl).origin);
+			} catch {
+				// ignore invalid mediaDirectBaseUrl
+			}
+		}
+		if (!allowedOrigins.has(parsed.origin)) {
+			return false;
+		}
+		try {
+			const segments = parsed.pathname
+				.replace(/^\/+/, '')
+				.split('/')
+				.map((segment) => decodeURIComponent(segment));
+			if (segments.some((seg) => seg === '' || seg === '.' || seg === '..' || seg.includes('\0'))) {
+				return false;
+			}
+			key = segments.join('/');
+		} catch {
+			return false;
+		}
+	} else if (key.startsWith('/uploads/')) {
+		key = key.replace(/^\/uploads\//, '');
+	} else if (key.startsWith('/api/media/')) {
+		key = key.replace(/^\/api\/media\//, '');
 	}
+
+	if (!key || key.includes('\0')) return false;
 
 	if (r2) {
 		try {
@@ -297,7 +562,9 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 
 	// Local file fallback
 	try {
-		const localFilePath = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', key);
+		const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+		const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+		if (!localFilePath) return false;
 		await fs.unlink(localFilePath);
 		return true;
 	} catch {

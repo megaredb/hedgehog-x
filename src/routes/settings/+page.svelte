@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { fade } from 'svelte/transition';
+	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
@@ -35,7 +36,6 @@
 	import {
 		SEEK_STEPS,
 		PLAYBACK_RATES,
-		MIRROR_OPTIONS,
 		fetchStorageEstimate,
 		clearAppCache,
 		performManualSync,
@@ -48,6 +48,7 @@
 		type PlaybackRate
 	} from './settings-helpers';
 	import { strings } from '$lib/constants/strings';
+	import type { SiteMirror } from '$lib/types/site';
 
 	// ── State: Audio & Playback ──────────────────────────────────────────────
 	let currentSeekStep = $state<SeekStep>(10);
@@ -58,6 +59,20 @@
 
 	// ── State: Mirror & Network ──────────────────────────────────────────────
 	let mirrorPref = $state<MirrorPreference>('auto');
+	const mirrorOptions = $derived([
+		{
+			value: 'auto',
+			label: 'Автоматически',
+			description: 'Определение по домену + авто-fallback при сбоях'
+		},
+		...((page.data.mirrors as SiteMirror[] | undefined) ?? [])
+			.filter((mirror) => mirror.enabled)
+			.map((mirror) => ({
+				value: mirror.id,
+				label: mirror.label,
+				description: mirror.description || mirror.host
+			}))
+	]);
 	let activeHost = $derived(getActiveMirrorHost(mirrorPref));
 
 	// ── State: Storage & Cache ───────────────────────────────────────────────
@@ -126,7 +141,7 @@
 	function handleMirrorSelect(pref: MirrorPreference) {
 		mirrorPref = pref;
 		setMirrorPreference(pref);
-		showToast(`Источник CDN: ${MIRROR_OPTIONS.find((m) => m.value === pref)?.label ?? pref}`);
+		showToast(`Источник CDN: ${mirrorOptions.find((m) => m.value === pref)?.label ?? pref}`);
 	}
 
 	// ── Handlers: Cache ──────────────────────────────────────────────────────
@@ -186,6 +201,10 @@
 		wakeLockEnabled = audioStore.wakeLockEnabled;
 		wakeLockSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
 		mirrorPref = getMirrorPreference();
+		if (!mirrorOptions.some((option) => option.value === mirrorPref)) {
+			mirrorPref = 'auto';
+			setMirrorPreference('auto');
+		}
 
 		// Realtime online status
 		if (typeof navigator !== 'undefined') {
@@ -241,12 +260,15 @@
 				<!-- Seek Step -->
 				<div class="space-y-2.5">
 					<div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-						<label for="seek-step-group" class="text-sm font-medium"
-							>{strings.settings.seekStep}</label
+						<span id="seek-step-label" class="text-sm font-medium">{strings.settings.seekStep}</span
 						>
 						<span class="text-xs text-muted-foreground">{strings.settings.seekStepDesc}</span>
 					</div>
-					<div id="seek-step-group" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+					<div
+						role="group"
+						aria-labelledby="seek-step-label"
+						class="grid grid-cols-2 gap-2 sm:grid-cols-4"
+					>
 						{#each SEEK_STEPS as step (step)}
 							<Button
 								type="button"
@@ -347,11 +369,11 @@
 			</CardHeader>
 			<CardContent class="space-y-4 pt-2">
 				<div
-					class="grid grid-cols-1 gap-2.5 sm:grid-cols-3"
+					class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
 					role="radiogroup"
 					aria-label="CDN Зеркало"
 				>
-					{#each MIRROR_OPTIONS as opt (opt.value)}
+					{#each mirrorOptions as opt (opt.value)}
 						{@const isSelected = mirrorPref === opt.value}
 						<button
 							type="button"
@@ -577,9 +599,9 @@
 <!-- Cache clear confirmation modal -->
 <ConfirmModal
 	bind:open={isClearModalOpen}
-	title="Очистить локальный кэш и загрузки?"
-	description="Будет удалён кэш страниц, временные аудиофайлы и сохранённые офлайн-главы. При следующем прослушивании они будут скачиваться заново с CDN."
-	confirmLabel="Очистить всё"
+	title="Очистить кэш страниц?"
+	description="Будет удалён кэш страниц и временные файлы. Скачанные офлайн-главы и данные локальной базы сохранятся."
+	confirmLabel="Очистить кэш"
 	cancelLabel="Отмена"
 	confirming={isClearing}
 	onConfirm={handleConfirmClearCache}

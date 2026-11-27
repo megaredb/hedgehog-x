@@ -33,7 +33,7 @@
 
 ## Почему performance не 100 на data-страницах
 
-1. Обложки отдаются через `/api/media` → R2; мобильный Lighthouse throttling
+1. Обложки могут отдаваться через `/api/media` → R2 (или напрямую с CDN-зеркала; режим задаётся в админке); мобильный Lighthouse throttling
    делает LCP-ресурс ощутимо медленнее, чем локальную статику.
 2. Страницы с Dexie/плеером требуют клиентской гидратации; TTI/interactive
    проседает на мобильном CPU.
@@ -47,7 +47,8 @@
 - `server.js`: gzip compression + immutable cache headers.
 - LCP-обложки: `fetchpriority=high`, eager, preload.
 - R2 media proxy: диск-кэш изображений в `MEDIA_CACHE_DIR` (по умолчанию
-  `/tmp/hedgehog-media`).
+  `/tmp/hedgehog-media`). В админке «Сайт → Настройки → Сеть и зеркала»
+  можно выключить проксирование и отдавать файлы напрямую с CDN-зеркала.
 - Главная: видео-фон выключен по умолчанию.
 - Долгие списки: показ томов порциями по 12.
 - Telegram-комментарии: lazy-load по действию.

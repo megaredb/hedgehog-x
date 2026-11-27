@@ -4,8 +4,27 @@ import { SvelteMap } from 'svelte/reactivity';
 import { createLogger } from '$lib/logger';
 import { resolveMediaUrl, getFallbackMediaUrl } from '$lib/utils/mirror';
 import { parseContentLength, hasEnoughDownloadSpace, buildCorsUrl } from './downloadUtils';
+import { audioVersionKey, opfsAudioFileName, splitAudioVersionKey } from '$lib/audio-version';
 
 const log = createLogger('Downloads');
+
+function downloadKey(chapterId: string, versionId = 'default'): string {
+	return audioVersionKey(chapterId, versionId);
+}
+
+function storageFileName(key: string, baseChapterId?: string, versionId?: string): string {
+	const parsed = splitAudioVersionKey(key);
+	return opfsAudioFileName(baseChapterId ?? parsed.chapterId, versionId ?? parsed.versionId);
+}
+
+export interface DownloadSource {
+	chapterId: string;
+	versionId?: string;
+	title: string;
+	audioUrl: string;
+	durationSeconds: number;
+	volumeId?: string;
+}
 
 export interface DownloadStats {
 	percentage: number;
@@ -52,9 +71,10 @@ async function processQueue() {
 
 	queuedItems.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
 	const nextDownload = queuedItems[0];
-	const chapterToDownload = chapters.find((c) => c.id === nextDownload.chapterId);
+	const baseChapterId = nextDownload.baseChapterId ?? nextDownload.chapterId;
+	const chapterToDownload = chapters.find((c) => c.id === baseChapterId);
 
-	if (!chapterToDownload) {
+	if (!nextDownload.audioUrl && !chapterToDownload) {
 		await db.downloads.delete(nextDownload.chapterId);
 		processQueue();
 		return;
@@ -62,30 +82,35 @@ async function processQueue() {
 
 	processingQueue = true;
 	try {
-		await performDownload(chapterToDownload);
+		await performDownload(nextDownload, chapterToDownload);
 	} finally {
 		processingQueue = false;
 		processQueue();
 	}
 }
 
-async function performDownload(chapter: OfflineChapter) {
-	if (activeDownloads.has(chapter.id)) return;
+async function performDownload(download: OfflineDownload, chapter?: OfflineChapter) {
+	const key = download.chapterId;
+	if (activeDownloads.has(key)) return;
 
 	const controller = new AbortController();
-	activeDownloads.set(chapter.id, controller);
+	activeDownloads.set(key, controller);
 
-	progressMap[chapter.id] = { percentage: 0, downloadedBytes: 0, totalBytes: 0 };
+	const audioUrl = download.audioUrl ?? chapter?.audioUrl;
+	if (!audioUrl) throw new Error('Audio URL is missing');
+
+	progressMap[key] = { percentage: 0, downloadedBytes: 0, totalBytes: 0 };
 
 	try {
 		await db.downloads.put({
-			chapterId: chapter.id,
+			...download,
+			chapterId: key,
 			status: 'downloading',
 			progress: 0,
-			createdAt: Date.now()
+			createdAt: download.createdAt ?? Date.now()
 		});
 
-		const primaryUrl = resolveMediaUrl(chapter.audioUrl);
+		const primaryUrl = resolveMediaUrl(audioUrl);
 		const fallbackUrl = getFallbackMediaUrl(primaryUrl);
 
 		const fetchWithCors = async (urlStr: string) => {
@@ -103,7 +128,7 @@ async function performDownload(chapter: OfflineChapter) {
 			if (controller.signal.aborted) throw primaryErr;
 			if (fallbackUrl && fallbackUrl !== primaryUrl) {
 				log.warn(
-					`Download of chapter ${chapter.id} from primary mirror failed, switching to fallback:`,
+					`Download of chapter ${chapter?.id ?? key} from primary mirror failed, switching to fallback:`,
 					primaryErr
 				);
 				response = await fetchWithCors(fallbackUrl);
@@ -137,13 +162,14 @@ async function performDownload(chapter: OfflineChapter) {
 			const cache = await caches.open('audio-cache');
 			await cache.delete(primaryUrl);
 			if (fallbackUrl) await cache.delete(fallbackUrl);
-			await cache.delete(chapter.audioUrl);
+			await cache.delete(audioUrl);
 		} catch {
 			// ignore
 		}
 
 		const opfsRoot = await navigator.storage.getDirectory();
-		const fileHandle = await opfsRoot.getFileHandle(chapter.id, { create: true });
+		const opfsName = storageFileName(key, download.baseChapterId, download.versionId);
+		const fileHandle = await opfsRoot.getFileHandle(opfsName, { create: true });
 		const writable = await fileHandle.createWritable();
 
 		try {
@@ -154,7 +180,7 @@ async function performDownload(chapter: OfflineChapter) {
 				receivedBytes += value.length;
 				const pct = totalBytes > 0 ? Math.round((receivedBytes / totalBytes) * 100) : 0;
 
-				progressMap[chapter.id] = { percentage: pct, downloadedBytes: receivedBytes, totalBytes };
+				progressMap[key] = { percentage: pct, downloadedBytes: receivedBytes, totalBytes };
 				await writable.write(value);
 			}
 			await writable.close();
@@ -163,34 +189,36 @@ async function performDownload(chapter: OfflineChapter) {
 			}
 		} catch (e) {
 			await writable.abort().catch(() => {});
-			await opfsRoot.removeEntry(chapter.id).catch(() => {});
+			await opfsRoot.removeEntry(opfsName).catch(() => {});
 			await reader.cancel().catch(() => {});
 			throw e;
 		}
 
 		await db.downloads.put({
-			chapterId: chapter.id,
+			...download,
+			chapterId: key,
 			status: 'downloaded',
 			progress: 100,
 			totalBytes,
-			createdAt: Date.now()
+			createdAt: download.createdAt ?? Date.now()
 		});
 
-		progressMap[chapter.id] = { percentage: 100, downloadedBytes: totalBytes, totalBytes };
+		progressMap[key] = { percentage: 100, downloadedBytes: totalBytes, totalBytes };
 	} catch (err: unknown) {
 		if (err instanceof Error && err.name === 'AbortError') {
-			log.debug(`Download of chapter ${chapter.id} was aborted`);
+			log.debug(`Download of chapter ${key} was aborted`);
 		} else {
-			log.error(`Error downloading chapter ${chapter.id}:`, err);
+			log.error(`Error downloading chapter ${key}:`, err);
 			await db.downloads.put({
-				chapterId: chapter.id,
+				...download,
+				chapterId: key,
 				status: 'error',
 				error: err instanceof Error ? err.message : String(err),
-				createdAt: Date.now()
+				createdAt: download.createdAt ?? Date.now()
 			});
 		}
 	} finally {
-		activeDownloads.delete(chapter.id);
+		activeDownloads.delete(key);
 	}
 }
 
@@ -206,7 +234,7 @@ export function useDownloads() {
 	const downloadingChapters = $derived(
 		downloading
 			.map((d) => {
-				const ch = chapters.find((c) => c.id === d.chapterId);
+				const ch = chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId));
 				return { download: d, chapter: ch };
 			})
 			.filter(
@@ -218,7 +246,7 @@ export function useDownloads() {
 	const queuedChapters = $derived(
 		queued
 			.map((d) => {
-				const ch = chapters.find((c) => c.id === d.chapterId);
+				const ch = chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId));
 				return { download: d, chapter: ch };
 			})
 			.filter(
@@ -230,7 +258,7 @@ export function useDownloads() {
 	const downloadedChapters = $derived(
 		downloaded
 			.map((d) => {
-				const ch = chapters.find((c) => c.id === d.chapterId);
+				const ch = chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId));
 				return { download: d, chapter: ch };
 			})
 			.filter(
@@ -239,29 +267,82 @@ export function useDownloads() {
 			)
 	);
 
-	async function enqueueDownload(chapter: OfflineChapter) {
-		const rawChapter = $state.snapshot(chapter);
-		await db.chapters.put(rawChapter);
-
+	async function enqueueSource(source: DownloadSource) {
+		const versionId = source.versionId ?? 'default';
+		const key = downloadKey(source.chapterId, versionId);
 		await db.downloads.put({
-			chapterId: chapter.id,
+			chapterId: key,
+			baseChapterId: source.chapterId,
+			versionId,
+			title: source.title,
+			audioUrl: source.audioUrl,
+			durationSeconds: source.durationSeconds,
+			volumeId: source.volumeId,
 			status: 'queued',
 			progress: 0,
 			createdAt: Date.now()
 		});
-
 		processQueue();
 	}
 
-	async function enqueueVolume(volumeId: string, volumeChapters: OfflineChapter[]) {
-		const now = Date.now();
-		const toEnqueue = volumeChapters.filter((ch) => !isDownloaded(ch.id));
+	async function enqueueDownload(chapter: OfflineChapter) {
+		const rawChapter = $state.snapshot(chapter);
+		await db.chapters.put(rawChapter);
+		await enqueueSource({
+			chapterId: chapter.id,
+			versionId: 'default',
+			title: chapter.title,
+			audioUrl: chapter.audioUrl,
+			durationSeconds: chapter.durationSeconds,
+			volumeId: chapter.volumeId
+		});
+	}
 
-		for (let i = 0; i < toEnqueue.length; i++) {
-			const chapter = toEnqueue[i];
+	async function enqueueVersionDownload(
+		chapter: OfflineChapter,
+		version: { versionId: string; title: string; audioUrl: string; durationSeconds: number }
+	) {
+		await db.chapters.put($state.snapshot(chapter));
+		await enqueueSource({
+			chapterId: chapter.id,
+			versionId: version.versionId,
+			title: version.title || chapter.title,
+			audioUrl: version.audioUrl,
+			durationSeconds: version.durationSeconds,
+			volumeId: chapter.volumeId
+		});
+	}
+
+	async function enqueueVolume(
+		volumeId: string,
+		volumeChapters: OfflineChapter[],
+		versionId = 'default',
+		versions: Array<{
+			chapterId: string;
+			versionId: string;
+			title: string;
+			audioUrl: string;
+			durationSeconds: number;
+		}> = []
+	) {
+		const now = Date.now();
+		const versionMap = new SvelteMap(versions.map((version) => [version.chapterId, version]));
+
+		for (let i = 0; i < volumeChapters.length; i++) {
+			const chapter = volumeChapters[i];
+			const version = versionId === 'default' ? null : versionMap.get(chapter.id);
+			if (versionId !== 'default' && !version) continue;
+			const key = downloadKey(chapter.id, versionId);
+			if (isDownloaded(key) || isDownloading(key) || isQueued(key)) continue;
 			await db.chapters.put($state.snapshot(chapter));
 			await db.downloads.put({
-				chapterId: chapter.id,
+				chapterId: key,
+				baseChapterId: chapter.id,
+				versionId,
+				title: version?.title || chapter.title,
+				audioUrl: version?.audioUrl || chapter.audioUrl,
+				durationSeconds: version?.durationSeconds || chapter.durationSeconds,
+				volumeId,
 				status: 'queued',
 				progress: 0,
 				createdAt: now + i
@@ -271,19 +352,22 @@ export function useDownloads() {
 		processQueue();
 	}
 
-	async function cancelDownload(chapterId: string, audioUrl?: string) {
-		const controller = activeDownloads.get(chapterId);
+	async function cancelDownload(key: string, audioUrl?: string) {
+		const download = downloads.find((item) => item.chapterId === key);
+		const baseChapterId = download?.baseChapterId ?? key;
+		const controller = activeDownloads.get(key);
 		if (controller) {
 			controller.abort();
-			activeDownloads.delete(chapterId);
+			activeDownloads.delete(key);
 		}
 
-		delete progressMap[chapterId];
+		delete progressMap[key];
 
 		const targetAudioUrl =
 			audioUrl ||
-			chapters.find((c) => c.id === chapterId)?.audioUrl ||
-			(await db.chapters.get(chapterId))?.audioUrl;
+			download?.audioUrl ||
+			chapters.find((c) => c.id === baseChapterId)?.audioUrl ||
+			(await db.chapters.get(baseChapterId))?.audioUrl;
 
 		if (targetAudioUrl) {
 			try {
@@ -296,14 +380,19 @@ export function useDownloads() {
 
 		try {
 			const opfsRoot = await navigator.storage.getDirectory();
-			await opfsRoot.removeEntry(chapterId);
+			const opfsName = storageFileName(key, download?.baseChapterId, download?.versionId);
+			await opfsRoot.removeEntry(opfsName);
+			const legacyName = key.replaceAll('::', '__');
+			if (legacyName !== opfsName) {
+				await opfsRoot.removeEntry(legacyName).catch(() => {});
+			}
 		} catch (e: unknown) {
 			if (e instanceof Error && e.name !== 'NotFoundError') {
 				log.warn('Failed to remove audio file from OPFS:', e);
 			}
 		}
 
-		await db.downloads.delete(chapterId);
+		await db.downloads.delete(key);
 		processQueue();
 	}
 
@@ -313,12 +402,23 @@ export function useDownloads() {
 		const toCancel = downloads.filter(
 			(d) =>
 				(d.status === 'queued' || d.status === 'downloading') &&
-				volumeChapterIds.includes(d.chapterId)
+				(d.volumeId === volumeId || volumeChapterIds.includes(d.baseChapterId ?? d.chapterId))
 		);
 
 		for (const d of toCancel) {
 			await cancelDownload(d.chapterId);
 		}
+	}
+
+	async function cancelVolumeVersion(volumeId: string, versionId: string) {
+		const toCancel = downloads.filter(
+			(d) =>
+				(d.volumeId === volumeId ||
+					chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId))?.volumeId === volumeId) &&
+				(d.versionId ?? 'default') === versionId &&
+				(d.status === 'queued' || d.status === 'downloading')
+		);
+		for (const item of toCancel) await cancelDownload(item.chapterId);
 	}
 
 	async function cancelAllQueued() {
@@ -330,6 +430,30 @@ export function useDownloads() {
 
 	async function deleteDownload(chapterId: string, audioUrl?: string) {
 		await cancelDownload(chapterId, audioUrl);
+	}
+
+	async function deleteVolume(volumeId: string) {
+		const ids = downloads
+			.filter(
+				(d) =>
+					d.volumeId === volumeId ||
+					chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId))?.volumeId === volumeId
+			)
+			.map((d) => d.chapterId);
+		for (const id of ids) await cancelDownload(id);
+	}
+
+	async function deleteVolumeVersion(volumeId: string, versionId: string) {
+		const ids = downloads
+			.filter(
+				(d) =>
+					(d.volumeId === volumeId ||
+						chapters.find((c) => c.id === (d.baseChapterId ?? d.chapterId))?.volumeId ===
+							volumeId) &&
+					(d.versionId ?? 'default') === versionId
+			)
+			.map((d) => d.chapterId);
+		for (const id of ids) await cancelDownload(id);
 	}
 
 	function isDownloaded(chapterId: string): boolean {
@@ -384,10 +508,14 @@ export function useDownloads() {
 			return progressMap;
 		},
 		enqueueDownload,
+		enqueueVersionDownload,
 		enqueueVolume,
 		cancelDownload,
 		deleteDownload,
+		deleteVolume,
+		deleteVolumeVersion,
 		cancelVolumeQueue,
+		cancelVolumeVersion,
 		cancelAllQueued,
 		isDownloaded,
 		isDownloading,

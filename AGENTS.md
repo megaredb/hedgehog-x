@@ -1,9 +1,9 @@
-Е# AGENTS.md — Hedgehog X (аудиокниги, SvelteKit PWA)
+# AGENTS.md — Hedgehog X (аудиокниги, SvelteKit PWA)
 
 > Это основной входной документ для ИИ-агентов и разработчиков.
 > Он намеренно короткий: детали — в `docs/`. Читай его целиком перед первой правкой.
 >
-> **Проверено:** 2026-11-18, ветка `dev`, коммит `5f67c5d` (worktree `dsh-d6a6b302-2f83`).
+> **Проверено:** 2026-11-25, ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41` (рабочее дерево).
 > Если код разошёлся с документами — прав код, но сначала обнови документы, а не наоборот.
 
 ## 0. Что это за проект
@@ -15,7 +15,7 @@
 но страницы читают контент и действия пользователя из **Dexie/IndexedDB**.
 Аудио можно скачивать в **OPFS** и слушать без сети. Авторизация — better-auth
 (Telegram OIDC, Discord OAuth2), без паролей. Админка — SSR-панель с загрузкой
-обложек/аудио в **Cloudflare R2**. PWA собирается через `vite-plugin-pwa` +
+обложек/аудио/видео в **Cloudflare R2**. PWA собирается через `vite-plugin-pwa` +
 собственный `src/service-worker.ts`.
 
 ## 1. Что читать (по задаче)
@@ -56,13 +56,14 @@ pnpm preview             # preview собранного приложения
 pnpm check               # svelte-check + sync — проходит
 pnpm lint                # prettier --check . && eslint . — проходит
 pnpm format              # prettier --write .
-pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 197 тестов, зелёные
-pnpm test:e2e            # playwright install && playwright test — требует env, см. ниже
+pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 268 тестов, зелёные
+pnpm test:coverage       # unit + экспериментальное покрытие Node
+pnpm test:e2e            # playwright install && playwright test — 48/48, требует env
 pnpm test:docker         # docker compose -f compose.test.yml up --build ...
 pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
 pnpm db:seed             # node --import tsx src/lib/server/db/seed.ts
 pnpm db:generate         # drizzle-kit generate (после изменения schema.ts)
-pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0008)
+pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0034)
 pnpm db:studio           # drizzle-kit studio
 pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 ```
@@ -83,17 +84,18 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
                                    │
                     syncService (клиент) ── mappers ── hydrate() ── Dexie
                                    │
-Страницы ── useDexie(liveQuery) ───┘        (книги/тома SSR; остальные client)
+Страницы ── useDexie(liveQuery) ───┘        (главная, каталог, книги/тома, публичные,
+                                            трансляции, подписка и админка — SSR; остальные client)
 ```
 
 - Контент (книги/тома/главы/иллюстрации) живёт в Dexie; страница книги `/books/:bookId`
   в `+layout.ts` фоново вызывает `syncBookDetails` и `syncUserData`.
 - Личные данные (прогресс, лайки, закладки) — тоже Dexie; синхронизация через
   `/api/user/sync`.
-- Главная `/` — витрина на `src/lib/data/mockShowcase.ts`; полный каталог — `/books`.
+- Главная `/` — SSR-витрина из БД (отдельные изображение/видео и порядок книг); полный каталог — `/books`.
 - `/books` — SSR-каталог книг с поиском; доступен из навигации.
 - Аналитика прослушивания — отдельный поток `/api/analytics/listen` (не в user sync).
-- Админка `/admin/**` — единственные SSR-страницы с данными из БД; доступ по `locals.user.role === 'admin'`.
+- Админка `/admin/**` — SSR-панель управления контентом, сайтом, пользователями и трансляциями; доступ по `locals.user.role в ('admin','author')`. Публичные и доменные страницы (`/`, `/books`, `/books/[bookId]`, `/about`, `/support`, `/community`, `/broadcasts`, `/subscription`) также загружаются на сервере (SSR) из БД.
 
 ## 5. Главные правила (нарушение = риск потери данных)
 
@@ -111,13 +113,15 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 5. **SSR книг/томов содержит данные.** `/books/[bookId]` и volume имеют серверные
    `+page.server.ts` (404/OG); не ломай их. Остальные страницы всё ещё могут быть
    клиентскими.
-6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0008;
+6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0034;
    `0005` — намеренный no-op, `0006` — catch-up из `schema.ts`). Не используй `db:push`
    как основной путь: он может удалять колонки. После изменения `schema.ts`:
    `db:generate` → проверь SQL → `db:migrate`. Не редактируй применённые миграции задним
    числом; добавляй новую. История инцидента — в `docs/AUDIT.md` P0-02.
-7. **R2-объекты удаляются при delete/update контента** (P1-07). Новые CRUD-ветки
-   обязаны вызывать `deleteFromStorage` для заменяемых файлов.
+7. **При удалении книги, тома или главы R2-объекты не удаляются** — это сознательная
+   политика сохранения медиа. `deleteFromStorage` использовать только для заменяемого
+   файла или прямой отдельной операции удаления иллюстрации/аудио (если файл больше
+   нигде не referenced).
 8. **Не храни секреты в клиенте.** Сессионный токен больше не пишется в localStorage
    (P1-06); кэшируются только user/expiresAt.
 9. **Даты/ID:** ID книг/томов/глав — `varchar(128)`, генерируются в админке;
@@ -163,15 +167,15 @@ src/
                 guestAdoption.svelte,progressSync.svelte,listeningTracker.svelte}.ts
       downloads/downloadManager.svelte.ts
     components/
-      ui/ (159 shadcn-примитивов)  audio/ (GlobalPlayer, Download)
+      ui/ (157 shadcn-примитивов)  audio/ (GlobalPlayer, Download)
       volume/ comments/ header/ layout/ overlay/ showcase/ support/ auth/ seo/ share/
       overlay/GuestDataAdoptionModal.svelte
-    data/mockShowcase.ts, constants/strings.ts, actions/inview.ts, utils/*
+    types/showcase.ts, constants/strings.ts, actions/inview.ts, utils/*
   routes/
-    +layout.svelte, +page.svelte
-    about/ admin/ auth/ bookmarks/ books/ community/ downloads/ history/
-    profile/ settings/ support/ api/
-drizzle/                  # SQL-миграции 0000–0008 (актуальны; 0005 — no-op)
+    +layout.server.ts, +layout.svelte, +page.server.ts, +page.svelte, +error.svelte
+    about/ admin/ api/ auth/ bookmarks/ books/ broadcasts/ community/ downloads/
+    feedback/ health/ history/ profile/ settings/ sitemap.xml/ subscription/ support/
+drizzle/                  # SQL-миграции 0000–0034 (актуальны; 0005 — no-op)
 e2e/                      # 9 Playwright-файлов
 static/                   # аудио/картинки/видео/QR/PWA-иконки
 ```

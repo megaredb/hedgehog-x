@@ -24,6 +24,7 @@ export const strings = {
 		downloads: 'Загрузки',
 		community: 'Сообщество',
 		support: 'Поддержать',
+		subscription: 'Подписка',
 		about: 'О сайте',
 		profile: 'Профиль',
 		settings: 'Настройки'
@@ -31,11 +32,13 @@ export const strings = {
 	breadcrumbs: {
 		home: 'Главная',
 		books: 'Книги',
+		broadcasts: 'Трансляции',
 		bookmarks: 'Закладки',
 		history: 'История',
 		downloads: 'Загрузки',
 		community: 'Сообщество',
 		support: 'Поддержать',
+		subscription: 'Подписка',
 		about: 'О проекте',
 		profile: 'Профиль',
 		settings: 'Настройки',
@@ -44,6 +47,10 @@ export const strings = {
 		chapters: 'Главы',
 		volumes: 'Тома',
 		illustrations: 'Иллюстрации',
+		versions: 'Версии',
+		content: 'Контент',
+		users: 'Пользователи',
+		integrations: 'Интеграции',
 		auth: 'Авторизация',
 		unknown: 'Раздел'
 	},
@@ -71,7 +78,7 @@ export const strings = {
 		deleteConfirmTitle: 'Удалить закладку?',
 		deleteConfirmDescription:
 			'Вы уверены, что хотите удалить эту закладку? Это действие необратимо.',
-		jumpToBookmark: 'Перейти к фрагменту'
+		jumpToBookmark: 'Слушать фрагмент'
 	},
 	history: {
 		title: 'История прослушиваний',
@@ -110,25 +117,21 @@ export const strings = {
 	support: {
 		title: 'Поддержать автора',
 		cardTransferTitle: 'Перевод по карте',
-		cardNumber: '4817 7603 3434 7832',
 		copyCard: 'Скопировать номер карты',
 		copyCardShort: 'Скопировать карту',
 		sberPayAction: 'Перевод',
-		boostyTitle: 'Boosty',
-		boostyDesc: 'Ежемесячная подписка и донаты',
 		bankQrSubtitle: 'Отсканируйте QR-код или нажмите на него',
-		cryptoTitle: 'Криптовалюта (Сеть TON)',
-		cryptoSubtitle: 'Отсканируйте QR-код или скопируйте адрес',
-		cryptoAddress: 'UQDoqpcudSDCZGqKWCoLDT008_BNhSKBUao_G5MZR9jcpf-i',
+		cryptoTitle: 'Криптовалюта',
+		cryptoSubtitle: 'Выберите сеть и скопируйте адрес или отсканируйте QR-код',
 		copyCrypto: 'Скопировать адрес',
 		copied: 'Скопировано!',
 		qrCodeBtn: 'QR-код',
 		cardQrAriaLabel: 'QR-код карты',
-		tonQrAriaLabel: 'QR-код TON',
+		tonQrAriaLabel: 'QR-код GRAM',
 		qrModalBankTitle: 'QR-код банковского перевода',
 		qrModalBankDesc: 'Отсканируйте камерой смартфона или в приложении банка',
-		qrModalTonTitle: 'QR-код TON',
-		qrModalTonDesc: 'Отсканируйте кошельком Tonkeeper / Telegram Wallet'
+		qrModalTonTitle: 'QR-код кошелька',
+		qrModalTonDesc: 'Отсканируйте камерой или в приложении кошелька'
 	},
 	share: {
 		title: 'Поделиться',

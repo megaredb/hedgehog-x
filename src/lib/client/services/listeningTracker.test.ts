@@ -83,6 +83,7 @@ describe('ListeningTrackerService Unit Tests', () => {
 			{ ...(fetchCalls[0].body as Record<string, unknown>), dateKey: undefined },
 			{
 				chapterId: 'ch_1',
+				versionId: 'default',
 				bookId: 'book_1',
 				volumeId: 'vol_1',
 				listenedSeconds: 15,

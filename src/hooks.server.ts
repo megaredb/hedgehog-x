@@ -1,4 +1,8 @@
-import type { Handle, RequestEvent } from '@sveltejs/kit';
+import { json, redirect, type Handle, type RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { session as sessionTable } from '$lib/server/db/auth.schema';
+import { getSubscriptionRecord } from '$lib/server/subscriptions/entitlement';
 import { building } from '$app/environment';
 import { auth } from '$lib/server/auth';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
@@ -49,7 +53,8 @@ function allowUpload(event: RequestEvent): boolean {
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const isUploadRequest =
-		event.request.method === 'POST' && event.url.pathname.startsWith('/admin');
+		event.request.method === 'POST' &&
+		(event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/api/admin'));
 	if (isUploadRequest) {
 		const length = Number(event.request.headers.get('content-length') ?? '0');
 		if (Number.isFinite(length) && length > MAX_UPLOAD_REQUEST_BYTES) {
@@ -72,6 +77,23 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	if (session) {
 		event.locals.session = session.session;
 		event.locals.user = session.user;
+
+		if (!building) {
+			const subscription = await getSubscriptionRecord(session.user.id).catch(() => null);
+			if (subscription?.blockedAt) {
+				await db
+					.delete(sessionTable)
+					.where(eq(sessionTable.userId, session.user.id))
+					.catch(() => {});
+				for (const name of ['better-auth.session_token', '__Secure-better-auth.session_token']) {
+					event.cookies.delete(name, { path: '/' });
+				}
+				if (event.url.pathname.startsWith('/api/')) {
+					return json({ error: 'Аккаунт заблокирован' }, { status: 403 });
+				}
+				throw redirect(303, '/auth?blocked=1');
+			}
+		}
 	}
 
 	const response = await svelteKitHandler({ event, resolve, auth, building });

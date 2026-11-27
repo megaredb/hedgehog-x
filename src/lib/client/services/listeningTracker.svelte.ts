@@ -14,9 +14,11 @@ const log = createLogger('ListeningTracker');
 const HEARTBEAT_INTERVAL_MS = 30000; // Emit listening heartbeat every 30s of active playback
 const MIN_FLUSH_SECONDS = 2; // Minimum threshold to record a session on pause/track change
 const MAX_SINGLE_SESSION_SECONDS = 300; // Endpoint constraint: max 300s per ping
+const MAX_SYNC_BATCH = 100;
 
 interface ActiveSession {
 	chapterId: string;
+	versionId: string;
 	bookId?: string;
 	volumeId?: string;
 	startedAt: number;
@@ -57,14 +59,19 @@ export class ListeningTrackerService {
 	 * Ticks listening playback progress during active playback.
 	 * Automatically rotates and emits when HEARTBEAT_INTERVAL_MS is reached.
 	 */
-	tick(chapterId: string, bookId?: string, volumeId?: string) {
+	tick(chapterId: string, bookId?: string, volumeId?: string, versionId = 'default') {
 		const now = Date.now();
 
-		if (!this.currentSession || this.currentSession.chapterId !== chapterId) {
-			// Flush previous session if switching tracks
+		if (
+			!this.currentSession ||
+			this.currentSession.chapterId !== chapterId ||
+			this.currentSession.versionId !== versionId
+		) {
+			// Flush previous session if switching tracks or versions
 			this.flush();
 			this.currentSession = {
 				chapterId,
+				versionId,
 				bookId,
 				volumeId,
 				startedAt: now,
@@ -88,6 +95,7 @@ export class ListeningTrackerService {
 
 			const payload: ListenHeartbeatPayload = {
 				chapterId: this.currentSession.chapterId,
+				versionId: this.currentSession.versionId,
 				bookId: this.currentSession.bookId,
 				volumeId: this.currentSession.volumeId,
 				listenedSeconds: Math.min(secondsToEmit, MAX_SINGLE_SESSION_SECONDS),
@@ -103,11 +111,12 @@ export class ListeningTrackerService {
 	/**
 	 * Flushes any remaining accumulated listening seconds (on pause, ended, or unload).
 	 */
-	flush() {
+	async flush(): Promise<void> {
 		if (!this.currentSession) return;
 
 		const seconds = Math.floor(this.currentSession.accumulatedMs / 1000);
 		const chapterId = this.currentSession.chapterId;
+		const versionId = this.currentSession.versionId;
 		const bookId = this.currentSession.bookId;
 		const volumeId = this.currentSession.volumeId;
 		const startedAt = new SvelteDate(this.currentSession.startedAt).toISOString();
@@ -117,13 +126,14 @@ export class ListeningTrackerService {
 		if (seconds >= MIN_FLUSH_SECONDS) {
 			const payload: ListenHeartbeatPayload = {
 				chapterId,
+				versionId,
 				bookId,
 				volumeId,
 				listenedSeconds: Math.min(seconds, MAX_SINGLE_SESSION_SECONDS),
 				startedAt,
 				dateKey: formatLocalDateKey(startedAt)
 			};
-			void this.dispatchSession(payload);
+			await this.dispatchSession(payload);
 		}
 	}
 
@@ -182,7 +192,7 @@ export class ListeningTrackerService {
 	}
 
 	/**
-	 * Flushes all pending offline listening sessions to the server in a batch.
+	 * Flushes all pending offline listening sessions to the server in chunks of <= 100.
 	 */
 	async flushOfflineQueue() {
 		if (typeof indexedDB === 'undefined') return;
@@ -195,23 +205,58 @@ export class ListeningTrackerService {
 			);
 			if (queued.length === 0) return;
 
-			const sessions = queued
-				.map((q) => q.payload as ListenHeartbeatPayload)
-				.filter((s) => s && s.chapterId && s.listenedSeconds > 0);
-
-			if (sessions.length === 0) {
-				const ids = queued.map((q) => q.id!).filter(Boolean);
-				await db.syncQueue.bulkDelete(ids);
-				return;
+			const validItems: Array<{ id?: number; session: ListenHeartbeatPayload }> = [];
+			const invalidIds: number[] = [];
+			for (const item of queued) {
+				const session = item.payload as ListenHeartbeatPayload | undefined;
+				if (session && session.chapterId && session.listenedSeconds > 0) {
+					validItems.push({ id: item.id, session });
+				} else if (item.id !== undefined) {
+					invalidIds.push(item.id);
+				}
 			}
 
-			const ok = await sendListenHeartbeat({ sessions });
-			if (ok) {
-				const ids = queued.map((q) => q.id!).filter(Boolean);
-				await db.syncQueue.bulkDelete(ids);
-				log.info(`Successfully flushed ${sessions.length} offline listening sessions to server`);
-			} else {
-				log.warn('Server rejected batch offline listening sessions, will retry later');
+			if (invalidIds.length > 0) {
+				await db.syncQueue.bulkDelete(invalidIds);
+			}
+			if (validItems.length === 0) return;
+
+			let flushedCount = 0;
+			for (let i = 0; i < validItems.length; i += MAX_SYNC_BATCH) {
+				const chunk = validItems.slice(i, i + MAX_SYNC_BATCH);
+				const chunkIds = chunk
+					.map((entry) => entry.id)
+					.filter((id): id is number => id !== undefined);
+				const sessions = chunk.map((entry) => entry.session);
+
+				const res = await fetch('/api/analytics/listen', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ sessions })
+				});
+
+				if (res.ok) {
+					if (chunkIds.length > 0) await db.syncQueue.bulkDelete(chunkIds);
+					flushedCount += sessions.length;
+				} else if (
+					res.status >= 400 &&
+					res.status < 500 &&
+					res.status !== 401 &&
+					res.status !== 429
+				) {
+					log.warn(`Dropping invalid listening session batch after HTTP ${res.status}`);
+					if (chunkIds.length > 0) await db.syncQueue.bulkDelete(chunkIds);
+					continue;
+				} else {
+					log.warn(
+						`Server rejected batch offline listening sessions (HTTP ${res.status}), will retry later`
+					);
+					break;
+				}
+			}
+
+			if (flushedCount > 0) {
+				log.info(`Successfully flushed ${flushedCount} offline listening sessions to server`);
 			}
 		} catch (err) {
 			log.warn('Error flushing offline listening queue:', err);

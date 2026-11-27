@@ -3,9 +3,21 @@
 	import type { OfflineBook, OfflineBookmark, OfflineChapter, OfflineVolume } from '$lib/client/db';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
 	import { Button } from '$lib/components/ui/button';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import ConfirmModal from '$lib/components/overlay/ConfirmModal.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
+	import { Input } from '$lib/components/ui/input';
 	import { formatDuration } from '$lib/utils/time';
-	import { Bookmark, BookOpen, Clock, Play, Quote, Trash2 } from '@lucide/svelte';
+	import { Bookmark, BookOpen, Clock, Pencil, Play, Quote, Trash2 } from '@lucide/svelte';
+
+	interface ChapterAudioVersion {
+		chapterId: string;
+		versionId: string;
+		title: string;
+		audioUrl: string;
+		durationSeconds: number;
+	}
 
 	interface Props {
 		bookmarks: OfflineBookmark[];
@@ -13,17 +25,27 @@
 		volume: OfflineVolume | undefined;
 		book?: OfflineBook;
 		bookId: string;
+		chapterVersions?: ChapterAudioVersion[];
 	}
 
-	let { bookmarks, chapters, volume, book, bookId }: Props = $props();
+	let { bookmarks, chapters, volume, book, bookId, chapterVersions = [] }: Props = $props();
 
 	let bookmarkToDelete = $state<OfflineBookmark | null>(null);
 	let isDeleteModalOpen = $state(false);
+	let bookmarkToEdit = $state<OfflineBookmark | null>(null);
+	let isEditModalOpen = $state(false);
+	let editStart = $state(0);
+	let editEnd = $state<number | null>(null);
+	let editNote = $state('');
+	let isSavingEdit = $state(false);
 
 	const sortedBookmarks = $derived(
 		[...bookmarks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 	);
 	const chapterMap = $derived(new Map(chapters.map((chapter) => [chapter.id, chapter])));
+	const hasMultipleVersions = $derived(
+		chapterVersions.some((version) => version.versionId !== 'default')
+	);
 
 	function formatDate(timestamp: number): string {
 		if (!timestamp) return '';
@@ -37,10 +59,54 @@
 	function handlePlayBookmark(bookmark: OfflineBookmark) {
 		const index = chapters.findIndex((chapter) => chapter.id === bookmark.chapterId);
 		if (index === -1) return;
+		const versionId = bookmark.versionId ?? 'default';
+		const currentVersion =
+			typeof audioStore.currentTrack?.versionId === 'string'
+				? audioStore.currentTrack.versionId
+				: 'default';
 
-		if (audioStore.currentTrack?.id === bookmark.chapterId) {
+		if (
+			audioStore.currentTrack?.id === bookmark.chapterId &&
+			!audioStore.currentTrack.broadcastId &&
+			currentVersion === versionId
+		) {
+			audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 			audioStore.seek(bookmark.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
+		const hasClip =
+			bookmark.endTimestampSeconds != null &&
+			bookmark.endTimestampSeconds > bookmark.timestampSeconds;
+
+		if (versionId !== 'default') {
+			const version = chapterVersions.find(
+				(item) => item.chapterId === bookmark.chapterId && item.versionId === versionId
+			);
+			const chapter = chapters[index];
+			if (!version) return;
+			audioStore.setQueueAndPlay(
+				[
+					{
+						id: chapter.id,
+						title: version.title,
+						url: version.audioUrl,
+						duration: version.durationSeconds,
+						versionId,
+						artwork: volume?.coverUrl,
+						blurhash: volume?.blurhash,
+						album: volume?.title,
+						artist: book?.title || 'Hedgehog X',
+						volumeId: volume?.id,
+						bookId,
+						startTime: bookmark.timestampSeconds,
+						clipStart: hasClip ? bookmark.timestampSeconds : null,
+						clipEnd: hasClip ? bookmark.endTimestampSeconds : null
+					}
+				],
+				0
+			);
 			return;
 		}
 
@@ -49,15 +115,44 @@
 			url: chapter.audioUrl,
 			title: chapter.title,
 			duration: chapter.durationSeconds,
+			versionId: 'default',
 			artwork: volume?.coverUrl,
+			blurhash: volume?.blurhash,
 			album: volume?.title,
 			artist: book?.title || 'Hedgehog X',
 			volumeId: volume?.id,
 			bookId,
-			startTime: chapter.id === bookmark.chapterId ? bookmark.timestampSeconds : 0
+			startTime: chapter.id === bookmark.chapterId ? bookmark.timestampSeconds : 0,
+			...(chapter.id === bookmark.chapterId && hasClip
+				? { clipStart: bookmark.timestampSeconds, clipEnd: bookmark.endTimestampSeconds }
+				: {})
 		}));
 
 		audioStore.setQueueAndPlay(tracks, index);
+	}
+
+	function openEditModal(bookmark: OfflineBookmark) {
+		bookmarkToEdit = bookmark;
+		editStart = bookmark.timestampSeconds;
+		editEnd = bookmark.endTimestampSeconds ?? null;
+		editNote = bookmark.note;
+		isEditModalOpen = true;
+	}
+
+	async function saveEdit() {
+		if (!bookmarkToEdit || isSavingEdit) return;
+		isSavingEdit = true;
+		try {
+			await bookmarkService.updateBookmark(bookmarkToEdit.id, {
+				timestampSeconds: editStart,
+				endTimestampSeconds: editEnd,
+				note: editNote
+			});
+			isEditModalOpen = false;
+			bookmarkToEdit = null;
+		} finally {
+			isSavingEdit = false;
+		}
 	}
 
 	function openDeleteModal(bookmark: OfflineBookmark) {
@@ -97,13 +192,14 @@
 					<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div class="flex min-w-0 items-start gap-3">
 							{#if volume?.coverUrl}
-								<img
+								<BlurhashImage
 									src={volume.coverUrl}
+									blurhash={volume.blurhash}
 									alt={volume.title}
 									width={48}
 									height={64}
 									loading="lazy"
-									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm"
+									class="h-16 w-12 shrink-0 rounded-lg shadow-sm"
 								/>
 							{:else}
 								<div
@@ -119,13 +215,28 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatDuration(bookmark.timestampSeconds)}</span>
+										<span>
+											{formatDuration(bookmark.timestampSeconds)}
+											{#if bookmark.endTimestampSeconds}
+												– {formatDuration(bookmark.endTimestampSeconds)}
+											{/if}
+										</span>
 									</span>
 									{#if bookmark.createdAt}
 										<span class="text-xs text-muted-foreground/70">
 											{formatDate(bookmark.createdAt)}
 										</span>
 									{/if}
+									{#if (bookmark.versionId ?? 'default') !== 'default' || hasMultipleVersions}
+										<span
+											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {bookmark.versionId ===
+												'default' || !bookmark.versionId
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+											>{bookmark.versionId === 'default' || !bookmark.versionId
+												? 'Новая версия'
+												: 'Старая версия'}</span
+										>{/if}
 								</div>
 
 								<h3 class="truncate text-sm font-semibold text-foreground sm:text-base">
@@ -137,10 +248,10 @@
 
 								{#if bookmark.note}
 									<div
-										class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
+										class="mt-1.5 flex w-fit max-w-full items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
 									>
 										<Quote class="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-										<span class="line-clamp-2 italic">{bookmark.note}</span>
+										<span class="break-words whitespace-pre-wrap italic">{bookmark.note}</span>
 									</div>
 								{/if}
 							</div>
@@ -153,7 +264,17 @@
 								onclick={() => handlePlayBookmark(bookmark)}
 							>
 								<Play class="h-3.5 w-3.5 fill-current" />
-								<span>Перейти</span>
+								<span>Слушать фрагмент</span>
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted"
+								onclick={() => openEditModal(bookmark)}
+								title="Редактировать закладку"
+								aria-label="Редактировать закладку"
+							>
+								<Pencil class="h-4 w-4" />
 							</Button>
 							<Button
 								variant="ghost"
@@ -172,6 +293,55 @@
 		</ul>
 	{/if}
 </div>
+
+<Dialog.Root bind:open={isEditModalOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Редактировать закладку</Dialog.Title>
+		</Dialog.Header>
+		<div class="space-y-4 py-2">
+			<div class="grid grid-cols-2 gap-3">
+				<TimecodeInput
+					label="Начало"
+					value={editStart}
+					onchange={(value) => {
+						editStart = value;
+						if (editEnd !== null && editEnd <= value) editEnd = null;
+					}}
+				/>
+				<div>
+					<label class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+						<input
+							type="checkbox"
+							checked={editEnd !== null}
+							onchange={(event) => {
+								editEnd = event.currentTarget.checked ? editStart + 30 : null;
+							}}
+						/>
+						Конец фрагмента
+					</label>
+					{#if editEnd !== null}
+						<TimecodeInput
+							value={editEnd}
+							min={editStart + 1}
+							onchange={(value) => (editEnd = value)}
+						/>
+					{:else}
+						<p class="px-1 py-2 text-xs text-muted-foreground">До конца главы</p>
+					{/if}
+				</div>
+			</div>
+			<label class="block space-y-1.5 text-sm">
+				<span class="font-medium">Заметка</span>
+				<Input bind:value={editNote} maxlength={500} />
+			</label>
+		</div>
+		<Dialog.Footer class="flex gap-2 sm:justify-end">
+			<Button variant="outline" onclick={() => (isEditModalOpen = false)}>Отмена</Button>
+			<Button onclick={saveEdit} disabled={isSavingEdit}>Сохранить</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
 <ConfirmModal
 	bind:open={isDeleteModalOpen}

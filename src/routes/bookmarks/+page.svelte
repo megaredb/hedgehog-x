@@ -1,5 +1,8 @@
+<!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { audioStore } from '$lib/audio-store.svelte';
 	import type { Track } from '$lib/html-audio.js';
 	import {
@@ -11,18 +14,24 @@
 	} from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
+	import { syncService } from '$lib/client/services/syncService';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { PaginationBar } from '$lib/components/ui/pagination';
+	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
+	import { Input } from '$lib/components/ui/input';
+	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
 	import { strings } from '$lib/constants/strings';
-	import { Bookmark, Clock, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
+	import { Bookmark, Clock, Pencil, Play, Trash2, BookOpen, Quote } from '@lucide/svelte';
 	import { formatDuration } from '$lib/utils/time';
 
 	interface EnrichedBookmark extends OfflineBookmark {
 		chapter?: OfflineChapter;
 		volume?: OfflineVolume;
 		book?: OfflineBook;
+		version?: import('$lib/client/db').OfflineChapterAudioVersion;
+		hasMultipleVersions?: boolean;
 	}
 
 	const bookmarksQuery = useDexie(
@@ -30,16 +39,33 @@
 			const bms = await db.bookmarks.toArray();
 			bms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+			const versionRows = await db.chapterAudioVersions.toArray();
+			const alternativeChapterIds = [
+				...new Set(
+					versionRows
+						.filter((version) => version.versionId !== 'default')
+						.map((version) => version.chapterId)
+				)
+			];
+			const alternativeChapters = await db.chapters.bulkGet(alternativeChapterIds);
+			const alternativeVolumeIds = new Set(
+				alternativeChapters.filter(Boolean).map((chapter) => chapter!.volumeId)
+			);
 			const enriched: EnrichedBookmark[] = await Promise.all(
 				bms.map(async (bm) => {
 					const chapter = await db.chapters.get(bm.chapterId);
 					const volume = chapter ? await db.volumes.get(chapter.volumeId) : undefined;
 					const book = volume ? await db.books.get(volume.bookId) : undefined;
+					const version = versionRows.find(
+						(v) => v.chapterId === bm.chapterId && v.versionId === (bm.versionId ?? 'default')
+					);
 					return {
 						...bm,
 						chapter,
 						volume,
-						book
+						book,
+						version,
+						hasMultipleVersions: volume ? alternativeVolumeIds.has(volume.id) : false
 					};
 				})
 			);
@@ -50,6 +76,12 @@
 
 	let bookmarkToDelete = $state<EnrichedBookmark | null>(null);
 	let isDeleteModalOpen = $state(false);
+	let bookmarkToEdit = $state<EnrichedBookmark | null>(null);
+	let isEditModalOpen = $state(false);
+	let editStart = $state(0);
+	let editEnd = $state<number | null>(null);
+	let editNote = $state('');
+	let isSavingEdit = $state(false);
 
 	let currentPage = $state(1);
 	let pageSize = $state(10);
@@ -72,10 +104,59 @@
 	}
 
 	async function handlePlayBookmark(item: EnrichedBookmark) {
+		if (item.broadcastHref) {
+			await goto(item.broadcastHref + '?t=' + encodeURIComponent(String(item.timestampSeconds)));
+			return;
+		}
 		if (!item.chapter) return;
-		if (audioStore.currentTrack?.id === item.chapterId) {
+		const versionId = item.versionId ?? 'default';
+		const currentVersion =
+			typeof audioStore.currentTrack?.versionId === 'string'
+				? audioStore.currentTrack.versionId
+				: 'default';
+		if (
+			audioStore.currentTrack?.id === item.chapterId &&
+			!audioStore.currentTrack.broadcastId &&
+			currentVersion === versionId
+		) {
+			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 			audioStore.seek(item.timestampSeconds);
 			if (!audioStore.isPlaying) audioStore.play();
+			return;
+		}
+
+		if (versionId !== 'default') {
+			let version = item.version;
+			if (!version && item.book?.id) {
+				await syncService.syncBookDetails(item.book.id);
+				version = await db.chapterAudioVersions
+					.where({ chapterId: item.chapterId, versionId })
+					.first();
+			}
+			if (!version) return;
+			const hasClip =
+				item.endTimestampSeconds != null && item.endTimestampSeconds > item.timestampSeconds;
+			audioStore.setQueueAndPlay(
+				[
+					{
+						id: item.chapter.id,
+						title: version.title,
+						url: version.audioUrl,
+						duration: version.durationSeconds,
+						versionId,
+						album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
+						artist: item.book?.title || 'Hedgehog',
+						artwork: item.volume?.coverUrl || item.book?.coverUrl,
+						blurhash: item.volume?.blurhash || item.book?.blurhash,
+						bookId: item.book?.id,
+						volumeId: item.volume?.id,
+						startTime: item.timestampSeconds,
+						clipStart: hasClip ? item.timestampSeconds : null,
+						clipEnd: hasClip ? item.endTimestampSeconds : null
+					}
+				],
+				0
+			);
 			return;
 		}
 
@@ -90,17 +171,50 @@
 			title: ch.title,
 			url: ch.audioUrl,
 			duration: ch.durationSeconds,
+			versionId: 'default',
 			album: item.volume?.title || `Том ${item.volume?.volumeNumber || 1}`,
 			artist: item.book?.title || 'Hedgehog',
 			artwork: item.volume?.coverUrl || item.book?.coverUrl,
+			blurhash: item.volume?.blurhash || item.book?.blurhash,
 			bookId: item.book?.id,
 			volumeId: item.volume?.id
 		}));
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
-			tracks[startIndex] = { ...tracks[startIndex], startTime: item.timestampSeconds };
+			const hasClip =
+				item.endTimestampSeconds != null && item.endTimestampSeconds > item.timestampSeconds;
+			tracks[startIndex] = {
+				...tracks[startIndex],
+				startTime: item.timestampSeconds,
+				clipStart: hasClip ? item.timestampSeconds : null,
+				clipEnd: hasClip ? item.endTimestampSeconds : null
+			};
 			audioStore.setQueueAndPlay(tracks, startIndex);
+		}
+	}
+
+	function openEditModal(item: EnrichedBookmark) {
+		bookmarkToEdit = item;
+		editStart = item.timestampSeconds;
+		editEnd = item.endTimestampSeconds ?? null;
+		editNote = item.note;
+		isEditModalOpen = true;
+	}
+
+	async function saveEdit() {
+		if (!bookmarkToEdit || isSavingEdit) return;
+		isSavingEdit = true;
+		try {
+			await bookmarkService.updateBookmark(bookmarkToEdit.id, {
+				timestampSeconds: editStart,
+				endTimestampSeconds: editEnd,
+				note: editNote
+			});
+			isEditModalOpen = false;
+			bookmarkToEdit = null;
+		} finally {
+			isSavingEdit = false;
 		}
 	}
 
@@ -114,6 +228,23 @@
 		await bookmarkService.deleteBookmark(bookmarkToDelete.id);
 		isDeleteModalOpen = false;
 		bookmarkToDelete = null;
+	}
+
+	function chapterHref(item: EnrichedBookmark): string {
+		if (item.broadcastHref) return item.broadcastHref;
+		if (!item.book || !item.volume || !item.chapter) return '#';
+		return (
+			resolve(`/books/${item.book.id}/${item.volume.id}`) +
+			`?chapter=${encodeURIComponent(item.chapter.id)}&version=${encodeURIComponent(item.versionId ?? 'default')}`
+		);
+	}
+
+	function volumeHref(item: EnrichedBookmark): string {
+		return item.book && item.volume ? resolve(`/books/${item.book.id}/${item.volume.id}`) : '#';
+	}
+
+	function bookHref(item: EnrichedBookmark): string {
+		return item.book ? resolve(`/books/${item.book.id}`) + '#volumes' : '#';
 	}
 </script>
 
@@ -160,7 +291,7 @@
 			<p class="mt-1.5 max-w-md text-xs text-muted-foreground sm:text-sm">
 				{strings.bookmarks.emptyDescription}
 			</p>
-			<Button href={resolve('/')} class="mt-6 gap-2">
+			<Button href={resolve('/books')} class="mt-6 gap-2">
 				<BookOpen class="h-4 w-4" />
 				<span>{strings.nav.catalog}</span>
 			</Button>
@@ -174,18 +305,21 @@
 					<div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
 						<!-- Book & Chapter info -->
 						<div class="flex min-w-0 items-start gap-3 sm:items-center">
-							{#if item.volume?.coverUrl || item.book?.coverUrl}
-								<img
-									src={item.volume?.coverUrl || item.book?.coverUrl}
-									alt={item.volume?.title || item.chapter?.title || 'Cover'}
-									width={56}
-									height={80}
-									loading={i < 2 ? 'eager' : 'lazy'}
-									class="h-16 w-12 shrink-0 rounded-lg object-cover shadow-sm sm:h-20 sm:w-14"
-								/>
+							{#if item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
+								<a href={chapterHref(item)} aria-label="Перейти к главе" class="shrink-0">
+									<BlurhashImage
+										src={item.broadcastCoverUrl || item.volume?.coverUrl || item.book?.coverUrl}
+										blurhash={item.volume?.blurhash || item.book?.blurhash}
+										alt={item.volume?.title || item.chapter?.title || 'Cover'}
+										width={56}
+										height={80}
+										loading={i < 2 ? 'eager' : 'lazy'}
+										class="aspect-[7/10] w-12 rounded-lg shadow-sm sm:w-14"
+									/>
+								</a>
 							{:else}
 								<div
-									class="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:h-20 sm:w-14"
+									class="flex aspect-[7/10] w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground sm:w-14"
 								>
 									<BookOpen class="h-6 w-6" />
 								</div>
@@ -197,36 +331,67 @@
 										class="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary"
 									>
 										<Clock class="h-3 w-3" />
-										<span>{formatDuration(item.timestampSeconds)}</span>
+										<span>
+											{formatDuration(item.timestampSeconds)}
+											{#if item.endTimestampSeconds}
+												– {formatDuration(item.endTimestampSeconds)}
+											{/if}
+										</span>
 									</span>
+									{#if item.broadcastId}<span
+											class="inline-flex items-center gap-1 rounded-md bg-violet-500/10 px-2 py-0.5 text-xs font-semibold text-violet-500"
+											>{item.broadcastLive ? 'Трансляция' : 'Replay'}</span
+										>{:else}<span
+											class="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground"
+											>Глава</span
+										>{/if}
 									{#if item.createdAt}
 										<span class="text-xxs text-muted-foreground/70">
 											{formatDate(item.createdAt)}
 										</span>
 									{/if}
+									{#if (item.versionId ?? 'default') !== 'default' || item.hasMultipleVersions}
+										<span
+											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
+												'default' || !item.versionId
+												? 'border-primary/30 bg-primary/10 text-primary'
+												: 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'}"
+											>{item.versionId === 'default' || !item.versionId
+												? 'Новая версия'
+												: 'Старая версия'}</span
+										>{/if}
 								</div>
 
 								<h3 class="truncate text-base font-semibold text-foreground">
-									{item.chapter?.title ?? strings.player.chapterFallback}
+									<a href={chapterHref(item)} class="hover:underline">
+										{item.broadcastTitle ?? item.chapter?.title ?? strings.player.chapterFallback}
+									</a>
 								</h3>
 
 								<p class="truncate text-xs text-muted-foreground">
-									{#if item.book?.title}
-										<span>{item.book.title}</span>
-										{#if item.volume?.title}
-											<span> &bull; {item.volume.title}</span>
-										{/if}
-									{:else if item.volume?.title}
-										<span>{item.volume.title}</span>
-									{/if}
+									{#if item.broadcastId}<span
+											>{item.broadcastBookTitle ??
+												item.book?.title ??
+												'HEDGEHOG.INC'}{#if item.broadcastVolumeTitle}
+												· {item.broadcastVolumeTitle}{/if}</span
+										>{:else if item.book?.title}<a
+											href={bookHref(item)}
+											class="hover:text-foreground hover:underline">{item.book.title}</a
+										>{#if item.volume?.title}<span> &bull; </span><a
+												href={volumeHref(item)}
+												class="hover:text-foreground hover:underline">{item.volume.title}</a
+											>{/if}{:else if item.volume?.title}<a
+											href={volumeHref(item)}
+											class="hover:text-foreground hover:underline">{item.volume.title}</a
+										>{/if}
 								</p>
 
 								{#if item.note}
 									<div
-										class="mt-1.5 flex items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
+										class="mt-1.5 flex w-fit max-w-full items-start gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1.5 text-xs text-foreground/90"
 									>
 										<Quote class="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-										<span class="line-clamp-2 italic">{item.note}</span>
+										<span class="break-words whitespace-pre-wrap italic">{item.note}</span>
 									</div>
 								{/if}
 							</div>
@@ -241,6 +406,16 @@
 							>
 								<Play class="h-3.5 w-3.5 fill-current" />
 								<span>{strings.bookmarks.jumpToBookmark}</span>
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted"
+								onclick={() => openEditModal(item)}
+								title="Редактировать закладку"
+								aria-label="Редактировать закладку"
+							>
+								<Pencil class="h-4 w-4" />
 							</Button>
 							<Button
 								variant="ghost"
@@ -262,6 +437,64 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Edit Bookmark Dialog -->
+<Dialog.Root bind:open={isEditModalOpen}>
+	<Dialog.Content class="sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Редактировать закладку</Dialog.Title>
+			<Dialog.Description>Измените таймкод, конец фрагмента или заметку.</Dialog.Description>
+		</Dialog.Header>
+		<div class="space-y-4 py-2">
+			<div class="grid grid-cols-2 gap-3">
+				<TimecodeInput
+					label="Начало"
+					value={editStart}
+					onchange={(value) => {
+						editStart = value;
+						if (editEnd !== null && editEnd <= value) editEnd = null;
+					}}
+				/>
+				<div>
+					<label class="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+						<input
+							type="checkbox"
+							checked={editEnd !== null}
+							onchange={(event) => {
+								editEnd = event.currentTarget.checked ? editStart + 30 : null;
+							}}
+						/>
+						Конец фрагмента
+					</label>
+					{#if editEnd !== null}
+						<TimecodeInput
+							value={editEnd}
+							min={editStart + 1}
+							onchange={(value) => (editEnd = value)}
+						/>
+					{:else}
+						<p class="px-1 py-2 text-xs text-muted-foreground">До конца главы</p>
+					{/if}
+				</div>
+			</div>
+			<label class="block space-y-1.5 text-sm">
+				<span class="font-medium">{strings.bookmarks.noteLabel}</span>
+				<Input bind:value={editNote} maxlength={500} />
+			</label>
+		</div>
+		<Dialog.Footer class="flex gap-2 sm:justify-end">
+			<Button variant="outline" onclick={() => (isEditModalOpen = false)}>
+				{strings.common.cancel}
+			</Button>
+			<Button
+				onclick={saveEdit}
+				disabled={isSavingEdit || (editEnd !== null && editEnd <= editStart)}
+			>
+				{isSavingEdit ? 'Сохранение…' : 'Сохранить'}
+			</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
 
 <!-- Delete Bookmark Confirm Dialog -->
 <Dialog.Root bind:open={isDeleteModalOpen}>

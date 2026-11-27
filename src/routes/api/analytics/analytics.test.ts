@@ -32,11 +32,28 @@ describe('Analytics Math, Formatting, and Validation', () => {
 	});
 
 	describe('buildDailyStatId', () => {
-		it('builds a bounded deterministic id when all fields are present', () => {
+		it('builds a legacy 4-part deterministic id for default version', () => {
 			const id = buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123');
 			assert.match(id, /^2026-11-08_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}$/);
-			assert.ok(id.length <= 34);
+			assert.ok(id.length <= 40);
 			assert.equal(id, buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123'));
+			assert.equal(
+				id,
+				buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123', 'default')
+			);
+			assert.equal(id, buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123', '   '));
+		});
+
+		it('builds a 5-part deterministic id for alternative audio versions', () => {
+			const defaultId = buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123');
+			const oldId = buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123', 'old');
+			assert.match(oldId, /^2026-11-08_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}_[a-z0-9]{7}$/);
+			assert.ok(oldId.length <= 48);
+			assert.notEqual(oldId, defaultId);
+			assert.equal(
+				oldId,
+				buildDailyStatId('2026-11-08', 'mushoku_tensei', 'ch_1', 'user_123', ' old ')
+			);
 		});
 
 		it('does not collide on underscore-separated identifiers', () => {
@@ -117,7 +134,26 @@ describe('Analytics Math, Formatting, and Validation', () => {
 			assert.equal(res.valid, true);
 			assert.equal(res.session?.chapterId, 'c1');
 			assert.equal(res.session?.bookId, 'b1');
+			assert.equal(res.session?.versionId, 'default');
 			assert.ok(res.session?.startedAt instanceof Date);
+		});
+
+		it('accepts versionId up to 64 characters and rejects longer values', () => {
+			const exact64 = 'v'.repeat(64);
+			const ok = validateListenSession({
+				chapterId: 'c1',
+				versionId: `  ${exact64}  `,
+				listenedSeconds: 30
+			});
+			assert.equal(ok.valid, true);
+			assert.equal(ok.session?.versionId, exact64);
+
+			const tooLong = validateListenSession({
+				chapterId: 'c1',
+				versionId: 'v'.repeat(65),
+				listenedSeconds: 30
+			});
+			assert.equal(tooLong.valid, false);
 		});
 	});
 

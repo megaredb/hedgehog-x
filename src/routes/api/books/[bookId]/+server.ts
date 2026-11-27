@@ -1,5 +1,10 @@
 import { db } from '$lib/server/db';
-import { volumeLikes, chapterLikes } from '$lib/server/db/schema';
+import {
+	volumeLikes,
+	chapterLikes,
+	audioVersions,
+	chapterAudioVersions
+} from '$lib/server/db/schema';
 import { inArray, count } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 
@@ -14,6 +19,7 @@ export const GET = async ({ params, request }) => {
 				orderBy: (volumes, { asc }) => [asc(volumes.volumeNumber)],
 				with: {
 					chapters: {
+						where: (chapters, { eq }) => eq(chapters.published, true),
 						orderBy: (chapters, { asc }) => [asc(chapters.chapterNumber)]
 					},
 					illustrations: {
@@ -31,7 +37,7 @@ export const GET = async ({ params, request }) => {
 	const volumeIds = bookData.volumes.map((v) => v.id);
 	const chapterIds = bookData.volumes.flatMap((v) => v.chapters.map((c) => c.id));
 
-	const [volLikesCounts, chLikesCounts] = await Promise.all([
+	const [volLikesCounts, chLikesCounts, audioVersionRows, chapterVersionRows] = await Promise.all([
 		volumeIds.length > 0
 			? db
 					.select({
@@ -46,16 +52,33 @@ export const GET = async ({ params, request }) => {
 			? db
 					.select({
 						chapterId: chapterLikes.chapterId,
+						versionId: chapterLikes.versionId,
 						count: count()
 					})
 					.from(chapterLikes)
 					.where(inArray(chapterLikes.chapterId, chapterIds))
-					.groupBy(chapterLikes.chapterId)
+					.groupBy(chapterLikes.chapterId, chapterLikes.versionId)
+			: [],
+		db.select().from(audioVersions).orderBy(audioVersions.sortOrder),
+		chapterIds.length > 0
+			? db
+					.select()
+					.from(chapterAudioVersions)
+					.where(inArray(chapterAudioVersions.chapterId, chapterIds))
 			: []
 	]);
 
 	const volLikesMap = new Map(volLikesCounts.map((v) => [v.volumeId, Number(v.count)]));
-	const chLikesMap = new Map(chLikesCounts.map((c) => [c.chapterId, Number(c.count)]));
+	const chLikesMap = new Map(
+		chLikesCounts
+			.filter((c) => c.versionId === 'default')
+			.map((c) => [c.chapterId, Number(c.count)])
+	);
+	const chapterVersionLikes = chLikesCounts.map((c) => ({
+		chapterId: c.chapterId,
+		versionId: c.versionId,
+		count: Number(c.count)
+	}));
 
 	const enrichedVolumes = bookData.volumes.map((v) => ({
 		...v,
@@ -68,7 +91,10 @@ export const GET = async ({ params, request }) => {
 
 	const responsePayload = {
 		...bookData,
-		volumes: enrichedVolumes
+		volumes: enrichedVolumes,
+		chapterVersionLikes,
+		audioVersions: audioVersionRows,
+		chapterAudioVersions: chapterVersionRows
 	};
 
 	const payloadString = JSON.stringify(responsePayload);

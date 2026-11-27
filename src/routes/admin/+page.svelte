@@ -15,6 +15,7 @@
 		Disc3,
 		Image as ImageIcon,
 		Users,
+		Crown,
 		Plus,
 		ArrowRight
 	} from '@lucide/svelte';
@@ -27,7 +28,7 @@
 			count: data.counts.books,
 			subtext: 'Всего в библиотеке',
 			icon: BookOpen,
-			href: '/admin/books',
+			href: '/admin/content',
 			color: 'text-blue-500'
 		},
 		{
@@ -35,7 +36,7 @@
 			count: data.counts.volumes,
 			subtext: 'Во всех сериях',
 			icon: Layers,
-			href: '/admin/volumes',
+			href: '/admin/content?tab=volume',
 			color: 'text-amber-500'
 		},
 		{
@@ -43,7 +44,7 @@
 			count: data.counts.chapters,
 			subtext: 'Доступно для прослушивания',
 			icon: Disc3,
-			href: '/admin/chapters',
+			href: '/admin/content?tab=chapters',
 			color: 'text-purple-500'
 		},
 		{
@@ -51,7 +52,7 @@
 			count: data.counts.illustrations,
 			subtext: 'Загружено в хранилище',
 			icon: ImageIcon,
-			href: '/admin/illustrations',
+			href: '/admin/content?tab=illustrations',
 			color: 'text-emerald-500'
 		},
 		{
@@ -61,6 +62,14 @@
 			icon: Users,
 			href: '/admin/users',
 			color: 'text-rose-500'
+		},
+		{
+			label: 'Подписчиков',
+			count: data.counts.subscribers,
+			subtext: 'Активный доступ',
+			icon: Crown,
+			href: '/admin/users',
+			color: 'text-emerald-500'
 		}
 	]);
 </script>
@@ -75,7 +84,7 @@
 	</div>
 
 	<!-- Stats Grid -->
-	<div class="grid grid-cols-2 gap-4 lg:grid-cols-5">
+	<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
 		{#each stats as stat (stat.label)}
 			{@const Icon = stat.icon}
 			<Button
@@ -110,7 +119,7 @@
 				<CardDescription class="text-xs">Создание новой серии или тайтла</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<Button href="/admin/books#create" size="sm" class="w-full gap-1.5">
+				<Button href="/admin/content?new=book" size="sm" class="w-full gap-1.5">
 					<Plus class="h-4 w-4" />
 					Создать книгу
 				</Button>
@@ -126,7 +135,7 @@
 				<CardDescription class="text-xs">Новый том с обложкой в WebP</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<Button href="/admin/volumes#create" size="sm" class="w-full gap-1.5">
+				<Button href="/admin/content?new=volume" size="sm" class="w-full gap-1.5">
 					<Plus class="h-4 w-4" />
 					Создать том
 				</Button>
@@ -142,7 +151,7 @@
 				<CardDescription class="text-xs">MP3 в R2 и ссылка на Telegram</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<Button href="/admin/chapters#create" size="sm" class="w-full gap-1.5">
+				<Button href="/admin/content?new=chapter" size="sm" class="w-full gap-1.5">
 					<Plus class="h-4 w-4" />
 					Загрузить главу
 				</Button>
@@ -158,7 +167,7 @@
 				<CardDescription class="text-xs">Авто-конвертация WebP + Blurhash</CardDescription>
 			</CardHeader>
 			<CardContent>
-				<Button href="/admin/illustrations#create" size="sm" class="w-full gap-1.5">
+				<Button href="/admin/content?new=illustration" size="sm" class="w-full gap-1.5">
 					<Plus class="h-4 w-4" />
 					Загрузить арт
 				</Button>
@@ -174,7 +183,7 @@
 				<CardDescription class="text-xs">Последние добавленные или измененные книги</CardDescription
 				>
 			</div>
-			<Button href="/admin/books" variant="ghost" size="sm" class="gap-1 text-xs">
+			<Button href="/admin/content" variant="ghost" size="sm" class="gap-1 text-xs">
 				{strings.common.allBooks}
 				<ArrowRight class="h-3.5 w-3.5" />
 			</Button>
@@ -208,7 +217,7 @@
 								</div>
 							</div>
 							<div class="flex shrink-0 items-center gap-2">
-								<Button href="/admin/books?edit={book.id}" variant="outline" size="sm">
+								<Button href={'/admin/content?edit=' + book.id} variant="outline" size="sm">
 									Изменить
 								</Button>
 								<Button href="/books/{book.id}" variant="ghost" size="sm">Просмотр</Button>

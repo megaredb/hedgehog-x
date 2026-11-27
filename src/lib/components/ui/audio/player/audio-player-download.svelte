@@ -28,8 +28,19 @@
 					}
 				: undefined)
 	);
+
+	let currentVersion = $derived.by(() => {
+		const track = audioStore.currentTrack;
+		if (!track || !track.versionId || track.versionId === 'default') return undefined;
+		return {
+			versionId: track.versionId,
+			title: track.title ?? '',
+			audioUrl: track.url,
+			durationSeconds: track.duration ?? 0
+		};
+	});
 </script>
 
 {#if currentChapter}
-	<Download chapter={currentChapter} size="icon" variant="outline" />
+	<Download chapter={currentChapter} version={currentVersion} size="icon" variant="outline" />
 {/if}

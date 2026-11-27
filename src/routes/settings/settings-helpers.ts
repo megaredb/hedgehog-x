@@ -25,30 +25,6 @@ export {
 	type PlaybackRate
 } from '$lib/settings/values';
 
-export interface MirrorOption {
-	value: MirrorPreference;
-	label: string;
-	description: string;
-}
-
-export const MIRROR_OPTIONS: MirrorOption[] = [
-	{
-		value: 'auto',
-		label: 'Автоматически',
-		description: 'Определение по домену + авто-fallback при сбоях'
-	},
-	{
-		value: 'primary',
-		label: 'Основной CDN',
-		description: 'files.hedgehog-inc.one (глобальный Cloudflare R2)'
-	},
-	{
-		value: 'ru',
-		label: 'RU Прокси',
-		description: 'ru-files.hedgehog-inc.one (прокси)'
-	}
-];
-
 export function getStoredSeekStep(): SeekStep {
 	if (typeof localStorage === 'undefined') return 10;
 	try {

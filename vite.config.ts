@@ -80,7 +80,14 @@ export default defineConfig({
 			}
 		})
 	],
-	server: { allowedHosts: ['hedgehog-inc.localhost', 'preview.hedgehog-inc.localhost'] },
+	server: {
+		allowedHosts: [
+			'hedgehog-inc.localhost',
+			'preview.hedgehog-inc.localhost',
+			'6b4veh-138-124-9-161.a.2na.am',
+			'.serveousercontent.com'
+		]
+	},
 	ssr: {
 		noExternal: ['bits-ui']
 	}

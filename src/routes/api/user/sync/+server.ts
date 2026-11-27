@@ -10,6 +10,7 @@ import {
 	volumes
 } from '$lib/server/db/schema';
 import { createLogger } from '$lib/logger';
+import { normalizeVersionId } from '$lib/audio-version';
 import { boundedText as text, timestampSeconds as time } from '$lib/utils/validation';
 import type { RequestHandler } from './$types';
 
@@ -65,6 +66,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			isNewUser,
 			chapterLikes: userChapterLikes.map((like) => ({
 				chapterId: like.chapterId,
+				versionId: like.versionId,
 				createdAt: like.createdAt?.getTime() || 0
 			})),
 			volumeLikes: userVolumeLikes.map((like) => ({
@@ -73,6 +75,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 			})),
 			listeningProgress: userProgress.map((progress) => ({
 				chapterId: progress.chapterId,
+				versionId: progress.versionId,
 				progressSeconds: progress.progressSeconds,
 				isCompleted: progress.isCompleted || false,
 				updatedAt: progress.updatedAt?.getTime() || 0
@@ -80,7 +83,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 			bookmarks: userBookmarks.map((bookmark) => ({
 				id: bookmark.id,
 				chapterId: bookmark.chapterId,
+				versionId: bookmark.versionId,
 				timestampSeconds: bookmark.timestampSeconds,
+				endTimestampSeconds: bookmark.endTimestampSeconds ?? null,
 				note: bookmark.note || '',
 				createdAt: bookmark.createdAt?.getTime() || 0
 			}))
@@ -133,7 +138,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	const errors: string[] = [];
-	const progress: Array<{ chapterId: string; progressSeconds: number; isCompleted: boolean }> = [];
+	const progress: Array<{
+		chapterId: string;
+		versionId: string;
+		progressSeconds: number;
+		isCompleted: boolean;
+	}> = [];
 	for (const raw of Array.isArray(source.progressUpdates) ? source.progressUpdates : []) {
 		const item = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
 		const chapterId = text(item?.chapterId);
@@ -149,6 +159,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		progress.push({
 			chapterId,
+			versionId: normalizeVersionId(item?.versionId),
 			progressSeconds: Math.floor(progressSeconds),
 			isCompleted: item?.isCompleted === true
 		});
@@ -157,7 +168,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const bookmarkUpdates: Array<{
 		id: string;
 		chapterId: string;
+		versionId: string;
 		timestampSeconds: number;
+		endTimestampSeconds: number | null;
 		note: string;
 		action: 'upsert' | 'delete';
 	}> = [];
@@ -166,13 +179,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const id = text(item?.id);
 		const chapterId = text(item?.chapterId);
 		const timestampSeconds = time(item?.timestampSeconds);
+		const endTimestampSeconds =
+			item?.endTimestampSeconds === null || item?.endTimestampSeconds === undefined
+				? null
+				: time(item.endTimestampSeconds);
 		const note = typeof item?.note === 'string' ? item.note.slice(0, 500) : '';
 		const action = item?.action === 'delete' ? 'delete' : 'upsert';
-		if (!id || !chapterId || (action === 'upsert' && timestampSeconds === null)) {
+		if (!id || (action === 'upsert' && (!chapterId || timestampSeconds === null))) {
 			if (errors.length < 5) errors.push('Invalid bookmark update');
 			continue;
 		}
-		bookmarkUpdates.push({ id, chapterId, timestampSeconds: timestampSeconds ?? 0, note, action });
+		if (
+			action === 'upsert' &&
+			endTimestampSeconds !== null &&
+			endTimestampSeconds <= (timestampSeconds ?? 0)
+		) {
+			if (errors.length < 5) errors.push('Bookmark end must be after start');
+			continue;
+		}
+		bookmarkUpdates.push({
+			id,
+			chapterId: chapterId ?? '',
+			versionId: normalizeVersionId(item?.versionId),
+			timestampSeconds: timestampSeconds ?? 0,
+			endTimestampSeconds: action === 'upsert' ? endTimestampSeconds : null,
+			note,
+			action
+		});
 	}
 
 	const volumeLikeUpdates: Array<{ volumeId: string; action: 'like' | 'unlike' }> = [];
@@ -187,7 +220,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		volumeLikeUpdates.push({ volumeId, action });
 	}
 
-	const chapterLikeUpdates: Array<{ chapterId: string; action: 'like' | 'unlike' }> = [];
+	const chapterLikeUpdates: Array<{
+		chapterId: string;
+		versionId: string;
+		action: 'like' | 'unlike';
+	}> = [];
 	for (const raw of Array.isArray(source.chapterLikeUpdates) ? source.chapterLikeUpdates : []) {
 		const item = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
 		const chapterId = text(item?.chapterId) || text(item?.id);
@@ -196,7 +233,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (errors.length < 5) errors.push('Invalid chapter like update');
 			continue;
 		}
-		chapterLikeUpdates.push({ chapterId, action });
+		chapterLikeUpdates.push({
+			chapterId,
+			versionId: normalizeVersionId(item?.versionId),
+			action
+		});
 	}
 
 	try {
@@ -204,7 +245,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const chapterIds = [
 				...new Set([
 					...progress.map((item) => item.chapterId),
-					...bookmarkUpdates.map((item) => item.chapterId),
+					...bookmarkUpdates
+						.filter((item) => item.action === 'upsert')
+						.map((item) => item.chapterId),
 					...chapterLikeUpdates.map((item) => item.chapterId)
 				])
 			];
@@ -222,11 +265,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const knownVolumeIds = new Set(knownVolumes.map((item) => item.id));
 			const skipped =
 				progress.filter((item) => !knownChapterIds.has(item.chapterId)).length +
-				bookmarkUpdates.filter((item) => !knownChapterIds.has(item.chapterId)).length +
+				bookmarkUpdates.filter(
+					(item) => item.action === 'upsert' && !knownChapterIds.has(item.chapterId)
+				).length +
 				chapterLikeUpdates.filter((item) => !knownChapterIds.has(item.chapterId)).length +
 				volumeLikeUpdates.filter((item) => !knownVolumeIds.has(item.volumeId)).length;
 			const validProgress = progress.filter((item) => knownChapterIds.has(item.chapterId));
-			const validBookmarks = bookmarkUpdates.filter((item) => knownChapterIds.has(item.chapterId));
+			const validBookmarks = bookmarkUpdates.filter(
+				(item) => item.action === 'delete' || knownChapterIds.has(item.chapterId)
+			);
 			const validChapterLikes = chapterLikeUpdates.filter((item) =>
 				knownChapterIds.has(item.chapterId)
 			);
@@ -240,12 +287,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					.values({
 						userId: user.id,
 						chapterId: item.chapterId,
+						versionId: item.versionId,
 						progressSeconds: item.progressSeconds,
 						isCompleted: item.isCompleted,
 						updatedAt: new Date()
 					})
 					.onConflictDoUpdate({
-						target: [listeningProgress.userId, listeningProgress.chapterId],
+						target: [
+							listeningProgress.userId,
+							listeningProgress.chapterId,
+							listeningProgress.versionId
+						],
 						set: {
 							progressSeconds: sql`GREATEST(${listeningProgress.progressSeconds}, ${item.progressSeconds})`,
 							isCompleted: sql`COALESCE(${listeningProgress.isCompleted}, false) OR ${item.isCompleted}`,
@@ -269,7 +321,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					await tx
 						.update(bookmarks)
 						.set({
+							versionId: item.versionId,
 							timestampSeconds: item.timestampSeconds,
+							endTimestampSeconds: item.endTimestampSeconds,
 							note: item.note
 						})
 						.where(and(eq(bookmarks.id, item.id), eq(bookmarks.userId, user.id)));
@@ -278,7 +332,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						id: item.id,
 						userId: user.id,
 						chapterId: item.chapterId,
+						versionId: item.versionId,
 						timestampSeconds: item.timestampSeconds,
+						endTimestampSeconds: item.endTimestampSeconds,
 						note: item.note,
 						createdAt: new Date()
 					});
@@ -302,12 +358,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					await tx
 						.delete(chapterLikes)
 						.where(
-							and(eq(chapterLikes.userId, user.id), eq(chapterLikes.chapterId, item.chapterId))
+							and(
+								eq(chapterLikes.userId, user.id),
+								eq(chapterLikes.chapterId, item.chapterId),
+								eq(chapterLikes.versionId, item.versionId)
+							)
 						);
 				else
 					await tx
 						.insert(chapterLikes)
-						.values({ userId: user.id, chapterId: item.chapterId, createdAt: new Date() })
+						.values({
+							userId: user.id,
+							chapterId: item.chapterId,
+							versionId: item.versionId,
+							createdAt: new Date()
+						})
 						.onConflictDoNothing();
 			}
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Link2Off, Plus, Trash2, UserRound, ShieldAlert, WifiOff } from '@lucide/svelte';
+	import { Link2Off, Plus, LogOut, Trash2, UserRound, ShieldAlert, WifiOff } from '@lucide/svelte';
 	import { online } from 'svelte/reactivity/window';
 	import { Button } from '$lib/components/ui/button';
 	import { useSession } from '$lib/client/session.svelte';
@@ -20,6 +20,9 @@
 		computeDeleteButtons,
 		nextDeleteConfirmPos
 	} from '$lib/delete-confirm';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	const session = useSession();
 	const accounts = useAccounts();
@@ -36,9 +39,13 @@
 		}
 	});
 
-	// Redirect unauthenticated visitors to auth page
+	// Redirect unauthenticated visitors to auth page (only when online)
 	$effect(() => {
-		if (!session.isPending && !session.user) {
+		if (
+			!session.isPending &&
+			!session.user &&
+			(typeof navigator === 'undefined' || navigator.onLine)
+		) {
 			void goto(
 				resolve(`${resolve('/auth')}?from=${encodeURIComponent(resolve('/profile'))}` as '/')
 			);
@@ -50,6 +57,11 @@
 		if (url) {
 			window.location.href = url;
 		}
+	}
+
+	async function signOut() {
+		await session.signOut();
+		if (navigator.onLine) await goto(resolve('/'));
 	}
 
 	const isLinked = (providerId: string) =>
@@ -145,8 +157,12 @@
 		}
 		deleteModalOpen = false;
 		deleting = false;
-		await session.signOut();
-		window.location.href = resolve('/');
+		try {
+			await session.signOut();
+		} catch {
+			// The user and session are already deleted; still clear local state and leave.
+		}
+		if (navigator.onLine) window.location.href = resolve('/');
 	}
 </script>
 
@@ -156,8 +172,16 @@
 </svelte:head>
 
 <div class="mx-auto max-w-2xl p-6">
-	<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
-	<p class="mt-2 text-muted-foreground">Профиль, идентификатор и способы входа.</p>
+	<div class="flex items-start justify-between gap-4">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Мой аккаунт</h1>
+			<p class="mt-2 text-muted-foreground">Профиль, идентификатор и способы входа.</p>
+		</div>
+		<Button variant="outline" size="sm" class="gap-1.5" onclick={signOut}>
+			<LogOut class="h-4 w-4" />
+			Выйти
+		</Button>
+	</div>
 
 	{#if !isOnline}
 		<div
@@ -175,23 +199,37 @@
 		<div class="mt-8 text-sm text-muted-foreground">Загрузка…</div>
 	{:else}
 		{#if session.user}
+			{@const profileSubscription = data.subscription}
 			<!-- Profile card -->
 			<section class="mt-8 rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
 				<div class="flex items-center gap-5">
 					<div
-						class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary ring-2 ring-border/60"
+						class="relative h-20 w-20 shrink-0 rounded-full {profileSubscription?.active
+							? 'p-[3px]'
+							: 'ring-2 ring-border/60'}"
+						style={profileSubscription?.active ? 'background-color: #10b981' : undefined}
 					>
-						{#if session.user.image}
-							<img
-								src={session.user.image}
-								alt={session.user.name}
-								width={80}
-								height={80}
-								fetchpriority="high"
-								class="h-20 w-20 object-cover"
-							/>
-						{:else}
-							<UserRound class="h-9 w-9" />
+						<div
+							class="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary"
+						>
+							{#if session.user.image}
+								<img
+									src={session.user.image}
+									alt={session.user.name}
+									width={80}
+									height={80}
+									fetchpriority="high"
+									class="h-full w-full object-cover"
+								/>
+							{:else}
+								<UserRound class="h-9 w-9" />
+							{/if}
+						</div>
+						{#if profileSubscription?.active}
+							<span
+								class="absolute -right-0.5 -bottom-0.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white ring-2 ring-background"
+								>{profileSubscription.isLifetime ? '∞' : '♛'}</span
+							>
 						{/if}
 					</div>
 					<div class="min-w-0">
@@ -326,7 +364,9 @@
 				</div>
 				<p class="mt-1 text-sm text-muted-foreground">
 					Удаление аккаунта навсегда стирает профиль, способы входа, закладки, прогресс
-					прослушивания и лайки. Действие необратимо.
+					прослушивания и лайки. Подписки и история подписок также обнуляются. Если у вас есть
+					активная подписка Boosty, после повторного входа через Boosty она снова откроет доступ.
+					Действие необратимо.
 				</p>
 				<div class="mt-4">
 					<Button
@@ -346,7 +386,7 @@
 			<BaseModal
 				bind:open={deleteModalOpen}
 				title={DELETE_CONFIRM_TEXTS[deleteConfirmStep]}
-				description="Это действие нельзя отменить. Удаление сотрёт ваш профиль и все данные."
+				description="Это действие нельзя отменить. Удаление сотрёт профиль, подписки и все данные. Активная подписка Boosty не удаляется: после повторного входа через Boosty доступ восстановится."
 				showCloseButton={false}
 			>
 				{#if deleteError}
@@ -396,6 +436,13 @@
 					<p class="mt-3 text-center text-sm text-destructive">{unlinkError}</p>
 				{/if}
 			</ConfirmModal>
+		{:else if !isOnline}
+			<section
+				class="mt-8 rounded-2xl border border-border/60 bg-card p-6 text-sm text-muted-foreground"
+			>
+				Данные профиля недоступны без подключения к сети. Подключитесь к интернету, чтобы войти в
+				аккаунт.
+			</section>
 		{/if}
 	{/if}
 </div>

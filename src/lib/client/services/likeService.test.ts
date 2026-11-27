@@ -210,7 +210,7 @@ describe('likeService (Offline-first likes & sync)', () => {
 			const queue = await mockDb.syncQueue.toArray();
 			assert.equal(queue.length, 1);
 			assert.equal(queue[0].action, 'LIKE_CHAPTER');
-			assert.deepEqual(queue[0].payload, { id: 'ch-1', chapterId: 'ch-1' });
+			assert.deepEqual(queue[0].payload, { id: 'ch-1', chapterId: 'ch-1', versionId: 'default' });
 		});
 
 		it('optimistically unlikes a liked chapter and enqueues UNLIKE_CHAPTER', async () => {
@@ -292,7 +292,13 @@ describe('likeService (Offline-first likes & sync)', () => {
 				{ id: 'vol-1', volumeId: 'vol-1', action: 'like', timestamp: 1000 }
 			]);
 			assert.deepEqual(sentBody.chapterLikeUpdates, [
-				{ id: 'ch-2', chapterId: 'ch-2', action: 'unlike', timestamp: 2000 }
+				{
+					id: 'ch-2',
+					chapterId: 'ch-2',
+					versionId: 'default',
+					action: 'unlike',
+					timestamp: 2000
+				}
 			]);
 
 			// Queue should be cleared
@@ -321,6 +327,37 @@ describe('likeService (Offline-first likes & sync)', () => {
 			const remainingQueue = await mockDb.syncQueue.toArray();
 			assert.equal(remainingQueue.length, 1);
 			assert.equal(remainingQueue[0].action, 'LIKE_VOLUME');
+		});
+
+		it('chunks batches of >100 items and drops permanent 4xx chunks', async () => {
+			for (let i = 0; i < 120; i++) {
+				await mockDb.syncQueue.add({
+					action: 'LIKE_VOLUME',
+					payload: { id: `vol-${i}`, volumeId: `vol-${i}` },
+					timestamp: 1000 + i
+				});
+			}
+
+			const batchSizes: number[] = [];
+			let callCount = 0;
+			const chunkFetch: typeof fetch = async (_input, init) => {
+				callCount++;
+				const body = JSON.parse(String(init?.body || '{}')) as {
+					volumeLikeUpdates: unknown[];
+				};
+				batchSizes.push(body.volumeLikeUpdates.length);
+				// First chunk fails with permanent 400; second chunk succeeds
+				if (callCount === 1) {
+					return new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 });
+				}
+				return new Response(JSON.stringify({ success: true }), { status: 200 });
+			};
+
+			const res = await service.syncLikesQueue(chunkFetch);
+			assert.deepEqual(batchSizes, [100, 20]);
+			assert.equal(res.synced, 20);
+			const remaining = await mockDb.syncQueue.toArray();
+			assert.equal(remaining.length, 0);
 		});
 	});
 

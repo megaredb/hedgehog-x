@@ -6,9 +6,10 @@
 
 	interface Props {
 		class?: string;
+		markers?: Array<{ id: string; percent: number; endPercent?: number; note?: string }>;
 	}
 
-	let { class: className = '' }: Props = $props();
+	let { class: className = '', markers = [] }: Props = $props();
 
 	const isLiveStream = $derived(htmlAudio.isLive(audioStore.duration));
 
@@ -60,6 +61,7 @@
 	disabled={isLiveStream}
 	value={progress()}
 	bufferValue={bufferedProgress()}
+	{markers}
 	onValueChange={handleValueChange}
 	onMouseMove={handleMouseMove}
 	onTouchStart={handleTouchStart}

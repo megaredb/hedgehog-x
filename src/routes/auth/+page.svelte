@@ -30,6 +30,14 @@
 	$effect(() => {
 		if (session.user) return;
 		const params = page.url.searchParams;
+		if (params.get('blocked')) {
+			errorMessage = 'Аккаунт заблокирован администратором. Вход временно недоступен.';
+			errorModalOpen = true;
+			const url = new URL(window.location.href);
+			url.searchParams.delete('blocked');
+			window.history.replaceState({}, '', url);
+			return;
+		}
 		const err = params.get('error') ?? params.get('error_description');
 		if (err) {
 			errorMessage =
@@ -83,7 +91,10 @@
 
 	async function signOut() {
 		await session.signOut();
-		await goto(resolve('/'));
+		// Offline navigation to the SSR home page would land on the browser error
+		// page. Local state is already cleared, so staying on /auth is the safe
+		// logged-out fallback until connectivity returns.
+		if (navigator.onLine) await goto(resolve('/'));
 	}
 </script>
 

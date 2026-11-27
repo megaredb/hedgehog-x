@@ -12,7 +12,7 @@ function matchesBearerToken(headerValue: string | null, expectedToken: string): 
 }
 
 /**
- * Minimal internal metrics endpoint. Admin session or METRICS_TOKEN is required;
+ * Minimal internal metrics endpoint. Full admin session or METRICS_TOKEN is required;
  * no user content or identifiers are exposed.
  */
 export const GET: RequestHandler = async ({ locals, request }) => {

@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	/* eslint-disable svelte/no-navigation-without-resolve */
+	import { goto, replaceState as replaceShallowState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { normalizeVersionId } from '$lib/audio-version';
 	import {
 		db,
 		type OfflineBook,
@@ -32,7 +34,14 @@
 
 	let { data } = $props();
 
-	let activeTab = $state<'chapters' | 'bookmarks' | 'illustrations' | 'comments'>('chapters');
+	type VolumeTab = 'chapters' | 'bookmarks' | 'illustrations' | 'comments';
+	const queryTab = page.url.searchParams.get('tab');
+	let activeTab = $state<VolumeTab>(
+		queryTab === 'bookmarks' || queryTab === 'illustrations' || queryTab === 'comments'
+			? queryTab
+			: 'chapters'
+	);
+	let selectedVersionId = $state(page.url.searchParams.get('version') ?? 'default');
 	let isCompletionModalOpen = $state(false);
 
 	const volumeQuery = useDexie(
@@ -68,9 +77,18 @@
 		}
 	);
 	const volume = $derived(volumeQuery.data ?? serverData.volume);
-	const chapters = $derived(
-		chaptersQuery.data.length > 0 ? chaptersQuery.data : (serverData.chapters ?? [])
-	);
+	const chapters = $derived.by(() => {
+		if (chaptersQuery.data.length === 0) return serverData.chapters ?? [];
+		const authoritative = new Map(
+			(serverData.chapters ?? []).map((chapter) => [chapter.id, chapter.durationSeconds])
+		);
+		return chaptersQuery.data.map((chapter) => {
+			const durationSeconds = authoritative.get(chapter.id);
+			return durationSeconds != null && durationSeconds > 0
+				? { ...chapter, durationSeconds }
+				: chapter;
+		});
+	});
 	const volumeBookmarksQuery = useDexie(
 		() => {
 			const chapterIds = chapters.map((chapter) => chapter.id);
@@ -85,6 +103,75 @@
 		allBookVolumesQuery.data.length > 0 ? allBookVolumesQuery.data : (serverData.volumes ?? [])
 	);
 	const volumeBookmarks = $derived(volumeBookmarksQuery.data);
+	const audioVersions = $derived(data.audioVersions ?? []);
+	const chapterVersions = $derived(data.chapterVersions ?? []);
+	const chapterVersionLikes = $derived(data.chapterVersionLikes ?? []);
+	const hasAlternativeVersions = $derived(
+		chapterVersions.some((version) => version.versionId !== 'default')
+	);
+	const versionOptions = $derived([
+		{ id: 'default', label: 'Новая версия', description: 'Текущая озвучка' },
+		...(hasAlternativeVersions
+			? audioVersions
+					.filter((version) => version.id !== 'default')
+					.map((version) => ({
+						id: version.id,
+						label: version.id === 'old' ? 'Старая версия' : version.label,
+						description: version.description ?? ''
+					}))
+			: [])
+	]);
+
+	function handleVersionChange(versionId: string) {
+		if (versionId === selectedVersionId) return;
+		selectedVersionId = versionId;
+	}
+
+	$effect(() => {
+		if (!versionOptions.some((version) => version.id === selectedVersionId)) {
+			selectedVersionId = 'default';
+		}
+	});
+
+	let lastWrittenUrl = $state(page.url.pathname + page.url.search + page.url.hash);
+
+	$effect(() => {
+		const current = new URL(window.location.href);
+		const next = new URL(current);
+		if (activeTab === 'chapters') next.searchParams.delete('tab');
+		else next.searchParams.set('tab', activeTab);
+		if (selectedVersionId === 'default') next.searchParams.delete('version');
+		else next.searchParams.set('version', selectedVersionId);
+		const target = next.pathname + next.search + next.hash;
+		if (target === lastWrittenUrl) return;
+		lastWrittenUrl = target;
+		// Tab/version changes are client state. Update the query shallowly instead
+		// of running a full SvelteKit navigation and reloading the page data.
+		replaceShallowState(target, page.state);
+	});
+
+	// Handle deep links from bookmarks/history/downloads: ?chapter=...&version=...
+	let handledChapterAnchor = '';
+	$effect(() => {
+		if (chaptersQuery.isLoading || chapters.length === 0) return;
+		const chapterId =
+			page.url.searchParams.get('chapter') || page.url.hash.replace(/^#chapter-/, '');
+		const versionId = page.url.searchParams.get('version');
+		if (!chapterId) return;
+		if (versionId && versionOptions.some((version) => version.id === versionId)) {
+			selectedVersionId = versionId;
+		}
+		const key = `${chapterId}:${versionId ?? selectedVersionId}`;
+		if (handledChapterAnchor === key) return;
+		handledChapterAnchor = key;
+		activeTab = 'chapters';
+		setTimeout(() => {
+			document.getElementById(`chapter-${chapterId}`)?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center'
+			});
+		}, 100);
+	});
 
 	// Handle `?ch={chapterId}&t={seconds}` URL query parameters on initial load
 	let handledUrlParamsForVolumeId: string | null = null;
@@ -108,14 +195,20 @@
 			url: c.audioUrl,
 			title: c.title,
 			duration: c.durationSeconds,
+			versionId: 'default',
 			artwork: volume.coverUrl,
+			blurhash: volume.blurhash,
 			album: volume.title,
 			volumeId: volume.id,
 			bookId: data.bookId,
 			startTime: c.id === targetChapter.id ? seekTime : 0
 		}));
 
-		if (audioStore.currentTrack?.id === targetChapter.id) {
+		if (
+			audioStore.currentTrack?.id === targetChapter.id &&
+			!audioStore.currentTrack.broadcastId &&
+			normalizeVersionId(audioStore.currentTrack.versionId) === 'default'
+		) {
 			if (seekTime > 0) {
 				audioStore.seek(seekTime, false);
 			}
@@ -189,28 +282,75 @@
 
 <main class="layout-content mx-auto max-w-5xl py-4 md:py-8">
 	<!-- Volume header -->
-	<VolumeHeader {volume} {chapters} {book} bookId={data.bookId} isLoading={volumeQuery.isLoading} />
+	<VolumeHeader
+		{volume}
+		{chapters}
+		{book}
+		bookId={data.bookId}
+		isLoading={volumeQuery.isLoading}
+		{chapterVersions}
+	/>
 
 	<!-- Volume tab navigation: Chapters / Illustrations / Discussion -->
 	<Tabs.Root bind:value={activeTab} class="w-full">
-		<Tabs.List class="mx-auto mb-6 grid w-full max-w-lg grid-cols-4 rounded-xl bg-muted/60 p-1">
-			<Tabs.Trigger value="chapters" class="gap-1.5 text-xs sm:text-sm">
-				<Headphones class="h-4 w-4" />
-				<span>{strings.volume.chaptersTab} ({chapters.length})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="bookmarks" class="gap-1.5 text-xs sm:text-sm">
-				<BookmarkIcon class="h-4 w-4" />
-				<span>{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="illustrations" class="gap-1.5 text-xs sm:text-sm">
-				<ImageIcon class="h-4 w-4" />
-				<span>{strings.volume.illustrationsTab}</span>
-			</Tabs.Trigger>
-			<Tabs.Trigger value="comments" class="gap-1.5 text-xs sm:text-sm">
-				<MessageSquare class="h-4 w-4" />
-				<span>{strings.volume.commentsTab}</span>
-			</Tabs.Trigger>
-		</Tabs.List>
+		<div class="mb-5 flex flex-col gap-2.5 lg:flex-row lg:items-center">
+			<Tabs.List
+				class="order-1 grid w-full grid-cols-4 gap-0.5 rounded-xl bg-muted/60 p-0.5 sm:gap-1 sm:p-1 lg:order-1 lg:flex-1"
+			>
+				<Tabs.Trigger
+					value="chapters"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+				>
+					<Headphones class="hidden h-4 w-4 shrink-0 sm:block" />
+					<span class="truncate">{strings.volume.chaptersTab} ({chapters.length})</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="bookmarks"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+				>
+					<BookmarkIcon class="hidden h-4 w-4 shrink-0 sm:block" />
+					<span class="truncate">{strings.volume.bookmarksTab} ({volumeBookmarks.length})</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="illustrations"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+				>
+					<ImageIcon class="hidden h-4 w-4 shrink-0 sm:block" />
+					<span class="truncate">{strings.volume.illustrationsTab}</span>
+				</Tabs.Trigger>
+				<Tabs.Trigger
+					value="comments"
+					class="w-full min-w-0 justify-center gap-1 px-1 text-[10px] leading-tight sm:gap-1.5 sm:px-2 sm:text-sm"
+				>
+					<MessageSquare class="hidden h-4 w-4 shrink-0 sm:block" />
+					<span class="truncate">{strings.volume.commentsTab}</span>
+				</Tabs.Trigger>
+			</Tabs.List>
+
+			{#if versionOptions.length > 1}
+				<div
+					class="order-2 flex w-full items-center gap-1 rounded-xl border border-border/60 bg-card/60 p-1 lg:order-2 lg:w-auto lg:shrink-0"
+					role="radiogroup"
+					aria-label="Версия озвучки"
+				>
+					{#each versionOptions as version (version.id)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={selectedVersionId === version.id}
+							class="h-8 flex-1 rounded-lg px-3 text-xs font-semibold whitespace-nowrap transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden lg:flex-none {selectedVersionId ===
+							version.id
+								? 'bg-primary text-primary-foreground'
+								: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+							onclick={() => handleVersionChange(version.id)}
+							title={version.description}
+						>
+							{version.label}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
 
 		<!-- Tab 1: Chapters -->
 		<Tabs.Content value="chapters" class="outline-none">
@@ -219,6 +359,10 @@
 				{chapters}
 				bookId={data.bookId}
 				isLoading={chaptersQuery.isLoading}
+				{selectedVersionId}
+				{chapterVersions}
+				{chapterVersionLikes}
+				serverProgress={data.serverProgress}
 			/>
 		</Tabs.Content>
 
@@ -230,12 +374,17 @@
 				{volume}
 				{book}
 				bookId={data.bookId}
+				{chapterVersions}
 			/>
 		</Tabs.Content>
 
 		<!-- Tab 3: Illustrations -->
 		<Tabs.Content value="illustrations" class="outline-none">
-			<VolumeIllustrationsTab volumeId={data.volumeId} />
+			<VolumeIllustrationsTab
+				volumeId={data.volumeId}
+				timings={data.chapterIllustrationTimings}
+				serverProgress={data.serverProgress}
+			/>
 		</Tabs.Content>
 
 		<!-- Tab 3: Volume Discussion -->
@@ -265,5 +414,6 @@
 	bind:open={isCompletionModalOpen}
 	currentVolume={volume}
 	{nextVolume}
+	support={data.support}
 	onPlayNextVolume={handlePlayNextVolume}
 />

@@ -13,7 +13,6 @@ import {
 	setStoredAutoAdvance,
 	SEEK_STEPS,
 	PLAYBACK_RATES,
-	MIRROR_OPTIONS,
 	SEEK_STEP_STORAGE_KEY,
 	AUTO_ADVANCE_STORAGE_KEY,
 	PLAYBACK_RATE_STORAGE_KEY
@@ -22,6 +21,7 @@ import {
 	getMirrorPreference,
 	setMirrorPreference,
 	getActiveMirrorHost,
+	getMirrorOptions,
 	MIRROR_STORAGE_KEY,
 	PRIMARY_CDN_HOST,
 	RU_CDN_HOST
@@ -209,10 +209,13 @@ describe('Settings Center Utilities & Formatters', () => {
 	});
 
 	describe('CDN Mirror preference & active host', () => {
-		it('provides three mirror options: auto, primary, ru', () => {
-			assert.equal(MIRROR_OPTIONS.length, 3);
-			const values = MIRROR_OPTIONS.map((o) => o.value);
-			assert.deepEqual(values, ['auto', 'primary', 'ru']);
+		it('provides default mirror options: auto, primary, ru', () => {
+			const options = getMirrorOptions();
+			assert.equal(options.length, 3);
+			assert.deepEqual(
+				options.map((option) => option.value),
+				['auto', 'primary', 'ru']
+			);
 		});
 
 		it('saves and reads mirror preference', () => {

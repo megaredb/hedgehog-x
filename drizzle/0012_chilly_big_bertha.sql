@@ -1,0 +1,1 @@
+ALTER TABLE "bookmarks" ADD COLUMN "end_timestamp_seconds" integer;
