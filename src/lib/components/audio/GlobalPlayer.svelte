@@ -229,7 +229,7 @@
 
 {#snippet shortBookInfo()}
 	<!-- Book info — tapping navigates to the volume page -->
-	<div class="flex h-fit max-w-[min(42vw,560px)] min-w-0 items-center gap-2">
+	<div class="flex h-fit max-w-[min(21vw,280px)] min-w-0 items-center gap-2">
 		{#if volumeHref}
 			<a
 				href={resolve(volumeHref as '/')}
@@ -488,22 +488,24 @@
 						<Drawer.Header
 							class="p-0 text-center max-lg:landscape:col-start-2 max-lg:landscape:row-start-1 max-lg:landscape:text-left"
 						>
-							{#if volumeHref}
-								<a href={resolve(volumeHref as '/')} class="hover:underline">
+							<div class="relative mx-auto inline-block max-w-full max-lg:landscape:mx-0">
+								{#if volumeHref}
+									<a href={resolve(volumeHref as '/')} class="hover:underline">
+										<Drawer.Title class="text-base font-semibold">
+											{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
+										</Drawer.Title>
+									</a>
+								{:else}
 									<Drawer.Title class="text-base font-semibold">
 										{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 									</Drawer.Title>
-								</a>
-							{:else}
-								<Drawer.Title class="text-base font-semibold">
-									{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
-								</Drawer.Title>
-							{/if}
+								{/if}
+								<span class="absolute -top-1 -right-2">{@render sourceBadge()}</span>
+							</div>
 							<Drawer.Description
 								class="flex items-center justify-center gap-1.5 text-sm max-lg:landscape:justify-start"
 							>
 								<span>{audioStore.currentTrack?.title ?? strings.player.chapterFallback}</span>
-								{@render sourceBadge()}
 							</Drawer.Description>
 						</Drawer.Header>
 

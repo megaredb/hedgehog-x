@@ -428,14 +428,7 @@ class HtmlAudio {
 		this.ifClient(() => {
 			const audio = this.ensureAudio();
 			if (audio.muted === muted) return;
-			if (muted) {
-				if (audio.volume > 0) this.lastVolume = audio.volume;
-				this.fadeVolume({ audio, targetVolume: 0, duration: 200 });
-				audio.muted = true;
-			} else {
-				audio.muted = false;
-				this.fadeVolume({ audio, targetVolume: this.lastVolume, duration: 200 });
-			}
+			audio.muted = muted;
 		});
 	}
 
