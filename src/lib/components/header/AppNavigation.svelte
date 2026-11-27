@@ -20,6 +20,7 @@
 		ShieldCheck,
 		Users
 	} from '@lucide/svelte';
+	import LiveBars from '$lib/components/broadcasts/LiveBars.svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
@@ -514,27 +515,12 @@
 						</div>{/if}
 					<span class="absolute top-0.5 right-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-white"
 					></span>
-					<span
-						class="absolute inset-x-0 bottom-0 flex h-2 items-end justify-center gap-[1px] bg-black/30"
+					<div
+						class="absolute inset-x-0 bottom-0 flex justify-center bg-black/30 py-0.5"
 						aria-hidden="true"
 					>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white/90"
-							style="height:3px; animation-delay:0ms"
-						></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white/90"
-							style="height:5px; animation-delay:120ms"
-						></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white/90"
-							style="height:2px; animation-delay:240ms"
-						></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white/90"
-							style="height:4px; animation-delay:360ms"
-						></span>
-					</span>
+						<LiveBars tone="light" class="scale-75" />
+					</div>
 				</div>
 				<div class="min-w-0 flex-1">
 					<p

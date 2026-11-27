@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { useSession } from '$lib/client/session.svelte';
+	import LiveBars from '$lib/components/broadcasts/LiveBars.svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import {
 		BookOpen,
@@ -145,22 +146,10 @@
 				{/if}
 				{#if activeBroadcast.kind === 'live'}
 					<span
-						class="absolute inset-x-0 bottom-0 flex h-2.5 items-end justify-center gap-[1px] bg-black/45"
+						class="absolute inset-x-0 bottom-0 flex justify-center bg-black/45"
 						aria-hidden="true"
 					>
-						<span class="w-[1px] animate-pulse rounded-full bg-white" style="height:4px"></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white"
-							style="height:7px; animation-delay:120ms"
-						></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white"
-							style="height:3px; animation-delay:240ms"
-						></span>
-						<span
-							class="w-[1px] animate-pulse rounded-full bg-white"
-							style="height:5px; animation-delay:360ms"
-						></span>
+						<LiveBars class="scale-75" />
 					</span>
 				{/if}
 			</a>
