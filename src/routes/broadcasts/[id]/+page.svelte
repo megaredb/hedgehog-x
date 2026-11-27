@@ -1903,14 +1903,14 @@
 												{#if message.replyToId}
 													<button
 														type="button"
-														class="mb-1.5 w-full rounded-lg border-l-2 border-primary/60 bg-background/30 px-2 py-1 text-left transition hover:bg-muted/40"
+														class="reply-preview mb-1.5 w-full rounded-lg border-l-2 border-primary/60 bg-background/30 px-2 py-1 text-left transition hover:bg-muted/40"
 														onclick={() => scrollToMessage(message.replyToId)}
 													>
 														<p class="text-[9px] font-semibold text-primary">
 															{message.replyToName ?? 'Сообщение'}
 														</p>
 														<p
-															class="line-clamp-1 text-[9px] whitespace-pre-wrap text-muted-foreground"
+															class="reply-preview-body text-[9px] whitespace-pre-wrap text-muted-foreground"
 														>
 															{message.replyToBody ?? ''}
 														</p>
@@ -2226,6 +2226,18 @@
 		align-self: flex-start;
 		height: auto;
 		min-height: 0;
+	}
+
+	.reply-preview {
+		max-height: 3.5rem;
+		overflow: hidden;
+	}
+
+	.reply-preview-body {
+		display: block;
+		height: 1.05rem;
+		overflow: hidden;
+		line-height: 1.05rem;
 	}
 
 	.chat-scroll {
