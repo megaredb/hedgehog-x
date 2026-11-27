@@ -34,6 +34,7 @@
 		Trash2,
 		Users
 	} from '@lucide/svelte';
+	import { formatMoscowDateTime, formatMoscowLocalDateTimeInput } from '$lib/utils/time';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -51,8 +52,7 @@
 	let activeFilter = $state<'all' | 'live' | 'scheduled' | 'ended'>('all');
 
 	function toLocalInput(date: Date): string {
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+		return formatMoscowLocalDateTimeInput(date);
 	}
 
 	function defaultStart(): string {
@@ -147,14 +147,7 @@
 	}
 
 	function formatDate(value: Date | string | null): string {
-		if (!value) return '—';
-		return new Date(value).toLocaleString('ru-RU', {
-			day: '2-digit',
-			month: '2-digit',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
+		return formatMoscowDateTime(value);
 	}
 
 	resetForm();

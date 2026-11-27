@@ -15,6 +15,7 @@ import {
 import { user } from '$lib/server/db/auth.schema';
 import { requireAdmin } from '$lib/server/admin';
 import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
+import { parseMoscowLocalDateTime } from '$lib/utils/time';
 import {
 	ACTIVE_LISTENER_WINDOW_MS,
 	broadcastKind,
@@ -252,7 +253,9 @@ export const actions: Actions = {
 			}
 		}
 		const scheduledRaw = text(form, 'scheduledStartAt', 64);
-		const scheduledStartAt = scheduledRaw ? new Date(scheduledRaw) : new Date(Number.NaN);
+		const scheduledStartAt = scheduledRaw
+			? (parseMoscowLocalDateTime(scheduledRaw) ?? new Date(Number.NaN))
+			: new Date(Number.NaN);
 		if (!chapterId || !title) return fail(400, { error: 'Выберите главу и укажите название' });
 		if (Number.isNaN(scheduledStartAt.getTime())) {
 			return fail(400, { error: 'Укажите корректное время начала' });

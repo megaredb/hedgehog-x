@@ -291,7 +291,8 @@ manual_expires_at > now || telegram.active || discord.active)`.
 - `/admin` — counts + активные подписчики + recent books.
 - `/admin/content` — 13 actions: книги/тома/главы (published)/версии/
   иллюстрации и тайминги; R2-пикер, media lightbox, поиск, без пагинации.
-- `/admin/broadcasts` — создание эфира на главе, расписание, флаги
+- `/admin/broadcasts` — создание эфира на главе, расписание (datetime-local
+  вводится и показывается в Europe/Moscow, в БД хранится UTC), флаги
   `saveRecording/publishAfterEnd/chatEnabled`, старт (публикует главу),
   конец (автопубликация), publish, delete, статистика.
 - `/admin/users` — роли, автор, includeInStats, подписка (grant/revoke/
