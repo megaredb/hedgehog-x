@@ -38,6 +38,7 @@
 	.marquee-text {
 		display: block;
 		min-width: 0;
+		max-width: 100%;
 		overflow: hidden;
 		white-space: nowrap;
 		-webkit-mask-image: linear-gradient(
@@ -57,7 +58,8 @@
 	}
 
 	.marquee-track {
-		display: inline-block;
+		display: block;
+		width: max-content;
 		min-width: 100%;
 		will-change: transform;
 	}
@@ -67,7 +69,9 @@
 	}
 
 	.marquee-text:not(.is-overflow) .marquee-track {
-		display: block;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
