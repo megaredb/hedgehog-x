@@ -494,8 +494,8 @@
 			</CardContent>
 		</Card>
 
-		<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-			<div class="space-y-4">
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+			<div class="min-w-0 space-y-4">
 				<Card class="border-border/60">
 					<CardHeader class="pb-3"
 						><CardTitle class="text-base">Что даёт подписка</CardTitle></CardHeader
@@ -696,7 +696,7 @@
 				</Card>
 			</div>
 
-			<aside class="space-y-4">
+			<aside class="min-w-0 space-y-4">
 				<Card class="border-border/60">
 					<CardHeader class="pb-3"
 						><CardTitle class="flex items-center gap-2 text-sm"
