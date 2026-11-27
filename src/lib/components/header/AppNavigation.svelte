@@ -6,6 +6,7 @@
 		ArrowUpRight,
 		BookOpen,
 		Bookmark,
+		CalendarClock,
 		Crown,
 		Download,
 		Heart,
@@ -35,37 +36,56 @@
 		Boolean(session.user) && Boolean(page.data.subscriptionLifetime)
 	);
 
-	type LiveBroadcastInfo = {
+	type BroadcastInfo = {
 		id: string;
 		title: string;
 		coverUrl: string | null;
 		listeners: number;
 		kind: string;
+		scheduledStartAt: string;
 	};
-	let liveBroadcast = $state<LiveBroadcastInfo | null>(null);
-	let liveTimer: ReturnType<typeof setInterval> | null = null;
+	let activeBroadcast = $state<BroadcastInfo | null>(null);
+	let broadcastTimer: ReturnType<typeof setInterval> | null = null;
 
-	async function refreshLiveBroadcast() {
+	const liveBroadcast = $derived(activeBroadcast?.kind === 'live' ? activeBroadcast : null);
+	const scheduledBroadcast = $derived(
+		activeBroadcast?.kind === 'scheduled' ? activeBroadcast : null
+	);
+
+	async function refreshActiveBroadcast() {
 		try {
 			const res = await fetch('/api/broadcasts/active', { cache: 'no-store' });
 			if (!res.ok) return;
 			const payload = await res.json();
-			liveBroadcast = payload.broadcast?.kind === 'live' ? payload.broadcast : null;
+			const next = payload.broadcast;
+			activeBroadcast = next?.kind === 'live' || next?.kind === 'scheduled' ? next : null;
 		} catch {
 			// The menu is usable even if the broadcast endpoint is unavailable.
 		}
 	}
 
+	function formatScheduledAt(value: string): string {
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return 'Скоро';
+		return new Intl.DateTimeFormat('ru-RU', {
+			day: 'numeric',
+			month: 'long',
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'Europe/Moscow'
+		}).format(date);
+	}
+
 	onMount(() => {
-		void refreshLiveBroadcast();
-		liveTimer = setInterval(refreshLiveBroadcast, 10_000);
+		void refreshActiveBroadcast();
+		broadcastTimer = setInterval(refreshActiveBroadcast, 10_000);
 		return () => {
-			if (liveTimer) clearInterval(liveTimer);
+			if (broadcastTimer) clearInterval(broadcastTimer);
 		};
 	});
 
 	onDestroy(() => {
-		if (liveTimer) clearInterval(liveTimer);
+		if (broadcastTimer) clearInterval(broadcastTimer);
 	});
 
 	let y = $state(0);
@@ -408,6 +428,37 @@
 			<span class="relative truncate text-sm font-bold tracking-tight">Мой Premium</span>
 			<ArrowUpRight class="relative ml-auto h-3.5 w-3.5 text-white/80" />
 		</a>
+
+		{#if scheduledBroadcast}
+			<a
+				href={resolve('/broadcasts/[id]', { id: scheduledBroadcast.id })}
+				onclick={onLinkClick}
+				class="mb-2.5 flex items-center gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-foreground shadow-[0_8px_20px_rgba(245,158,11,0.12)] transition hover:bg-amber-500/15"
+			>
+				<div class="relative h-9 w-6 shrink-0 overflow-hidden rounded bg-amber-500/15">
+					{#if scheduledBroadcast.coverUrl}<img
+							src={scheduledBroadcast.coverUrl}
+							alt=""
+							class="h-full w-full object-cover"
+						/>{:else}<div class="flex h-full w-full items-center justify-center">
+							<CalendarClock class="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+						</div>{/if}
+				</div>
+				<div class="min-w-0 flex-1">
+					<p
+						class="flex items-center gap-1 text-[8px] font-bold tracking-[0.08em] text-amber-700 uppercase dark:text-amber-300"
+					>
+						<CalendarClock class="h-2.5 w-2.5" />
+						Запланировано
+					</p>
+					<p class="mt-0.5 truncate text-[10px] font-bold">{scheduledBroadcast.title}</p>
+					<p class="truncate text-[8px] text-muted-foreground">
+						{formatScheduledAt(scheduledBroadcast.scheduledStartAt)}
+					</p>
+				</div>
+				<ArrowUpRight class="h-3.5 w-3.5 text-muted-foreground" />
+			</a>
+		{/if}
 
 		{#if liveBroadcast}
 			<a
