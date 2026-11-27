@@ -456,7 +456,7 @@
 
 							<!-- Track info — takes remaining space, truncates -->
 							<div class="flex min-w-0 flex-1 flex-col text-left">
-								<p class="flex items-center gap-1.5 text-sm leading-tight font-medium">
+								<p class="flex max-w-[50%] items-center gap-1.5 text-sm leading-tight font-medium">
 									<MarqueeText
 										class="min-w-0 flex-1"
 										text={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
@@ -488,19 +488,23 @@
 						<Drawer.Header
 							class="p-0 text-center max-lg:landscape:col-start-2 max-lg:landscape:row-start-1 max-lg:landscape:text-left"
 						>
-							<div class="relative mx-auto inline-block max-w-full max-lg:landscape:mx-0">
-								{#if volumeHref}
-									<a href={resolve(volumeHref as '/')} class="hover:underline">
-										<Drawer.Title class="text-base font-semibold">
+							<div
+								class="mx-auto flex max-w-full items-start justify-center gap-2 max-lg:landscape:mx-0 max-lg:landscape:justify-start"
+							>
+								<div class="max-w-full min-w-0">
+									{#if volumeHref}
+										<a href={resolve(volumeHref as '/')} class="block min-w-0 hover:underline">
+											<Drawer.Title class="block max-w-full text-base font-semibold">
+												{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
+											</Drawer.Title>
+										</a>
+									{:else}
+										<Drawer.Title class="block max-w-full text-base font-semibold">
 											{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 										</Drawer.Title>
-									</a>
-								{:else}
-									<Drawer.Title class="text-base font-semibold">
-										{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
-									</Drawer.Title>
-								{/if}
-								<span class="absolute -top-1 -right-2">{@render sourceBadge()}</span>
+									{/if}
+								</div>
+								<span class="mt-1 shrink-0">{@render sourceBadge()}</span>
 							</div>
 							<Drawer.Description
 								class="flex items-center justify-center gap-1.5 text-sm max-lg:landscape:justify-start"
@@ -680,7 +684,7 @@
 				/>
 			</div>
 		</div>
-		<Dialog.Footer class="flex gap-2 sm:justify-end">
+		<Dialog.Footer class="flex flex-wrap gap-2 sm:justify-end">
 			<Button variant="outline" onclick={() => (isBookmarkModalOpen = false)}>
 				{strings.common.cancel}
 			</Button>
