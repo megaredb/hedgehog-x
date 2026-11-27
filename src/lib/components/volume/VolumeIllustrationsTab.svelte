@@ -7,7 +7,7 @@
 	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { Image as ImageIcon, Lock, ZoomIn } from '@lucide/svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
-	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { isBroadcastProgressKey, splitAudioVersionKey } from '$lib/audio-version';
 	import { isIllustrationChapterLocked } from '$lib/volume/illustration-lock';
 
@@ -62,26 +62,12 @@
 		}
 		return played;
 	});
-	const currentTiming = $derived.by(() => {
-		const chapterId = String(audioStore.currentTrack?.id ?? '');
-		const map = new SvelteMap<string, number>();
-		if (!chapterId) return map;
-		for (const timing of timings) {
-			if (timing.chapterId === chapterId) map.set(timing.illustrationId, timing.showAtSeconds);
-		}
-		return map;
-	});
 	function isChapterLocked(item: OfflineIllustration): boolean {
 		return isIllustrationChapterLocked(item.id, timings, playedChapterIds);
 	}
 
-	function isTimingLocked(item: OfflineIllustration): boolean {
-		const showAt = currentTiming.get(item.id);
-		return showAt !== undefined && showAt > audioStore.currentTime;
-	}
-
 	function isLocked(item: OfflineIllustration): boolean {
-		return !showAllIllustrations && (isChapterLocked(item) || isTimingLocked(item));
+		return !showAllIllustrations && Boolean(item);
 	}
 
 	function lockLabel(item: OfflineIllustration): string {
@@ -123,7 +109,11 @@
 				<ImageIcon class="h-4 w-4 text-primary" />
 				{showAllIllustrations ? 'Заблюрить иллюстрации' : 'Разблюрить иллюстрации'}
 			</span>
-			<Switch bind:checked={showAllIllustrations} aria-label="Разблюрить иллюстрации" />
+			<Switch
+				checked={showAllIllustrations}
+				onCheckedChange={(checked) => (showAllIllustrations = checked)}
+				aria-label="Разблюрить иллюстрации"
+			/>
 		</label>
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each illustrationsQuery.data as ill (ill.id)}

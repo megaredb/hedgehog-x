@@ -2009,7 +2009,7 @@
 															type="button"
 															class="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] text-muted-foreground transition hover:bg-muted hover:text-foreground {kind ===
 															'published'
-																? 'hidden'
+																? '!hidden'
 																: ''}"
 															onclick={() => setReplyTo(message)}
 															aria-label="Ответить"><Reply class="h-3 w-3" /> Ответить</button
