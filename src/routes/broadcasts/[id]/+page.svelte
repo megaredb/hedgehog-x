@@ -1280,25 +1280,29 @@
 				{/if}
 			</div>
 		{/snippet}
-		<div class="absolute top-3 right-3 z-50 hidden flex-col items-end gap-2 lg:flex landscape:flex">
-			<button
-				type="button"
-				class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
-				onclick={toggleExpanded}
-				aria-label={isExpanded ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-				>{#if isExpanded}<Minimize2 class="h-4 w-4" />{:else}<Maximize2
-						class="h-4 w-4"
-					/>{/if}</button
+		{#if isChatCollapsed}
+			<div
+				class="absolute top-3 right-3 z-50 hidden flex-col items-end gap-2 lg:flex landscape:flex"
 			>
-			{#if isChatCollapsed}
 				<button
 					type="button"
 					class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
-					onclick={showChat}
-					aria-label="Открыть чат"><MessageCircle class="h-4 w-4" /></button
+					onclick={toggleExpanded}
+					aria-label={isExpanded ? 'Выйти из полноэкранного режима' : 'На весь экран'}
+					>{#if isExpanded}<Minimize2 class="h-4 w-4" />{:else}<Maximize2
+							class="h-4 w-4"
+						/>{/if}</button
 				>
-			{/if}
-		</div>
+				{#if isChatCollapsed}
+					<button
+						type="button"
+						class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+						onclick={showChat}
+						aria-label="Открыть чат"><MessageCircle class="h-4 w-4" /></button
+					>
+				{/if}
+			</div>
+		{/if}
 		<div
 			class="absolute inset-x-2 top-2 z-40 hidden items-center gap-0.5 rounded-xl border border-white/15 bg-black/55 p-1 text-white backdrop-blur-md lg:hidden portrait:flex landscape:hidden"
 		>
