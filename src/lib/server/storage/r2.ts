@@ -5,6 +5,7 @@ import {
 	GetObjectCommand,
 	ListObjectsV2Command
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import sharp from 'sharp';
 import { encode } from 'blurhash';
 import { randomUUID } from 'node:crypto';
@@ -136,6 +137,23 @@ export async function getMediaObject(key: string, range?: string) {
 }
 
 const MEDIA_PROXY_BASE = '/api/media';
+
+/** Direct-to-R2 fallback used when the public CDN does not have an object. */
+export async function getPresignedMediaUrl(
+	key: string,
+	expiresIn = 6 * 60 * 60
+): Promise<string | null> {
+	const r2 = getS3Client();
+	if (!r2) return null;
+	try {
+		return await getSignedUrl(r2.client, new GetObjectCommand({ Bucket: r2.bucket, Key: key }), {
+			expiresIn
+		});
+	} catch (error) {
+		log.warn('Failed to presign media URL:', error);
+		return null;
+	}
+}
 
 /**
  * Stores media as canonical /api/media URLs so the admin "Через сайт" toggle
