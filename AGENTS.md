@@ -1,217 +1,311 @@
-# AGENTS.md — Hedgehog X (аудиокниги, SvelteKit PWA)
+# AGENTS.md — инструкции для ИИ-агента
 
-> Это основной входной документ для ИИ-агентов и разработчиков.
-> Он намеренно короткий: детали — в `docs/`. Читай его целиком перед первой правкой.
->
-> **Проверено:** 2026-11-25, ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41` (рабочее дерево).
-> Если код разошёлся с документами — прав код, но сначала обнови документы, а не наоборот.
+Это входная точка для любого агента в репозитории `hedgehog-x`.
+Документ описывает **правила и алгоритмы**, а не историю. Карта —
+[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md), архитектура —
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), домен —
+[docs/DOMAIN.md](docs/DOMAIN.md), запуск — [docs/OPERATIONS.md](docs/OPERATIONS.md),
+тесты — [docs/TESTING.md](docs/TESTING.md).
 
-## 0. Что это за проект
+## 0. Проект
 
-`hedgehog-x` — русскоязычное PWA-приложение для прослушивания аудиокниг
-`HEDGEHOG.INC` (Telegram-озвучка `Overlord` / `Mushoku Tensei` и будущих книг).
+`hedgehog-x` — русскоязычное PWA для аудиокниг HEDGEHOG.INC: каталог, версии
+озвучки, плеер, офлайн, live/replay трансляции с чатом, Boosty-подписка через
+Telegram/Discord, редактируемый сайт и SSR-админка.
 
-Ключевая идея: **offline-first**. Сервер (PostgreSQL + Drizzle) — источник истины,
-но страницы читают контент и действия пользователя из **Dexie/IndexedDB**.
-Аудио можно скачивать в **OPFS** и слушать без сети. Авторизация — better-auth
-(Telegram OIDC, Discord OAuth2), без паролей. Админка — SSR-панель с загрузкой
-обложек/аудио/видео в **Cloudflare R2**. PWA собирается через `vite-plugin-pwa` +
-собственный `src/service-worker.ts`.
+Стек: SvelteKit 2 + Svelte 5 (runes), adapter-node, PostgreSQL 18 + Drizzle,
+Dexie/OPFS, better-auth, Cloudflare R2, Tailwind v4 + shadcn-svelte,
+vite-plugin-pwa (injectManifest).
 
-## 1. Что читать (по задаче)
+Offline-first: сервер — истина, но контент книги и личные данные читаются из
+Dexie; аудио — OPFS. Главная, каталог, книга, том, сайт, подписка, трансляции
+и админка — SSR.
 
-| Задача                               | Обязательно прочитать                                    |
-| ------------------------------------ | -------------------------------------------------------- |
-| Любая первая сессия                  | этот файл + `docs/README.md`                             |
-| Понять, как устроен проект           | `docs/ARCHITECTURE.md`                                   |
-| Найти файл/маршрут/таблицу/компонент | `docs/PROJECT_MAP.md`                                    |
-| Понять термины и инварианты          | `docs/DOMAIN.md`                                         |
-| Запустить, настроить, задеплоить     | `docs/OPERATIONS.md`                                     |
-| Что сломано / где расхождения        | `docs/AUDIT.md` (сначала P0/P1)                          |
-| Менять offline-синхронизацию         | `docs/ARCHITECTURE.md` §5 + `docs/AUDIT.md` P0           |
-| Менять плеер                         | `docs/ARCHITECTURE.md` §6 + `docs/AUDIT.md` §5.2         |
-| Трогать миграции/БД                  | `docs/OPERATIONS.md` §4; история — `docs/AUDIT.md` P0-02 |
+## 1. Первые шаги
 
-## 2. Стек (фактический)
+1. Прочитайте этот файл целиком.
+2. [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) §1–7 — масштаб/маршруты/API.
+3. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §0–6 — потоки.
+4. Перед БД — [docs/OPERATIONS.md](docs/OPERATIONS.md) §4.
+5. Перед тестами — [docs/TESTING.md](docs/TESTING.md).
 
-- **SvelteKit 2.70 + Svelte 5.57 (runes)**, `@sveltejs/adapter-node`.
-- **TypeScript 6**, strict; проверка `svelte-check` проходит.
-- **Tailwind CSS v4** (плагин Vite, без `tailwind.config`) + **shadcn-svelte**
-  (style `vega`) на **bits-ui**; иконки `@lucide/svelte`; Inter Variable.
-- **PostgreSQL 18 + Drizzle ORM** (`postgres-js`); схема — `src/lib/server/db/schema.ts`.
-- **better-auth 1.6.33** + `better-auth-telegram` (OIDC) + Discord.
-- **Dexie 4** (IndexedDB) + **OPFS** для офлайн-аудио; `CacheStorage` для legacy/страниц.
-- **PWA**: `vite-plugin-pwa` (`injectManifest`), свой service worker.
-- **Тесты**: `node:test` + `tsx` (unit), Playwright (e2e).
-- **Пакетный менеджер**: pnpm 11.7.0 (`packageManager`, Node 26 в `engines`).
-- **Хранилище**: Cloudflare R2 (S3 API) с локальным fallback в `static/uploads`.
-- **Аналитика**: собственные `listening_sessions` / `daily_listening_stats` + Umami (опционально).
+Если код и документ расходятся — прав код; обновите документ в той же правке.
+Не создавайте историю изменений и списки «было/стало».
+
+## 2. Нельзя ломать
+
+1. **Hydrate/purge.** `hydrate(..., 'all')` с пустым/неполным ответом не стирает
+   данные; `allowEmptyPurge` — только после auth/owner/queue.
+2. **Гость и `/api/user/sync`.** Гость → 401; клиент не гидрирует пустой ответ;
+   без `userId` — не гидрирует.
+3. **Owner.** `meta.syncOwner` и `SyncItem.ownerUserId`; flush только текущего
+   владельца; logout/expiry/switch очищают данные/очередь/owner.
+4. **Пользователь — `locals.user`.** Не доверять `userId` из тела/query.
+5. **SSR.** Не удалять `+page.server.ts` и 404 для книги/тома; не переносить
+   книги/тома/каталог/главную/сайт/подписку/трансляции полностью в Dexie.
+6. **Публикация.** `chapters.published` default false; публичные API/SSR
+   отдают только true. Не показывайте неопубликованные главы без admin.
+7. **Миграции.** `schema.ts` → `pnpm db:generate` → проверка SQL →
+   `pnpm db:migrate` (0000–0035). Не редактировать применённые; `0005` no-op;
+   `db:push` — только dev.
+8. **R2.** Удалять заменяемые объекты через `deleteFromStorage` (content,
+   broadcasts); в prod без R2 загрузки запрещены; не включать local fallback.
+9. **Токен.** `session.token` не хранить в localStorage.
+10. **Роли.** `user|admin|author`; `requireAdmin` = admin/author,
+    `requireFullAdmin` = admin. Управление ролями/автором — только full admin;
+    последнего админа снять нельзя.
+11. **Подписка.** Не гейтить книги; она нужна для трансляций/чата/сообщества.
+    `hasBroadcastAccess` = admin/author или active subscription. Не отключать
+    проверку `blocked`/сессий.
+12. **Трансляции.** `chapters.published` при старте; replay только при
+    `saveRecording && publishedAt`; чат — live/replay с `chatEnabled`,
+    500 символов, 5/10 с, allowlist ссылок.
+13. **Sync actions.** Новое действие — producer + consumer + owner + тест.
+14. **Валидация/лимиты.** Новые API: auth, размеры, корректные 4xx/5xx; батчи —
+    лимит и транзакция; не добавлять unbounded-выборки.
+15. **Секреты.** Не коммитить `.env`, R2/OAuth/Telegram secrets.
+16. **UI.** Русские строки; `strings.ts` где возможно; никаких
+    `alert/confirm/prompt` — `ConfirmModal`.
+17. **Svelte 5 runes.** Без legacy stores/`$:`; общие runes — `*.svelte.ts`.
+18. **SSR/SW-безопасность.** Общие .ts — без `window`/`document` на верхнем
+    уровне и без импорта `svelte`.
 
 ## 3. Команды
 
-```bash
-pnpm dev                 # Vite dev (нужен .env + Postgres; см. OPERATIONS)
-pnpm build               # production build (adapter-node) — проходит
-pnpm preview             # preview собранного приложения
-pnpm check               # svelte-check + sync — проходит
-pnpm lint                # prettier --check . && eslint . — проходит
-pnpm format              # prettier --write .
-pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 268 тестов, зелёные
-pnpm test:coverage       # unit + экспериментальное покрытие Node
-pnpm test:e2e            # playwright install && playwright test — 48/48, требует env
-pnpm test:docker         # docker compose -f compose.test.yml up --build ...
-pnpm db:push             # dev-only shortcut; может удалять колонки, не основной путь
-pnpm db:seed             # node --import tsx src/lib/server/db/seed.ts
-pnpm db:generate         # drizzle-kit generate (после изменения schema.ts)
-pnpm db:migrate          # drizzle-kit migrate — РАБОЧИЙ способ (0000–0034)
-pnpm db:studio           # drizzle-kit studio
-pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
+| Команда                    | Что делает                 | Когда                             |
+| -------------------------- | -------------------------- | --------------------------------- |
+| `pnpm dev`                 | Vite dev 5173              | UI                                |
+| `pnpm build`               | Сборка (типы не проверяет) | Перед PR                          |
+| `pnpm preview`             | Preview 4173               | SSR/бандл                         |
+| `pnpm check`               | sync + svelte-check        | Перед PR                          |
+| `pnpm lint`                | prettier + eslint          | Перед PR                          |
+| `pnpm test:unit`           | 270 unit                   | Логика                            |
+| `pnpm test:coverage`       | Unit + coverage            | По необходимости                  |
+| `pnpm test:e2e`            | Playwright                 | UI/потоки                         |
+| `pnpm test:docker`         | E2E Docker                 | CI/по необходимости               |
+| `pnpm db:generate`         | Миграция из diff           | После schema                      |
+| `pnpm db:migrate`          | 0000–0035                  | После generate                    |
+| `pnpm db:seed`             | Seed                       | Локально                          |
+| `pnpm admin:grant <email>` | admin                      | Production                        |
+| `pnpm auth:schema`         | auth-схема                 | С `ALLOW_AUTH_SCHEMA_OVERWRITE=1` |
+
+Минимум: unit, check, lint; для UI — build + ручная проверка. `build` не
+заменяет `check`.
+
+## 4. Устройство
+
+```text
+Браузер: UI → Dexie → syncQueue → /api/user/sync
+          audioStore ↔ htmlAudio (OPFS/cache/URL), broadcast progress отдельно
+Сервер: hooks → SSR/API → Drizzle → PostgreSQL
+        broadcasts/subscriptions/site content/R2/media proxy
+PWA: SW injectManifest, pages denylist, audio cache
 ```
 
-### Как проверять правки (минимум)
+- Контент: books → volumes → chapters (published) / illustrations /
+  chapter_illustrations.
+- Личное: progress/likes/bookmarks, version_id в ключе.
+- Broadcasts: состояние, чат, слушатели, просмотры, прогресс.
+- Subscriptions: manual/Boosty Telegram/Discord, events, price, donations.
+- Site: site_pages/site_settings/translators.
+- Auth: better-auth, roles user/admin/author.
+- Админка: content/broadcasts/site/users/integrations.
 
-1. `pnpm test:unit` — быстрые чистые тесты.
-2. `pnpm check` — типы/Svelte (проходит; не добавляй новых ошибок).
-3. `pnpm lint`.
-4. `pnpm build` — ловит SSR/бандл-проблемы, но НЕ типы.
-5. Для UI/плеера — `pnpm dev` + ручная проверка; для e2e — см. OPERATIONS (нужен `BETTER_AUTH_SECRET`).
+## 5. Где что искать
 
-## 4. Маршруты и данные — карта в голове
+| Нужно          | Файлы                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Страница       | `src/routes/**/+page.svelte`, `+page.server.ts`                                                 |
+| API            | `src/routes/api/**/+server.ts`, `feedback/+server.ts`                                           |
+| Схема/миграции | `server/db/schema.ts`, `drizzle/*.sql`                                                          |
+| Auth/роли      | `server/auth.ts`, `server/admin.ts`, `client/session*`                                          |
+| Синхронизация  | `client/services/*`, `client/db/*`                                                              |
+| Трансляции     | `server/broadcasts.ts`, `lib/broadcasts/domain.ts`, `api/broadcasts/**`, `routes/broadcasts/**` |
+| Подписки       | `server/subscriptions/*`, `lib/subscriptions/domain.ts`, `routes/subscription`                  |
+| Сайт           | `server/site-content.ts`, `site-settings.ts`, `routes/admin/site`                               |
+| Плеер          | `audio-store`, `html-audio`, `ui/audio/provider`, `components/audio/*`                          |
+| Загрузки/OPFS  | `client/downloads/*`, `html-audio.ts`                                                           |
+| PWA            | `service-worker.ts`, `client/page-cache.ts`, `vite.config.ts`                                   |
+| R2             | `server/storage/r2.ts`, `admin/content`, `admin/broadcasts`                                     |
+| Аналитика      | `analytics/stats.ts`, `listeningTracker`, `api/analytics/listen`, `admin/analytics`             |
+| Тесты          | `src/**/*.test.ts`, `e2e/*.e2e.ts`                                                              |
 
-```
-Сервер: PostgreSQL ── Drizzle ── /api/books, /api/books/[bookId], /api/user/sync,
-                                /api/analytics/listen, /api/user/delete, /admin actions
-                                   │
-                    syncService (клиент) ── mappers ── hydrate() ── Dexie
-                                   │
-Страницы ── useDexie(liveQuery) ───┘        (главная, каталог, книги/тома, публичные,
-                                            трансляции, подписка и админка — SSR; остальные client)
-```
+## 6. Код
 
-- Контент (книги/тома/главы/иллюстрации) живёт в Dexie; страница книги `/books/:bookId`
-  в `+layout.ts` фоново вызывает `syncBookDetails` и `syncUserData`.
-- Личные данные (прогресс, лайки, закладки) — тоже Dexie; синхронизация через
-  `/api/user/sync`.
-- Главная `/` — SSR-витрина из БД (отдельные изображение/видео и порядок книг); полный каталог — `/books`.
-- `/books` — SSR-каталог книг с поиском; доступен из навигации.
-- Аналитика прослушивания — отдельный поток `/api/analytics/listen` (не в user sync).
-- Админка `/admin/**` — SSR-панель управления контентом, сайтом, пользователями и трансляциями; доступ по `locals.user.role в ('admin','author')`. Публичные и доменные страницы (`/`, `/books`, `/books/[bookId]`, `/about`, `/support`, `/community`, `/broadcasts`, `/subscription`) также загружаются на сервере (SSR) из БД.
+### Svelte/UI
 
-## 5. Главные правила (нарушение = риск потери данных)
+- Runes; без stores и `$:`. `$derived(expr)`/`$derived.by`.
+- `*.svelte.ts` — runes-модули; не импортировать в server/SW.
+- UI — `$lib/components/ui/<name>`; корневого barrel нет; kbd/popover нет.
+- Tailwind-токены; hex — брендовые иконки/поддержка; тёмная тема `.dark`.
+- Space уже один; не добавлять дубли.
 
-1. **Никогда не вызывай `hydrate(..., 'all')` с пустым/неполным ответом.**
-   `hydrate` с `purgeScope: 'all'` удаляет все локальные записи, которых нет во входных
-   данных. P0-01 исправлен (401 для гостя + owner-aware sync + guard), но правило
-   остаётся: purge допустим только после проверки авторизации, владельца и очереди.
-   Не ослабляй `allowEmptyPurge`.
-2. **Пользователь — только `locals.user`.** Не доверяй `userId` из тела запроса.
-3. **Не добавляй новые `syncQueue` actions без consumer'а и owner'а.** Каждый
-   `SyncItem` хранит `ownerUserId`; flush отправляет только элементы текущего
-   владельца. Новые actions обязаны иметь flush/retry, owner и тест. При logout
-   очередь и локальные данные очищаются.
-4. **Каталог — `/books`, SSR из БД.** `syncBooks()` удалён; контент книги по-прежнему гидрируется в Dexie при входе в книгу.
-5. **SSR книг/томов содержит данные.** `/books/[bookId]` и volume имеют серверные
-   `+page.server.ts` (404/OG); не ломай их. Остальные страницы всё ещё могут быть
-   клиентскими.
-6. **Миграции — рабочий способ.** Текущая БД собрана через `db:migrate` (0000–0034;
-   `0005` — намеренный no-op, `0006` — catch-up из `schema.ts`). Не используй `db:push`
-   как основной путь: он может удалять колонки. После изменения `schema.ts`:
-   `db:generate` → проверь SQL → `db:migrate`. Не редактируй применённые миграции задним
-   числом; добавляй новую. История инцидента — в `docs/AUDIT.md` P0-02.
-7. **При удалении книги, тома или главы R2-объекты не удаляются** — это сознательная
-   политика сохранения медиа. `deleteFromStorage` использовать только для заменяемого
-   файла или прямой отдельной операции удаления иллюстрации/аудио (если файл больше
-   нигде не referenced).
-8. **Не храни секреты в клиенте.** Сессионный токен больше не пишется в localStorage
-   (P1-06); кэшируются только user/expiresAt.
-9. **Даты/ID:** ID книг/томов/глав — `varchar(128)`, генерируются в админке;
-   `buildDailyStatId` может превысить 128 символов (AUDIT P2). Глава ID используется
-   как имя файла в OPFS — не делай его небезопасным для ФС.
-10. **Строки UI — русские.** Централизованный словарь `src/lib/constants/strings.ts`
-    есть, но многие страницы хардкодят текст; новый код — через словарь, где возможно.
+### TS/SSR
 
-## 6. 10 мин-ловушек (кратко)
+- strict, `unknown` вместо `any`; `$lib`/`$lib/server`.
+- SSR/SW-safe модули без `window` на верхнем уровне.
+- Клиентские данные — Dexie/liveQuery.
 
-- Не возвращай гостю `200 + пустые массивы` в `/api/user/sync`: это историческая
-  причина P0-01 (сейчас там 401). Гостевые данные должны переживать навигацию и
-  загружаться при входе; это закреплено e2e `sync-data-safety`.
-- `/admin` редиректит на `/auth?from=/admin`; `/auth` также понимает legacy `redirect`.
-- `/books` — каталог; `/books/unknown` и `/books/id/unknown` отдают **404** (P1-04).
-- Без `BETTER_AUTH_SECRET` приложение падает на старте (better-auth default secret).
-- `pnpm test:e2e` требует env; внешние OAuth-редиректы замоканы (P1-03), но
-  `--workers=1` всё ещё рекомендуется.
-- Space-хоткей теперь один на приложение; sleep-timer срабатывает раньше repeat.
-- Переход по закладке/истории использует `Track.startTime`; seek больше не теряется.
-- Прерванная загрузка удаляет частичный OPFS-файл и проверяет размер.
-- `pnpm build` не проверяет типы: запускай отдельно `pnpm check` (сейчас зелёный).
+### Сервер/БД
 
-## 7. Структура (сокращённо)
+- Drizzle; сырой SQL — редко.
+- Валидация `boundedText`, `timestampSeconds`, статусы, hex.
+- Транзакции для батчей; `isUniqueViolation`.
+- Кэш: private no-store для личного; публичное — осознанно.
+- Логи `createLogger`.
 
-```
-src/
-  hooks.server.ts        # better-auth -> locals.session/user; seed при старте
-  app.d.ts               # App.Locals
-  service-worker.ts      # Workbox: precache, pages-cache, audio-cache
-  lib/
-    audio-store.svelte.ts         # глобальный store плеера (runes)
-    html-audio.ts                 # HTMLAudioElement-обёртка, OPFS, retry
-    logger.ts, delete-confirm.ts, utils.ts
-    analytics/stats.ts            # валидация heartbeat, даты, агрегаты
-    server/
-      auth.ts, admin.ts, db/{index,schema,auth.schema,seed}.ts, storage/r2.ts
-    client/
-      authClient.ts, session.svelte.ts, accounts.svelte.ts, providers.ts
-      auth-storage.ts             # localStorage-кэш сессии/аккаунтов
-      db/{index,hydrate,syncState,useLiveQuery.svelte}.ts
-      services/{syncService,mappers,likeService,bookmarkService,bookmarkSync,
-                guestAdoption.svelte,progressSync.svelte,listeningTracker.svelte}.ts
-      downloads/downloadManager.svelte.ts
-    components/
-      ui/ (157 shadcn-примитивов)  audio/ (GlobalPlayer, Download)
-      volume/ comments/ header/ layout/ overlay/ showcase/ support/ auth/ seo/ share/
-      overlay/GuestDataAdoptionModal.svelte
-    types/showcase.ts, constants/strings.ts, actions/inview.ts, utils/*
-  routes/
-    +layout.server.ts, +layout.svelte, +page.server.ts, +page.svelte, +error.svelte
-    about/ admin/ api/ auth/ bookmarks/ books/ broadcasts/ community/ downloads/
-    feedback/ health/ history/ profile/ settings/ sitemap.xml/ subscription/ support/
-drizzle/                  # SQL-миграции 0000–0034 (актуальны; 0005 — no-op)
-e2e/                      # 9 Playwright-файлов
-static/                   # аудио/картинки/видео/QR/PWA-иконки
-```
+### Клиент/данные
 
-## 8. Конвенции кода
+- Оптимистично в Dexie → очередь → flush.
+- Owner в `meta.syncOwner`/`ownerUserId`.
+- Пустой `hydrate('all')` без `allowEmptyPurge` запрещён.
+- Загрузки: квота/размер/partial.
+- OPFS-имена — только через `opfsAudioFileName`.
 
-- Svelte 5 runes; НЕ использовать legacy stores. Общие runes-модули — `*.svelte.ts`.
-- Общие `.ts` модули должны быть безопасны для SSR и service worker (не импортировать
-  `svelte`, `window` на верхнем уровне без guard).
-- Импорты: `$lib/...`; shadcn-примитивы — из barrel `index.ts`.
-- Стили — токены Tailwind (`bg-card`, `text-muted-foreground`, ...), не hex; тёмная тема
-  поддерживается через `.dark`.
-- Новые API: `RequestHandler`, проверка `locals.user`, валидация входа, корректные 4xx/5xx,
-  никаких секретов в ответе. Для state-changing — подумай о CSRF/origin.
-- Новые клиентские мутации: сначала Dexie (optimistic UI), затем очередь `syncQueue`,
-  затем flush. Не забывай consumer и retry/poison-pill.
-- Новые SQL-запросы: Drizzle; не добавляй сырой SQL без причины.
-- Логи — `createLogger('Tag')`, не `console.log` (в SW/сервере особенно).
-- Тесты: unit — чистые функции; e2e — мокай внешние сервисы; не добавляй реальные
-  OAuth-переходы в CI.
+## 7. Алгоритмы
 
-## 9. Svelte MCP (сохранено из исходного AGENTS.md)
+### 7.1. Поле контента
 
-Для задач по Svelte/SvelteKit используй Svelte MCP:
+1. `schema.ts` + index/check.
+2. `db:generate` → SQL → `db:migrate`.
+3. `admin/content` + форма.
+4. `api/books/[bookId]` (select/relations).
+5. `mappers.ts` + `Offline*`.
+6. Seed/тесты.
+7. PROJECT_MAP §8 + DOMAIN.
 
-1. `list-sections` — сначала найди разделы документации.
-2. `get-documentation` — получи релевантные разделы.
-3. `svelte-autofixer` — обязательно прогоняй перед отдачей Svelte-кода.
-4. `playground-link` — только после подтверждения пользователя и не для файлов проекта.
+### 7.2. API
 
-## 10. Поддержание документов
+1. `+server.ts`; auth; Origin/CSRF для state-changing.
+2. Валидация/лимиты; красные 4xx/5xx; без секретов.
+3. Private no-store для личного.
+4. Unit + e2e.
+5. PROJECT_MAP §4.
 
-- Любое изменение схемы БД, API-контракта, offline-потока или деплоя → обнови
-  `docs/PROJECT_MAP.md` и `docs/ARCHITECTURE.md`; если меняешь поведение из AUDIT —
-  обнови статус находки.
-- Не создавай второй источник истины: `README.md` — краткий обзор, `AGENTS.md` — правила,
-  `docs/` — детали. `GEMINI.md` — только указатель на этот файл.
-- Если добавляешь крупное архитектурное решение — зафиксируй его в
-  `docs/ARCHITECTURE.md` §14 «Решения и компромиссы» (и, если отменяет старое, отметь это).
+### 7.3. Страница
+
+1. `+page.svelte`; `+page.server.ts` для SSR.
+2. Dexie — `useDexie`.
+3. meta/OG.
+4. SSR/404/mobile.
+5. nav/PROJECT_MAP.
+
+### 7.4. Синхронизация
+
+1. `SyncItem.action`.
+2. Producer: Dexie + queue + owner.
+3. Consumer: flush + retry + удаление после успеха.
+4. Сервер: `/api/user/sync` (валидация/транзакция) или endpoint.
+5. Owner/replace guard; тест.
+6. ARCHITECTURE §5.3.
+
+### 7.5. Плеер
+
+- Состояние — store; DOM — htmlAudio; provider — мост.
+- Retry только provider; persist 5 с/изменения.
+- Broadcast: `broadcastId/broadcastLive`, отдельный progress key.
+- Проверить live/replay/OPFS/ошибки/drawer.
+
+### 7.6. Офлайн/PWA
+
+- downloadManager: sequential, 50 МБ, content-length, OPFS, partial.
+- htmlAudio: OPFS → cache → URL; blob revoke.
+- SW: pages denylist, audio CacheFirst; manual register.
+- Не кэшировать personal/subscription/broadcasts.
+- `opfsAudioFileName` для версий.
+
+### 7.7. Админка/R2
+
+- `requireAdmin`/full admin; published; validation.
+- R2 limits 15/500/100, magic; rollback; delete old.
+- Media library `/api/admin/r2/files`.
+- No pagination content/users; limit search.
+- PROJECT_MAP/ARCHITECTURE §9.
+
+### 7.8. Трансляции
+
+- `broadcastKind`, start/end/publish; chapter published.
+- Access: subscription/admin/author; chat flags.
+- Chat limits/allowlist/reactions; illustrations via chapter timings.
+- Progress/heartbeat/status; replay flags.
+- Admin broadcasts + API + tests.
+
+### 7.9. Подписка
+
+- `subscriptions`/sources/events/ledger; active formula.
+- Manual grant/revoke/restore/block; price/notices.
+- Boosty: Telegram/Discord checks; webhook.
+- Blocked sessions; not a content gate.
+- Tests `subscriptions/domain`, `/admin/users`, `/subscription`.
+
+### 7.10. Сайт
+
+- `site_pages`/translators/settings; sanitize URL.
+- Admin site; public loads; defaults.
+- Media/mirrors; link-preview allowlist.
+- Update DOCS.
+
+### 7.11. Auth
+
+- server/auth.ts; client session/accounts; safe redirect.
+- Roles/full admin; page-cache denylist; token not stored.
+- Test both domains.
+
+### 7.12. Тесты
+
+- Unit `*.test.ts`; e2e `*.e2e.ts`; mocks; no real R2.
+- DB integration skip without secret; cleanup.
+- TESTING §7.
+
+### 7.13. Docs
+
+- Schema/API/flow/deploy → PROJECT_MAP + ARCHITECTURE.
+- Rules → AGENTS; tests → TESTING.
+- No history/audit files.
+
+## 8. Перед сдачей
+
+- [ ] `pnpm test:unit` (270).
+- [ ] `pnpm check` 0 ошибок.
+- [ ] `pnpm lint`.
+- [ ] `pnpm build`.
+- [ ] Ручной сценарий TESTING §8 для UI/плеера/трансляций/подписки.
+- [ ] `db:generate` не создаёт лишнего.
+- [ ] Нет секретов/токенов.
+- [ ] Документы обновлены.
+
+Если окружение не позволяет (нет .env/node_modules/Node 26) — укажите это и не
+выдавайте непроверенное за проверенное.
+
+## 9. Ловушки
+
+1. Rate limit'ы/кэши in-memory на процесс: sync 120/мин, analytics 60/мин,
+   admin/API admin 30/мин, chat 5/10 с, link-preview 20/мин, subscription
+   cache 10 с, active broadcast cache.
+2. `broadcast_illustrations` — legacy; читается `chapter_illustrations`.
+3. `chapters.published` default false; забытая публикация скрывает главу.
+4. `buildDailyStatId` — 42 символа.
+5. `syncBookDetails` — `Promise.all`, не атомарно.
+6. Admin content/users без пагинации; поиск limit 20/30.
+7. `broadcastKind` ленивый; live = startedAt+duration; replay требует
+   `saveRecording && publishedAt`.
+8. CSP `unsafe-inline`; HSTS/nonce нет; CSRF-токенов нет.
+9. `/api/user/progress/clear` и `/api/user/delete` без rate limit; delete
+   проверяет Origin/Sec-Fetch-Site.
+10. `/api/media` 302 при direct; кэш 10 МиБ/файл и 100 МиБ total.
+11. OPFS-имена версий кодируются; default старый формат.
+12. `role=author` исключён из статистики; управление ролями — только full admin.
+13. Blocked subscription удаляет сессии; restore/revoke замораживает остаток.
+14. Bookmark с чужим id → PK-конфликт sync → 500.
+15. Analytics/ listen без транзакции; nullable UNIQUE.
+16. Нет UI repeat/shuffle/queue и мобильной громкости; setPositionState нет.
+17. Media proxy/mirrors из site_settings; admin site управляет.
+18. Удаление аккаунта обезличивает аналитику/донаты, но не удаляет их.
+
+## 10. Отчёт
+
+- Что изменено (файлы).
+- Что проверено командами/результат.
+- Что не проверено и почему.
+- Какие документы обновлены.
+- Риски/ограничения.

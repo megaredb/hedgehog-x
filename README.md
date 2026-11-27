@@ -1,125 +1,131 @@
 # HEDGEHOG.INC / hedgehog-x
 
-Русскоязычное PWA-приложение для прослушивания аудиокниг: онлайн, офлайн и с
-синхронизацией прогресса между устройствами. Контент — озвучки HEDGEHOG.INC
-(«Повелитель», «Реинкарнация безработного» и будущие книги).
+Русскоязычное PWA для аудиокниг HEDGEHOG.INC: каталог, тома, главы, версии
+озвучки, глобальный плеер, закладки, офлайн-скачивание, live/replay трансляции
+с чатом, подписка через Boosty (Telegram/Discord), редактируемый сайт и
+SSR-админка с Cloudflare R2.
 
-> Это не учебный шаблон. Проект находится в активной разработке; перед запуском
-> и особенно перед деплоем прочитайте [docs/AUDIT.md](docs/AUDIT.md) — там
-> перечислены известные P0/P1-проблемы.
+> Документация описывает текущий код; если документ и код расходятся — прав код.
 
 ## Что умеет
 
-- Каталог книг → тома → главы; иллюстрации тома и Telegram-обсуждение.
-- Глобальный плеер: play/pause, seek, скорость, громкость, таймер сна,
-  закладки с заметками, автопереход, undo seek.
-- Офлайн: скачивание глав в OPFS, прослушивание без сети, PWA-кэш страниц.
-- Синхронизация прогресса/лайков/закладок для авторизованных; локальная работа
-  для гостей.
-- Вход через Telegram (OIDC) и Discord; привязка нескольких способов входа.
-- Админка: книги, тома, главы, иллюстрации; загрузка медиа в Cloudflare R2
-  (WebP + BlurHash + theme color), аналитика прослушиваний, пользователи и подписки.
-- Управление сайтом из админки: тексты страниц, обратная связь, медиа-прокси,
-  динамические CDN-зеркала и привязка аккаунтов к разработчикам/переводчикам.
-- Прямые трансляции глав: расписание, синхронизированное аудио, чат с антифлудом,
-  запись/replay с чатом по таймингу, иллюстрации на фоне и live-аналитика.
-- Тёмная/светлая тема, адаптивный интерфейс, PWA-установка.
+- Каталог и витрина из БД; книга → тома → главы (только опубликованные) →
+  иллюстрации и тайминги показа.
+- Версии озвучки: базовая/архивные, отдельные прогресс/лайки/закладки.
+- Плеер: play/pause, seek, скорость, громкость, sleep timer, undo seek,
+  автопереход, закладки с диапазоном, Media Session, wake lock.
+- Офлайн: OPFS-скачивание глав/томов, PWA-кэш страниц и аудио.
+- Синхронизация прогресса/лайков/закладок; гости локально; owner-aware очередь;
+  consent при переносе гостевых данных.
+- Трансляции: live/replay, чат с реакциями и ответами, иллюстрации по таймингу,
+  слушатели/просмотры, прогресс на нескольких устройствах.
+- Подписка: Boosty через Telegram-группу и Discord-роль, ручные донаты/выдачи,
+  lifetime, отзыв/блокировка, история, цена дня и уведомления.
+- Админка: контент и публикация глав, версии, иллюстрации/тайминги, R2-библиотека,
+  трансляции, сайт (about/support/community, переводчики, соцсети, реквизиты,
+  зеркала), пользователи и подписки, аналитика прослушиваний и доходов.
+- Тёмная/светлая тема, адаптив, PWA-установка.
 
 ## Стек
 
-| Слой           | Технологии                                                               |
-| -------------- | ------------------------------------------------------------------------ |
-| Фронтенд       | SvelteKit 2 / Svelte 5 (runes), Tailwind CSS v4, shadcn-svelte + bits-ui |
-| Сервер         | Node (adapter-node), better-auth                                         |
-| БД             | PostgreSQL 18 + Drizzle ORM (postgres-js)                                |
-| Клиентский кэш | Dexie/IndexedDB, OPFS, CacheStorage                                      |
-| PWA            | vite-plugin-pwa (injectManifest), Workbox                                |
-| Медиа          | Cloudflare R2 (S3 API), sharp, blurhash                                  |
-| Аналитика      | собственные heartbeat'ы + Umami (опционально)                            |
-| Тесты          | node:test + tsx, Playwright                                              |
+| Слой           | Технологии                                                                                          |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| UI             | SvelteKit `^2.70.3`, Svelte `^5.57.2` (runes), Tailwind CSS `^4.3.3`, shadcn-svelte `vega`, bits-ui |
+| Сервер         | Node (adapter-node), better-auth `~1.6.33` + `better-auth-telegram`, Discord OAuth2/Bot API         |
+| БД             | PostgreSQL 18 + Drizzle ORM `^0.45.4`                                                               |
+| Клиентский кэш | Dexie `^4.4.6` (IndexedDB), OPFS, CacheStorage                                                      |
+| PWA            | vite-plugin-pwa `injectManifest`, Workbox 7                                                         |
+| Медиа          | Cloudflare R2 (S3 API), sharp `^0.35.5`, blurhash                                                   |
+| Тесты          | `node:test` + tsx (`test:coverage`), Playwright, axe                                                |
+| Tooling        | TypeScript `^6.0.3`, Vite `^8.3.4`, pnpm 11.7.0, Node 26                                            |
+
+Точные версии — `package.json`.
 
 ## Быстрый старт
 
 ```bash
-cp .env.example .env          # заполнить BETTER_AUTH_SECRET и провайдеров
+cp .env.example .env          # BETTER_AUTH_SECRET и провайдеры
 pnpm install
-docker compose up -d db       # или pnpm dev:all
-pnpm db:migrate               # собрать схему из миграций (0000–0034)
-pnpm db:seed                  # опционально; сервер выполняет seed сам при старте
-pnpm dev
+docker compose up -d db       # или docker compose up -d
+pnpm db:migrate               # 0000–0035
+pnpm db:seed                  # опционально; сервер сеет сам
+pnpm dev                      # http://localhost:5173
 ```
 
-Откройте http://localhost:5192. Для HTTPS-доменов *.hedgehog-inc.localhost
-нужны сертификаты mkcert и Traefik (см. [docs/OPERATIONS.md](docs/OPERATIONS.md)).
-
-**Обязательно:** BETTER_AUTH_SECRET (32+ символа). Без него приложение падает
-на старте. `db:migrate` — рабочий способ; `db:push` оставлен как dev-shortcut и
-может удалять колонки, не используйте его как основной путь.
+- `BETTER_AUTH_SECRET` обязателен, ≥32; без него падение на старте.
+- Для HTTPS-домена нужны Traefik + сертификаты (`certs/`, `dynamic/dev.yaml`).
+- Production: `docker build -t hedgehog-x:prod .` и
+  `docker compose -f compose.yaml -f compose.prod.yml up -d --build`.
+- Подписка/трансляции опциональны: без Telegram/Discord env работают книги,
+  плеер и админка; см. `docs/OPERATIONS.md`.
 
 ## Скрипты
 
-| Команда                                                          | Назначение                            |
-| ---------------------------------------------------------------- | ------------------------------------- |
-| pnpm dev                                                         | Vite dev-сервер                       |
-| pnpm build                                                       | production-сборка (adapter-node)      |
-| pnpm preview                                                     | предпросмотр сборки                   |
-| pnpm check                                                       | svelte-check (проходит)               |
-| pnpm lint / pnpm format                                          | prettier + eslint / автоформат        |
-| pnpm test:unit                                                   | unit-тесты (node:test)                |
-| pnpm test:coverage                                               | unit + покрытие Node                  |
-| pnpm test:e2e                                                    | Playwright (нужен BETTER_AUTH_SECRET) |
-| pnpm test:docker                                                 | e2e в Docker (tmpfs Postgres)         |
-| pnpm db:push                                                     | dev-shortcut (может удалять колонки)  |
-| pnpm db:seed / db:studio                                         | сид / Drizzle Studio                  |
-| pnpm db:migrate                                                  | применить миграции 0000–0034          |
-| docker build -t hedgehog-x:prod .                                | production-образ                      |
-| docker compose -f compose.yaml -f compose.prod.yml up -d --build | production-стек                       |
+| Команда                     | Назначение                              |
+| --------------------------- | --------------------------------------- |
+| `pnpm dev`                  | Vite dev (5173)                         |
+| `pnpm build`                | Production-сборка; типы не проверяет    |
+| `pnpm preview`              | Preview (4173)                          |
+| `pnpm check`                | sync + svelte-check                     |
+| `pnpm lint` / `pnpm format` | prettier + eslint / автоформат          |
+| `pnpm test:unit`            | Unit (37 файлов, 270 тестов)            |
+| `pnpm test:coverage`        | Unit + experimental coverage            |
+| `pnpm test:e2e`             | Playwright (нужен `BETTER_AUTH_SECRET`) |
+| `pnpm test:docker`          | E2E в Docker                            |
+| `pnpm db:generate`          | Миграция из diff                        |
+| `pnpm db:migrate`           | Применить 0000–0035                     |
+| `pnpm db:seed`              | Seed 2/4/10/4                           |
+| `pnpm db:studio`            | Drizzle Studio                          |
+| `pnpm db:push`              | Dev-shortcut                            |
+| `pnpm admin:grant <email>`  | role=admin                              |
+| `pnpm auth:schema`          | Перегенерация auth-схемы                |
+
+## Порты
+
+| Что                        | Порт |
+| -------------------------- | ---- |
+| Vite dev                   | 5173 |
+| Vite preview / Playwright  | 4173 |
+| Traefik preview            | 5174 |
+| App production (в compose) | 3000 |
+| PostgreSQL                 | 5432 |
+| dbgate (dev)               | 3000 |
+| Umami (dev)                | 3001 |
 
 ## Структура
 
 ```text
 src/
-  routes/            страницы, /admin, /api
-  lib/
-    server/          auth, db, storage (R2), seed
-    client/          Dexie, sync, auth, downloads
-    components/      UI (shadcn) + плеер + контент
-    audio-store...   глобальный store плеера
-    html-audio.ts    HTMLAudioElement + OPFS
-drizzle/             миграции 0000–0034 (0005 — no-op, 0006 — catch-up)
-e2e/                 Playwright
-static/              медиа и PWA-ассеты
-docs/                архитектура, карта, аудит, операции
+  routes/                страницы, /api, /admin, /health, /sitemap.xml
+  lib/server/            auth, db, broadcasts, subscriptions, site, storage, metrics
+  lib/client/            Dexie, sync, broadcast player/chat, session, downloads
+  lib/broadcasts/        правила эфира
+  lib/subscriptions/     правила подписки
+  lib/components/        UI, плеер, контент, админка, site, 28 каталогов ui/
+  lib/audio-store*.ts    состояние плеера
+  lib/html-audio.ts      HTMLAudioElement + OPFS/cache/URL
+  lib/analytics/         валидация/агрегаты прослушивания
+  service-worker.ts      precache, pages (denylist), audio
+drizzle/                 36 миграций 0000–0035 + meta
+e2e/                     Playwright, 9 файлов
+scripts/                 migrate, entrypoint, grant-admin, normalize-storage,
+                         backfill-donation-ledger, serveo-webhook, TLS
+static/                  аудио/изображения/видео/QR/PWA
+docs/                    архитектура, карта, домен, операции, тесты
 ```
 
 ## Документация
 
-Начните с [AGENTS.md](AGENTS.md) — это входная точка для агентов и разработчиков.
-
-- [docs/README.md](docs/README.md) — индекс и порядок чтения.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как устроены потоки и подсистемы.
-- [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) — маршруты, API, БД, модули, env.
-- [docs/DOMAIN.md](docs/DOMAIN.md) — глоссарий и инварианты.
-- [docs/OPERATIONS.md](docs/OPERATIONS.md) — запуск, тесты, Docker, деплой.
-- [docs/AUDIT.md](docs/AUDIT.md) — дефекты, риски, расхождения, приоритеты.
-
-## Статус
-
-Снимок 2026-11-25 (ветка `dsh-da32b3f2-1fd5`, последний коммит `183aa41`; рабочее дерево без коммита):
-
-- pnpm build — проходит; pnpm lint — чисто; pnpm test:unit — 250/250 (35 файлов).
-- `pnpm test:coverage` — 88.00% строк / 82.89% ветвей / 65.66% функций для модулей, загруженных unit-тестами (не весь проект).
-- pnpm check — **зелёный** (0 ошибок).
-- E2E — 48/48 при `--workers=1` (тесты внешних OAuth-редиректов всё ещё зависят от сети), интеграционный — 3/3.
-- db:migrate — **работает**; БД пересобрана из миграций, схема совпадает с schema.ts.
-- production-деплой собран: `Dockerfile`, app-сервис в `compose.prod.yml`, миграции при старте, `/health`, graceful shutdown — проверено на чистой БД.
-- Гость больше не теряет прогресс/закладки при заходе в книгу — **P0-01 исправлен**, есть e2e.
-- Офлайн-закладки синхронизируются при возврате в сеть — **P0-03 исправлен**, есть e2e и проверка с реальной БД.
-- Logout/истечение сессии очищают локальные личные данные; guest→аккаунт — только с явным согласием (кроме нового аккаунта) — **P0-05 исправлен**.
-- P1 закрыт: SSR/404/OG, очистка истории, безопасные redirects, token storage, R2, admin, analytics, индексы, CI.
-
-Подробности и порядок исправлений — в [docs/AUDIT.md](docs/AUDIT.md).
+- [AGENTS.md](AGENTS.md) — правила/алгоритмы для ИИ.
+- [docs/README.md](docs/README.md) — индекс.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — потоки и подсистемы.
+- [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) — исчерпывающая карта.
+- [docs/DOMAIN.md](docs/DOMAIN.md) — глоссарий/инварианты.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — запуск/БД/деплой.
+- [docs/TESTING.md](docs/TESTING.md) — тесты/проверка.
 
 ## Лицензия
 
-Не указана. Контент аудиокниг принадлежит HEDGEHOG.INC; код — авторам проекта.
+Проприетарная. См. [LICENSE](LICENSE): код и контент принадлежат HEDGEHOG.INC;
+использование/копирование/изменение/распространение без письменного разрешения
+запрещены.
