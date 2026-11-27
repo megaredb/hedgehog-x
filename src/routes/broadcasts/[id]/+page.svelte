@@ -6,6 +6,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { htmlAudio } from '$lib/html-audio.js';
 	import { useDownloads } from '$lib/client/downloads/downloadManager.svelte';
 	import { audioVersionKey } from '$lib/audio-version';
 	import { saveBroadcastChat } from '$lib/client/broadcast-chat';
@@ -150,6 +151,9 @@
 	let nowMs = $state(Date.now());
 	let previousKind = untrack(() => kind);
 	let autoStartRequested = false;
+	let autoplayPriming = false;
+	let autoplayWasMuted = false;
+	let autoplayTimer: ReturnType<typeof setTimeout> | null = null;
 	let portraitQuery: MediaQueryList | null = null;
 	let chatText = $state('');
 	let chatError = $state('');
@@ -764,6 +768,27 @@
 		return days > 0 ? `${days} д ${time}` : time;
 	}
 
+	function finishAutoplayPriming() {
+		if (!autoplayPriming) return;
+		autoplayPriming = false;
+		audioStore.isMuted = autoplayWasMuted;
+		htmlAudio.setMuted(autoplayWasMuted);
+		if (autoplayTimer) {
+			clearTimeout(autoplayTimer);
+			autoplayTimer = null;
+		}
+	}
+
+	function startListeningWithAutoplay() {
+		autoplayWasMuted = audioStore.isMuted;
+		autoplayPriming = true;
+		audioStore.isMuted = true;
+		htmlAudio.setMuted(true);
+		startListening();
+		if (autoplayTimer) clearTimeout(autoplayTimer);
+		autoplayTimer = setTimeout(finishAutoplayPriming, 4000);
+	}
+
 	function updateClock(server: string) {
 		const parsed = new Date(server).getTime();
 		if (Number.isNaN(parsed)) return;
@@ -989,6 +1014,11 @@
 		}, 1000);
 		return () => {
 			clearInterval(clockTimer);
+			if (autoplayTimer) clearTimeout(autoplayTimer);
+			if (autoplayPriming) {
+				audioStore.isMuted = autoplayWasMuted;
+				htmlAudio.setMuted(autoplayWasMuted);
+			}
 			document.removeEventListener('pointerdown', handleAttachOutside);
 			portraitQuery?.removeEventListener('change', handlePortraitOrientation);
 			portraitQuery = null;
@@ -1015,6 +1045,11 @@
 				nowMs = Date.now();
 				previousKind = data.kind;
 				autoStartRequested = false;
+				autoplayPriming = false;
+				if (autoplayTimer) {
+					clearTimeout(autoplayTimer);
+					autoplayTimer = null;
+				}
 				listeners = 0;
 				selectedImageId = null;
 				savedChatForDownload = false;
@@ -1140,9 +1175,13 @@
 	$effect(() => {
 		const current = kind;
 		if (previousKind === 'scheduled' && current === 'live' && broadcast.audioUrl) {
-			startListening();
+			startListeningWithAutoplay();
 		}
 		previousKind = current;
+	});
+
+	$effect(() => {
+		if (autoplayPriming && audioStore.isPlaying) finishAutoplayPriming();
 	});
 </script>
 
