@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { broadcastProgress } from '$lib/server/db/schema';
 import {
 	activeBroadcastParticipants,
+	activeListenerCount,
 	broadcastKind,
 	broadcastViewerParticipants,
 	canReplay,
@@ -67,11 +68,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const supportPage = await loadSitePage('support');
 	const support = (supportPage.data as { support?: Record<string, unknown> }).support ?? null;
 	const participants =
-		kind === 'live'
+		kind === 'live' || kind === 'scheduled'
 			? await activeBroadcastParticipants(state.id)
 			: kind === 'published'
 				? await broadcastViewerParticipants(state.id)
 				: [];
+	const listeners =
+		kind === 'live' || kind === 'scheduled' ? await activeListenerCount(state.id) : 0;
 	const messages = hasMoreMessages ? latestMessages.slice(1) : latestMessages;
 	const images = canRevealImages
 		? [
@@ -104,6 +107,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		hasMoreMessages,
 		viewersCount,
 		participants,
+		listeners,
 		support,
 		images,
 		serverNow: new Date(),

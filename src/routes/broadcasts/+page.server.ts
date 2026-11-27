@@ -34,11 +34,12 @@ export const load: PageServerLoad = async () => {
 	const synced = await Promise.all(rows.map(async (row) => (await syncBroadcast(row.id)) ?? row));
 	const visible = synced
 		.map((row) => ({ ...row, kind: broadcastKind(row as never) }))
-		.filter((row) => row.kind === 'live' || row.kind === 'published');
+		.filter((row) => row.kind === 'live' || row.kind === 'scheduled' || row.kind === 'published');
 	const broadcastItems = await Promise.all(
 		visible.map(async (row) => ({
 			...row,
-			listeners: row.kind === 'live' ? await activeListenerCount(row.id) : 0
+			listeners:
+				row.kind === 'live' || row.kind === 'scheduled' ? await activeListenerCount(row.id) : 0
 		}))
 	);
 	return { broadcasts: broadcastItems };

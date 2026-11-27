@@ -8,12 +8,29 @@
 
 	const liveBroadcast = $derived(data.broadcasts.find((broadcast) => broadcast.kind === 'live'));
 	const replays = $derived(data.broadcasts.filter((broadcast) => broadcast.kind === 'published'));
+	const scheduledBroadcasts = $derived(
+		data.broadcasts
+			.filter((broadcast) => broadcast.kind === 'scheduled')
+			.sort(
+				(a, b) => new Date(a.scheduledStartAt).getTime() - new Date(b.scheduledStartAt).getTime()
+			)
+	);
 
 	function formatDate(value: Date | string): string {
 		return new Date(value).toLocaleDateString('ru-RU', {
 			day: 'numeric',
 			month: 'long',
 			year: 'numeric'
+		});
+	}
+
+	function formatDateTime(value: Date | string): string {
+		return new Date(value).toLocaleString('ru-RU', {
+			day: 'numeric',
+			month: 'long',
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'Europe/Moscow'
 		});
 	}
 
@@ -47,6 +64,10 @@
 				<span class="rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs">
 					<span class="font-bold text-foreground">{liveBroadcast ? '1' : '0'}</span>
 					<span class="text-muted-foreground">сейчас в эфире</span>
+				</span>
+				<span class="rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs">
+					<span class="font-bold text-foreground">{scheduledBroadcasts.length}</span>
+					<span class="text-muted-foreground">запланировано</span>
 				</span>
 				<span class="rounded-xl border border-border/60 bg-background/60 px-3 py-2 text-xs">
 					<span class="font-bold text-foreground">{replays.length}</span>
@@ -125,6 +146,75 @@
 					</div>
 				</div>
 			</a>
+		</section>
+	{/if}
+
+	{#if scheduledBroadcasts.length > 0}
+		<section class="space-y-4">
+			<div class="flex flex-wrap items-end justify-between gap-2">
+				<div>
+					<h2 class="text-xl font-bold tracking-tight">Запланированные</h2>
+					<p class="mt-1 text-xs text-muted-foreground">
+						Скоро в эфире. Можно открыть страницу заранее и ждать начала.
+					</p>
+				</div>
+				<Badge variant="outline">{scheduledBroadcasts.length}</Badge>
+			</div>
+
+			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+				{#each scheduledBroadcasts as broadcast (broadcast.id)}
+					<a
+						href={resolve('/broadcasts/[id]', { id: broadcast.id })}
+						class="group flex flex-col overflow-hidden rounded-2xl border border-amber-500/30 bg-card transition duration-300 hover:-translate-y-1 hover:border-amber-500/60 hover:shadow-xl"
+					>
+						<div class="relative aspect-video overflow-hidden bg-muted">
+							{#if broadcast.coverUrl}
+								<img
+									src={broadcast.coverUrl}
+									alt={broadcast.title}
+									class="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+									loading="lazy"
+								/>
+							{:else}
+								<div
+									class="flex h-full items-center justify-center bg-linear-to-br from-amber-500/20 to-background"
+								>
+									<CalendarDays class="h-12 w-12 text-amber-500/60" />
+								</div>
+							{/if}
+							<div
+								class="absolute inset-0 bg-linear-to-t from-black/70 via-black/10 to-transparent"
+							></div>
+							<span
+								class="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-[9px] font-bold tracking-wide text-amber-950 uppercase shadow-lg"
+							>
+								<CalendarDays class="h-3 w-3" /> Скоро
+							</span>
+							<span
+								class="absolute right-3 bottom-3 rounded-full bg-black/65 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-md"
+								>{formatDateTime(broadcast.scheduledStartAt)}</span
+							>
+						</div>
+						<div class="flex flex-1 flex-col p-4">
+							<h3 class="line-clamp-2 text-sm leading-snug font-bold">{broadcast.title}</h3>
+							<p class="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+								{broadcast.bookTitle} · {broadcast.volumeTitle} · {broadcast.chapterTitle}
+							</p>
+							<div
+								class="mt-auto flex items-center justify-between gap-2 pt-4 text-[10px] text-muted-foreground"
+							>
+								<span class="inline-flex items-center gap-1"
+									><Users class="h-3 w-3" /> {broadcast.listeners} на странице</span
+								>
+								<span
+									class="inline-flex items-center gap-1 font-semibold text-amber-600 opacity-0 transition group-hover:opacity-100 dark:text-amber-400"
+									>Открыть <ArrowRight class="h-3 w-3" /></span
+								>
+							</div>
+						</div>
+					</a>
+				{/each}
+			</div>
 		</section>
 	{/if}
 

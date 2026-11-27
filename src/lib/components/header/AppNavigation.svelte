@@ -36,11 +36,13 @@
 		Boolean(session.user) && Boolean(page.data.subscriptionLifetime)
 	);
 
+	type BroadcastParticipant = { id: string; name: string; image: string | null };
 	type BroadcastInfo = {
 		id: string;
 		title: string;
 		coverUrl: string | null;
 		listeners: number;
+		participants: BroadcastParticipant[];
 		kind: string;
 		scheduledStartAt: string;
 	};
@@ -58,7 +60,13 @@
 			if (!res.ok) return;
 			const payload = await res.json();
 			const next = payload.broadcast;
-			activeBroadcast = next?.kind === 'live' || next?.kind === 'scheduled' ? next : null;
+			activeBroadcast =
+				next?.kind === 'live' || next?.kind === 'scheduled'
+					? {
+							...next,
+							participants: Array.isArray(next.participants) ? next.participants : []
+						}
+					: null;
 		} catch {
 			// The menu is usable even if the broadcast endpoint is unavailable.
 		}
@@ -216,6 +224,35 @@
 			</div>
 		{/if}
 	</a>
+{/snippet}
+
+{#snippet broadcastAvatars(broadcast: BroadcastInfo, live: boolean)}
+	{#if broadcast.participants.length > 0}
+		<div class="mt-1 flex items-center gap-1.5">
+			<div class="flex -space-x-1.5">
+				{#each broadcast.participants.slice(0, 3) as participant (participant.id)}
+					<span
+						title={participant.name}
+						class="relative flex h-4.5 w-4.5 overflow-hidden rounded-full border bg-black/30 text-[7px] font-bold {live
+							? 'border-white/70 text-white'
+							: 'border-amber-700/30 text-foreground'}"
+					>
+						{#if participant.image}<img
+								src={participant.image}
+								alt=""
+								class="h-full w-full object-cover"
+								loading="lazy"
+							/>{:else}{participant.name.charAt(0).toUpperCase()}{/if}
+					</span>
+				{/each}
+			</div>
+			{#if broadcast.listeners > 3}
+				<span class="text-[8px] font-semibold {live ? 'text-white/85' : 'text-muted-foreground'}"
+					>+{broadcast.listeners - 3}</span
+				>
+			{/if}
+		</div>
+	{/if}
 {/snippet}
 
 {#snippet navContent(onLinkClick: () => void, showBrand: boolean)}
@@ -455,6 +492,7 @@
 					<p class="truncate text-[8px] text-muted-foreground">
 						{formatScheduledAt(scheduledBroadcast.scheduledStartAt)}
 					</p>
+					{@render broadcastAvatars(scheduledBroadcast, false)}
 				</div>
 				<ArrowUpRight class="h-3.5 w-3.5 text-muted-foreground" />
 			</a>
@@ -476,6 +514,27 @@
 						</div>{/if}
 					<span class="absolute top-0.5 right-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-white"
 					></span>
+					<span
+						class="absolute inset-x-0 bottom-0 flex h-2 items-end justify-center gap-[1px] bg-black/30"
+						aria-hidden="true"
+					>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white/90"
+							style="height:3px; animation-delay:0ms"
+						></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white/90"
+							style="height:5px; animation-delay:120ms"
+						></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white/90"
+							style="height:2px; animation-delay:240ms"
+						></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white/90"
+							style="height:4px; animation-delay:360ms"
+						></span>
+					</span>
 				</div>
 				<div class="min-w-0 flex-1">
 					<p
@@ -485,6 +544,7 @@
 						Сейчас слушают
 					</p>
 					<p class="mt-0.5 truncate text-[10px] font-bold">{liveBroadcast.title}</p>
+					{@render broadcastAvatars(liveBroadcast, true)}
 					<p class="truncate text-[8px] text-white">{liveBroadcast.listeners} слушают в эфире</p>
 				</div>
 				<ArrowUpRight class="h-3.5 w-3.5 text-white/80" />

@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import {
+	activeBroadcastParticipants,
 	broadcastKind,
 	hasBroadcastAccess,
 	syncBroadcast,
@@ -13,8 +14,10 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	if (!(await hasBroadcastAccess(locals.user))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state) throw error(404, 'Трансляция не найдена');
-	if (broadcastKind(state) !== 'live') throw error(409, 'Трансляция не идёт');
+	const kind = broadcastKind(state);
+	if (kind !== 'live' && kind !== 'scheduled') throw error(409, 'Трансляция недоступна');
 	const listeners = await touchListener(state.id, locals.user.id);
-	await touchBroadcastView(state.id, locals.user.id, 'live');
-	return json({ ok: true, listeners, serverNow: new Date().toISOString() });
+	if (kind === 'live') await touchBroadcastView(state.id, locals.user.id, 'live');
+	const participants = await activeBroadcastParticipants(state.id);
+	return json({ ok: true, listeners, participants, serverNow: new Date().toISOString() });
 };

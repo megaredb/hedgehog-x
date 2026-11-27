@@ -72,7 +72,7 @@
 	let broadcast = $state(untrack(() => data.broadcast));
 	let kind = $state(untrack(() => data.kind));
 	let messages = $state<ChatMessage[]>(untrack(() => data.messages as unknown as ChatMessage[]));
-	let listeners = $state(0);
+	let listeners = $state(untrack(() => data.listeners ?? 0));
 	type BroadcastParticipant = { id: string; name: string; image: string | null };
 	let participants = $state<BroadcastParticipant[]>(untrack(() => data.participants ?? []));
 	const support = $derived<SiteSupportSettings>(
@@ -1050,7 +1050,7 @@
 					clearTimeout(autoplayTimer);
 					autoplayTimer = null;
 				}
-				listeners = 0;
+				listeners = data.listeners ?? 0;
 				selectedImageId = null;
 				savedChatForDownload = false;
 				lastNewestMessageId = null;
@@ -1074,7 +1074,8 @@
 
 		function sendLeaveBeacon() {
 			if (leaveSent || !canWatch) return;
-			if (untrack(() => kind) !== 'live') return;
+			const currentKind = untrack(() => kind);
+			if (currentKind !== 'live' && currentKind !== 'scheduled') return;
 			leaveSent = true;
 			try {
 				navigator.sendBeacon('/api/broadcasts/' + currentId + '/leave');
@@ -1107,7 +1108,8 @@
 			if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
 			heartbeatTimeout = setTimeout(async () => {
 				if (!active || document.hidden) return;
-				if (untrack(() => kind) === 'live') {
+				const currentKind = untrack(() => kind);
+				if (currentKind === 'live' || currentKind === 'scheduled') {
 					await heartbeat(currentId, controller.signal);
 				}
 				scheduleHeartbeat(10_000);
@@ -1126,7 +1128,8 @@
 				}
 			} else if (canWatch && active) {
 				schedulePoll(0);
-				if (untrack(() => kind) === 'live') {
+				const currentKind = untrack(() => kind);
+				if (currentKind === 'live' || currentKind === 'scheduled') {
 					void heartbeat(currentId, controller.signal);
 				}
 				scheduleHeartbeat(10_000);
@@ -1136,7 +1139,8 @@
 		if (canWatch) {
 			if (!document.hidden) {
 				schedulePoll(2000);
-				if (initialKind === 'live') void heartbeat(currentId, controller.signal);
+				if (initialKind === 'live' || initialKind === 'scheduled')
+					void heartbeat(currentId, controller.signal);
 				scheduleHeartbeat(10_000);
 			}
 			document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1626,15 +1630,11 @@
 								{kind === 'live'
 									? 'Сейчас слушают'
 									: kind === 'scheduled'
-										? 'До начала'
+										? 'Сейчас на странице'
 										: 'Слушало'}
 							</p>
 							<p class="mt-1 text-sm font-bold">
-								{kind === 'live'
-									? listeners
-									: kind === 'scheduled'
-										? countdownLabel
-										: data.viewersCount}
+								{kind === 'live' || kind === 'scheduled' ? listeners : data.viewersCount}
 							</p>
 						</div>
 					</div>
@@ -1691,7 +1691,7 @@
 							>{/if}
 						<span
 							class="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold"
-							><Users class="h-3 w-3" /> {kind === 'scheduled' ? '—' : listeners}</span
+							><Users class="h-3 w-3" /> {listeners}</span
 						>
 
 						{#if kind === 'published'}<label

@@ -33,9 +33,10 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const canRevealImages = canWatch;
 	const canRevealAudio = canWatch && (kind !== 'scheduled' || admin);
 	const chatOpen = isBroadcastChatOpen(state, now);
-	const listeners = kind === 'live' ? await activeListenerCount(state.id, now) : 0;
+	const listeners =
+		kind === 'live' || kind === 'scheduled' ? await activeListenerCount(state.id, now) : 0;
 	const participants =
-		kind === 'live'
+		kind === 'live' || kind === 'scheduled'
 			? await activeBroadcastParticipants(state.id, now)
 			: kind === 'published'
 				? await broadcastViewerParticipants(state.id)
