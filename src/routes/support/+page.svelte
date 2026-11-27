@@ -30,6 +30,10 @@
 	</div>
 
 	{#if data.page.data.support}
-		<SupportBlock support={data.page.data.support} />
+		<SupportBlock
+			support={data.page.data.support}
+			tonConnectManifestUrl={data.tonConnectManifestUrl}
+			showTonConnect
+		/>
 	{/if}
 </div>

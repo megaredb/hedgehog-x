@@ -86,6 +86,7 @@
 		"@aws-sdk/client-s3": "^3.1161.0",
 		"@aws-sdk/s3-request-presigner": "3.1161.0",
 		"@sveltejs/kit": "^2.70.3",
+		"@tonconnect/ui": "5.0.4",
 		"@uinstinct/svelte-wheel-picker": "^0.1.33",
 		"better-auth": "~1.6.33",
 		"better-auth-telegram": "^2.0.1",

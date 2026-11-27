@@ -5,6 +5,7 @@
 	import TelegramIcon from '$lib/components/ui/brand-icons/TelegramIcon.svelte';
 	import TelegramWalletCard from '$lib/components/support/TelegramWalletCard.svelte';
 	import CryptoWalletCard from '$lib/components/support/CryptoWalletCard.svelte';
+	import TonWalletConnect from '$lib/components/support/TonWalletConnect.svelte';
 	import SupportCardModal from '$lib/components/support/SupportCardModal.svelte';
 	import { strings } from '$lib/constants/strings';
 	import {
@@ -15,7 +16,15 @@
 		type SiteSupportSettings
 	} from '$lib/types/site';
 
-	let { support = DEFAULT_SUPPORT_SETTINGS }: { support?: SiteSupportSettings } = $props();
+	let {
+		support = DEFAULT_SUPPORT_SETTINGS,
+		tonConnectManifestUrl = '',
+		showTonConnect = false
+	}: {
+		support?: SiteSupportSettings;
+		tonConnectManifestUrl?: string;
+		showTonConnect?: boolean;
+	} = $props();
 
 	type PaymentData = {
 		qrValue: string;
@@ -150,6 +159,11 @@
 				/>
 			</a>
 		</div>
+	{/if}
+
+	<!-- TON Connect wallet login -->
+	{#if showTonConnect}
+		<TonWalletConnect manifestUrl={tonConnectManifestUrl} />
 	{/if}
 
 	<!-- Telegram and crypto -->
