@@ -68,7 +68,7 @@ pnpm dev                      # http://localhost:5173
 | `pnpm preview`              | Preview (4173)                          |
 | `pnpm check`                | sync + svelte-check                     |
 | `pnpm lint` / `pnpm format` | prettier + eslint / автоформат          |
-| `pnpm test:unit`            | Unit (37 файлов, 270 тестов)            |
+| `pnpm test:unit`            | Unit (38 файлов, 275 тестов)            |
 | `pnpm test:coverage`        | Unit + experimental coverage            |
 | `pnpm test:e2e`             | Playwright (нужен `BETTER_AUTH_SECRET`) |
 | `pnpm test:docker`          | E2E в Docker                            |

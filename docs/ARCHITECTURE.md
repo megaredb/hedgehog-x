@@ -366,7 +366,7 @@ manual_expires_at > now || telegram.active || discord.active)`.
 - Docker: multi-stage, non-root, миграции в entrypoint, healthcheck,
   Traefik LE, edge rate limit только analytics; BODY_SIZE_LIMIT 550M.
 - Миграции `0000–0035`; `0005` no-op; `db:push` — dev-shortcut.
-- Тесты: 37 unit/270, 9 e2e/45.
+- Тесты: 38 unit/275, 9 e2e/45.
 
 ## 15. Ограничения и компромиссы
 
