@@ -522,7 +522,7 @@
 					>
 						<span class="h-1 w-1 rounded-full bg-white"></span>
 						<span class="truncate">Сейчас слушают</span>
-						<LiveBars tone="light" size="xs" class="ml-auto shrink-0" />
+						<LiveBars tone="light" size="xs" class="shrink-0" />
 					</p>
 					<p class="mt-0.5 truncate text-[10px] font-bold">{liveBroadcast.title}</p>
 					{@render broadcastAvatars(liveBroadcast, true)}
