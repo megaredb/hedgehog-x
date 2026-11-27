@@ -133,7 +133,11 @@ publishAfterEnd` — publishedAt; иначе запись недоступна; 
   активная подписка или admin/author. Гость видит CTA.
 - **Live:** та же глава; позиция = `now - startedAt`, синхронизация по
   `serverNow`; replay — с серверного прогресса; live всегда с края.
-- **Чат:** только live/replay с `chat_enabled`; 500 символов, 5 сообщений/10 с,
+- **Scheduled:** тот же layout; вместо Play — countdown; при старте клиент
+  обновляет state и включает аудио автоматически (autoplay может быть
+  заблокирован браузером).
+- **Чат:** live/replay с `chat_enabled`; для scheduled — за 1 час до старта;
+  500 символов, 5 сообщений/10 с,
   ссылки только Telegram/Boosty/Discord/сайт; reply, теги иллюстраций, 4
   реакции (👍/❤️/🔥/😂), нельзя реагировать на своё; страница 30.
 - **Иллюстрации:** по `show_at_seconds` из `chapter_illustrations`;

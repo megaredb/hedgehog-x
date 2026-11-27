@@ -10,6 +10,7 @@ import {
 	broadcastViewerCount,
 	CHAT_PAGE_SIZE,
 	getBroadcastIllustrations,
+	isBroadcastChatOpen,
 	listMessages,
 	syncBroadcast
 } from '$lib/server/broadcasts';
@@ -52,17 +53,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const subscription = currentUser ? await getSubscriptionSummary(currentUser.id) : null;
 	const subscribed = Boolean(subscription?.active);
 	const canWatch = Boolean(currentUser && (subscribed || isAdmin));
-	const canRevealMedia = canWatch && !(kind === 'scheduled' && !isAdmin);
-	const canReadChat =
-		canWatch &&
-		Boolean(state.startedAt) &&
-		state.chatEnabled &&
-		(kind === 'live' || canReplay(state));
+	const canRevealImages = canWatch;
+	const canRevealAudio = canWatch && (kind !== 'scheduled' || isAdmin);
+	const canReadChat = canWatch && isBroadcastChatOpen(state);
 	const [latestMessages, illustrations] = await Promise.all([
 		canReadChat
 			? listMessages(state.id, state.startedAt, undefined, currentUser?.id, CHAT_PAGE_SIZE + 1)
 			: Promise.resolve([]),
-		canRevealMedia ? getBroadcastIllustrations(state.id) : Promise.resolve([])
+		canRevealImages ? getBroadcastIllustrations(state.id) : Promise.resolve([])
 	]);
 	const hasMoreMessages = latestMessages.length > CHAT_PAGE_SIZE;
 	const viewersCount = kind === 'published' ? await broadcastViewerCount(state.id) : 0;
@@ -75,7 +73,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				? await broadcastViewerParticipants(state.id)
 				: [];
 	const messages = hasMoreMessages ? latestMessages.slice(1) : latestMessages;
-	const images = canRevealMedia
+	const images = canRevealImages
 		? [
 				...(state.coverUrl
 					? [
@@ -91,7 +89,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				...illustrations
 			]
 		: [];
-	const publicBroadcast = canRevealMedia ? state : { ...state, audioUrl: '' };
+	const publicBroadcast = canRevealAudio ? state : { ...state, audioUrl: '' };
 	return {
 		broadcast: publicBroadcast,
 		kind,
@@ -101,6 +99,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		isAuthenticated: Boolean(currentUser),
 		subscribed,
 		chatEnabled: state.chatEnabled,
+		chatOpen: canReadChat,
 		messages,
 		hasMoreMessages,
 		viewersCount,

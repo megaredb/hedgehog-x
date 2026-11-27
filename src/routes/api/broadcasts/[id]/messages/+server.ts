@@ -1,9 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 import {
 	addMessage,
-	broadcastKind,
-	canReplay,
 	getBroadcastIllustrations,
+	isBroadcastChatOpen,
 	CHAT_PAGE_SIZE,
 	hasBroadcastAccess,
 	listMessages,
@@ -18,8 +17,8 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
 	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state) throw error(404, 'Трансляция не найдена');
-	if (broadcastKind(state) !== 'live') throw error(409, 'Чат доступен только во время трансляции');
 	if (!state.chatEnabled) throw error(403, 'Чат отключён');
+	if (!isBroadcastChatOpen(state)) throw error(409, 'Чат откроется за час до начала трансляции');
 	const payload = await request.json().catch(() => null);
 	const validation = validateChatBodyDetailed(payload?.body, url.hostname);
 	if (validation.error === 'empty') throw error(400, 'Введите сообщение');
@@ -74,9 +73,8 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state) throw error(404, 'Трансляция не найдена');
-	const kind = broadcastKind(state);
-	if (kind !== 'live' && !canReplay(state)) throw error(409, 'Чат недоступен');
-	if (!state.startedAt || !state.chatEnabled) throw error(409, 'Чат недоступен');
+	if (!state.chatEnabled) throw error(409, 'Чат недоступен');
+	if (!isBroadcastChatOpen(state)) throw error(409, 'Чат недоступен');
 	const beforeRaw = url.searchParams.get('before');
 	const beforeId = url.searchParams.get('beforeId') ?? undefined;
 	const before = beforeRaw ? new Date(beforeRaw) : undefined;

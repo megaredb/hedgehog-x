@@ -68,7 +68,7 @@
 | `/support`                   | `+page.svelte`, `+page.server.ts`                                        | да, БД          | `site_pages.data`                                                                                     | Boosty, карты, крипто-кошельки (GRAM/XAUT и др.), Telegram Wallet, QR                                  |
 | `/about`                     | `+page.svelte`, `+page.server.ts`                                        | да, БД          | `site_pages.data`, `translators`                                                                      | Автор, разработчики, переводчики, аватары                                                              |
 | `/broadcasts`                | `+page.svelte`, `+page.server.ts`                                        | да, БД          | live/published broadcasts                                                                             | Список эфиров и записей                                                                                |
-| `/broadcasts/[id]`           | `+page.svelte`, `+page.server.ts`                                        | да, БД + client | broadcast, messages, images, listeners, progress                                                      | Live/replay, чат, реакции, иллюстрации, донат, OG                                                      |
+| `/broadcasts/[id]`           | `+page.svelte`, `+page.server.ts`                                        | да, БД + client | broadcast, messages, images, listeners, progress                                                      | Live/scheduled countdown/replay, чат, реакции, иллюстрации, донат, OG                                  |
 | `/admin`                     | `+layout.server.ts`, `+layout.svelte`, `+page.server.ts`, `+page.svelte` | да, БД          | counts, recent, active subscribers                                                                    | Dev self-promote                                                                                       |
 | `/admin/analytics`           | `+page.server.ts`, `+page.svelte`                                        | да, БД          | listening + revenue                                                                                   | 30 дней, top-5, сессии, донаты, Umami                                                                  |
 | `/admin/content`             | `+page.server.ts`, `+page.svelte`                                        | да, БД          | книги, тома, главы, версии, иллюстрации, тайминги                                                     | 13 actions, published, R2 picker, media lightbox                                                       |
@@ -129,7 +129,8 @@
 | `GET /api/broadcasts/[id]/messages`      | user + доступ | page 30, `before`                              | История                                                    |
 | `POST /api/broadcasts/[id]/reactions`    | user + доступ | 👍/❤️/🔥/😂; только live; не своё              | Toggle + counts                                            |
 
-Доступ: `isAdminRole(role)` (admin/author) или активная подписка. Чат — только live/replay с `chatEnabled`.
+Доступ: `isAdminRole(role)` (admin/author) или активная подписка. Чат —
+live/replay с `chatEnabled`, а для scheduled открывается за 1 час до старта.
 
 ### 4.3. Админ/интеграции
 

@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { broadcastMessages, broadcastReactions } from '$lib/server/db/schema';
-import { broadcastKind, hasBroadcastAccess, syncBroadcast } from '$lib/server/broadcasts';
+import { hasBroadcastAccess, isBroadcastChatOpen, syncBroadcast } from '$lib/server/broadcasts';
 import type { RequestHandler } from './$types';
 
 const ALLOWED = new Set(['👍', '❤️', '🔥', '😂']);
@@ -12,9 +12,9 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 	if (!currentUser) throw error(401, 'Требуется вход');
 	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
-	if (!state || broadcastKind(state) !== 'live')
-		throw error(409, 'Реакции доступны только в эфире');
+	if (!state) throw error(404, 'Трансляция не найдена');
 	if (!state.chatEnabled) throw error(403, 'Чат отключён');
+	if (!isBroadcastChatOpen(state)) throw error(409, 'Реакции доступны только в чате');
 	const payload = await request.json().catch(() => null);
 	const messageId = typeof payload?.messageId === 'string' ? payload.messageId : '';
 	const emoji = typeof payload?.emoji === 'string' ? payload.emoji : '';

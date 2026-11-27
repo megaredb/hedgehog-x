@@ -59,6 +59,7 @@ Dexie; аудио — OPFS. Главная, каталог, книга, том, 
     проверку `blocked`/сессий.
 12. **Трансляции.** `chapters.published` при старте; replay только при
     `saveRecording && publishedAt`; чат — live/replay с `chatEnabled`,
+    для scheduled — за 1 час до старта,
     500 символов, 5/10 с, allowlist ссылок.
 13. **Sync actions.** Новое действие — producer + consumer + owner + тест.
 14. **Валидация/лимиты.** Новые API: auth, размеры, корректные 4xx/5xx; батчи —

@@ -54,6 +54,20 @@ export function canReplay(state: BroadcastState): boolean {
 	return Boolean(state.endedAt && state.publishedAt && state.saveRecording);
 }
 
+export const CHAT_EARLY_OPEN_MS = 60 * 60 * 1000;
+
+/** Chat is open during the broadcast and one hour before a scheduled start. */
+export function isBroadcastChatOpen(state: BroadcastState, now = new Date()): boolean {
+	if (!state.chatEnabled) return false;
+	const kind = broadcastKind(state, now);
+	if (kind === 'live') return true;
+	if (kind === 'published') return canReplay(state);
+	if (kind === 'scheduled') {
+		return state.scheduledStartAt.getTime() - now.getTime() <= CHAT_EARLY_OPEN_MS;
+	}
+	return false;
+}
+
 export function canJoinLive(state: BroadcastState, now = new Date()): boolean {
 	return broadcastKind(state, now) === 'live';
 }

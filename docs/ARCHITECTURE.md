@@ -314,9 +314,14 @@ manual_expires_at > now || telegram.active || discord.active)`.
 - Список `/broadcasts` — публичные live/published. Деталь доступна, но
   media/чат требуют входа и активной подписки (или admin/author); гость
   видит CTA.
+- Scheduled-деталь рендерит тот же layout, что live: обложка/иллюстрации,
+  чат и плеер; вместо кнопки Play — countdown. В момент старта клиент
+  синхронизирует state и пытается включить аудио автоматически (если браузер
+  блокирует autoplay — остаётся Play).
 - Аудио — та же глава; live синхронизируется по `startedAt/serverNow`
   (коррекция при дрейфе), replay — по серверному прогрессу; live всегда с края.
-- Чат: только live/replay с chatEnabled; 500 символов, 5/10 с, allowlist
+- Чат: live/replay с chatEnabled; для scheduled открывается за 1 час до старта;
+  500 символов, 5/10 с, allowlist
   Telegram/Boosty/Discord/сайта; reply, tagged illustrations, 4 реакции,
   нельзя реагировать на своё; page 30.
 - Иллюстрации: `chapter_illustrations` по `showAtSeconds`; legacy

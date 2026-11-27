@@ -7,6 +7,7 @@ import {
 	canReplay,
 	getBroadcastIllustrations,
 	hasBroadcastAccess,
+	isBroadcastChatOpen,
 	listMessages,
 	syncBroadcast
 } from '$lib/server/broadcasts';
@@ -29,6 +30,9 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	}
 
 	const now = new Date();
+	const canRevealImages = canWatch;
+	const canRevealAudio = canWatch && (kind !== 'scheduled' || admin);
+	const chatOpen = isBroadcastChatOpen(state, now);
 	const listeners = kind === 'live' ? await activeListenerCount(state.id, now) : 0;
 	const participants =
 		kind === 'live'
@@ -39,9 +43,7 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const after = url.searchParams.get('after');
 	const afterId = url.searchParams.get('afterId') ?? undefined;
 	const afterDate = after ? new Date(after) : undefined;
-	const canRevealMedia = canWatch && !(kind === 'scheduled' && !admin);
-	const canReadChat =
-		Boolean(state.startedAt) && state.chatEnabled && (kind === 'live' || canReplay(state));
+	const canReadChat = chatOpen;
 	const messages = canReadChat
 		? await listMessages(
 				state.id,
@@ -53,12 +55,12 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 				afterId
 			)
 		: [];
-	const images = canRevealMedia ? await getBroadcastIllustrations(state.id) : [];
+	const images = canRevealImages ? await getBroadcastIllustrations(state.id) : [];
 
 	return json({
 		broadcast: {
 			...state,
-			audioUrl: canRevealMedia ? state.audioUrl : '',
+			audioUrl: canRevealAudio ? state.audioUrl : '',
 			scheduledStartAt: state.scheduledStartAt.toISOString(),
 			startedAt: state.startedAt?.toISOString() ?? null,
 			endedAt: state.endedAt?.toISOString() ?? null,
@@ -68,6 +70,7 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		},
 		messages,
 		images,
+		chatOpen,
 		listeners,
 		participants,
 		serverNow: now.toISOString(),

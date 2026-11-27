@@ -20,7 +20,6 @@
 	import CryptoWalletCard from '$lib/components/support/CryptoWalletCard.svelte';
 	import {
 		Check,
-		Clock,
 		Coins,
 		Heart,
 		Image as ImageIcon,
@@ -147,7 +146,10 @@
 	}
 
 	let serverNow = $state(untrack(() => new Date(data.serverNow).toISOString()));
-	let clockSkew = $state(0);
+	let clockSkew = $state(untrack(() => Date.now() - new Date(data.serverNow).getTime()));
+	let nowMs = $state(Date.now());
+	let previousKind = untrack(() => kind);
+	let autoStartRequested = false;
 	let portraitQuery: MediaQueryList | null = null;
 	let chatText = $state('');
 	let chatError = $state('');
@@ -317,6 +319,28 @@
 		const expected = (Date.now() - clockSkew - new Date(broadcast.startedAt).getTime()) / 1000;
 		return Math.max(0, Math.min(expected, broadcast.durationSeconds));
 	});
+	const CHAT_EARLY_OPEN_MS = 60 * 60 * 1000;
+	const timeUntilStart = $derived.by(() => {
+		void nowMs;
+		const startsAt = new Date(broadcast.scheduledStartAt).getTime();
+		return Math.max(0, startsAt - (nowMs - clockSkew));
+	});
+	const chatOpen = $derived(
+		data.chatEnabled &&
+			(kind === 'live' ||
+				(kind === 'scheduled' && timeUntilStart <= CHAT_EARLY_OPEN_MS) ||
+				(kind === 'published' && Boolean(data.chatOpen)))
+	);
+	const scheduledAtLabel = $derived(
+		new Intl.DateTimeFormat('ru-RU', {
+			day: 'numeric',
+			month: 'long',
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'Europe/Moscow'
+		}).format(new Date(broadcast.scheduledStartAt))
+	);
+	const countdownLabel = $derived(formatCountdown(timeUntilStart));
 	const pageTimelineTime = $derived.by(() => {
 		if (kind === 'live') return liveOffset;
 		if (isCurrentBroadcast) return currentTime;
@@ -729,6 +753,17 @@
 			: m + ':' + String(s).padStart(2, '0');
 	}
 
+	function formatCountdown(ms: number): string {
+		const total = Math.max(0, Math.ceil(ms / 1000));
+		const pad = (value: number) => String(value).padStart(2, '0');
+		const days = Math.floor(total / 86_400);
+		const hours = Math.floor((total % 86_400) / 3_600);
+		const minutes = Math.floor((total % 3_600) / 60);
+		const seconds = total % 60;
+		const time = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+		return days > 0 ? `${days} д ${time}` : time;
+	}
+
 	function updateClock(server: string) {
 		const parsed = new Date(server).getTime();
 		if (Number.isNaN(parsed)) return;
@@ -949,7 +984,11 @@
 		portraitQuery.addEventListener('change', handlePortraitOrientation);
 		document.body.style.overflow = 'hidden';
 		document.body.classList.add('broadcast-page');
+		const clockTimer = setInterval(() => {
+			nowMs = Date.now();
+		}, 1000);
 		return () => {
+			clearInterval(clockTimer);
 			document.removeEventListener('pointerdown', handleAttachOutside);
 			portraitQuery?.removeEventListener('change', handlePortraitOrientation);
 			portraitQuery = null;
@@ -972,7 +1011,10 @@
 				participants = data.participants ?? [];
 				hasMoreMessages = data.hasMoreMessages ?? false;
 				serverNow = new Date(data.serverNow).toISOString();
-				clockSkew = 0;
+				clockSkew = Date.now() - new Date(data.serverNow).getTime();
+				nowMs = Date.now();
+				previousKind = data.kind;
+				autoStartRequested = false;
 				listeners = 0;
 				selectedImageId = null;
 				savedChatForDownload = false;
@@ -1076,6 +1118,32 @@
 			sendLeaveBeacon();
 		};
 	});
+
+	async function nudgeBroadcastLive() {
+		if (untrack(() => kind) !== 'scheduled') return;
+		const controller = new AbortController();
+		for (let attempt = 0; attempt < 4; attempt += 1) {
+			await poll(broadcast.id, controller.signal);
+			if (untrack(() => kind) === 'live') return;
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
+	}
+
+	$effect(() => {
+		void nowMs;
+		if (kind === 'scheduled' && timeUntilStart <= 0 && !autoStartRequested) {
+			autoStartRequested = true;
+			void nudgeBroadcastLive();
+		}
+	});
+
+	$effect(() => {
+		const current = kind;
+		if (previousKind === 'scheduled' && current === 'live' && broadcast.audioUrl) {
+			startListening();
+		}
+		previousKind = current;
+	});
 </script>
 
 <svelte:window onkeydown={handleExpandedKeydown} />
@@ -1145,18 +1213,6 @@
 					Трансляции и записи доступны подписчикам HEDGEHOG.INC.
 				</p>
 				<Button class="mt-4" href={resolve('/subscription')}>Оформить подписку</Button>
-			</div>
-		</div>
-	{:else if kind === 'scheduled'}
-		<div class="relative z-10 flex h-full items-center justify-center p-6">
-			<div
-				class="w-full max-w-md rounded-2xl border border-sky-500/30 bg-card/95 p-8 text-center shadow-xl"
-			>
-				<Clock class="mx-auto h-10 w-10 text-sky-500" />
-				<h1 class="mt-3 text-xl font-bold">{broadcast.title}</h1>
-				<p class="mt-2 text-sm text-muted-foreground">
-					{new Date(broadcast.scheduledStartAt).toLocaleString('ru-RU')}
-				</p>
 			</div>
 		</div>
 	{:else}
@@ -1285,7 +1341,25 @@
 									>{/if}
 							</button>
 						{/if}
-						{#if !isCurrentBroadcast || !audioStore.isPlaying}
+						{#if kind === 'scheduled'}
+							<div
+								class="absolute top-1/2 left-1/2 z-20 w-[min(88vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/20 bg-black/55 px-5 py-6 text-center text-white shadow-2xl backdrop-blur-md sm:px-8 sm:py-8"
+								aria-live="polite"
+							>
+								<p class="text-[10px] font-bold tracking-[0.18em] text-white/75 uppercase">
+									До начала трансляции
+								</p>
+								<p
+									class="mt-2 font-mono text-4xl font-black tracking-tight tabular-nums sm:text-6xl"
+								>
+									{countdownLabel}
+								</p>
+								<p class="mt-3 text-xs text-white/75 sm:text-sm">{scheduledAtLabel}</p>
+								{#if timeUntilStart <= 0}
+									<p class="mt-2 text-[10px] text-white/60">Начинаем эфир…</p>
+								{/if}
+							</div>
+						{:else if !isCurrentBroadcast || !audioStore.isPlaying}
 							<button
 								type="button"
 								class="absolute top-1/2 left-1/2 z-20 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/45 text-white shadow-2xl backdrop-blur-md transition hover:scale-105 hover:bg-black/60 sm:h-20 sm:w-20"
@@ -1504,15 +1578,24 @@
 							</p>
 							<p class="mt-1 flex items-center gap-1 text-sm font-bold">
 								{#if kind === 'live'}<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"
-									></span> LIVE{:else}ЗАПИСЬ{/if}
+									></span> LIVE{:else if kind === 'scheduled'}
+									СКОРО{:else}ЗАПИСЬ{/if}
 							</p>
 						</div>
 						<div class="rounded-xl border border-border/50 bg-muted/30 p-3">
 							<p class="text-[9px] font-semibold tracking-wide text-muted-foreground uppercase">
-								{kind === 'live' ? 'Сейчас слушают' : 'Слушало'}
+								{kind === 'live'
+									? 'Сейчас слушают'
+									: kind === 'scheduled'
+										? 'До начала'
+										: 'Слушало'}
 							</p>
 							<p class="mt-1 text-sm font-bold">
-								{kind === 'live' ? listeners : data.viewersCount}
+								{kind === 'live'
+									? listeners
+									: kind === 'scheduled'
+										? countdownLabel
+										: data.viewersCount}
 							</p>
 						</div>
 					</div>
@@ -1525,7 +1608,9 @@
 						</label>
 					{/if}
 					<div class="mt-4 flex items-center justify-between gap-2">
-						<h3 class="text-xs font-bold">{kind === 'live' ? 'На трансляции' : 'Слушали'}</h3>
+						<h3 class="text-xs font-bold">
+							{kind === 'live' ? 'На трансляции' : kind === 'scheduled' ? 'В чате' : 'Слушали'}
+						</h3>
 						<span
 							class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"
 							>{participants.length}</span
@@ -1563,11 +1648,11 @@
 								><span class="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"></span> Live</span
 							>{:else}<span
 								class="rounded-full bg-muted px-2 py-1 text-[9px] font-bold tracking-wide text-muted-foreground uppercase"
-								>Запись</span
+								>{kind === 'scheduled' ? 'Скоро' : 'Запись'}</span
 							>{/if}
 						<span
 							class="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold"
-							><Users class="h-3 w-3" /> {listeners}</span
+							><Users class="h-3 w-3" /> {kind === 'scheduled' ? '—' : listeners}</span
 						>
 
 						{#if kind === 'published'}<label
@@ -1703,7 +1788,9 @@
 								{#if visibleMessages.length === 0}<p
 										class="py-10 text-center text-xs text-muted-foreground"
 									>
-										Сообщений пока нет. Будьте первым.
+										{kind === 'scheduled' && !chatOpen
+											? 'Чат откроется за час до начала трансляции.'
+											: 'Сообщений пока нет. Будьте первым.'}
 									</p>{/if}
 								{#each newestMessages as message (message.id)}
 									{@const lifetime = message.subscription === 'lifetime'}
@@ -1839,7 +1926,7 @@
 														</span>
 													</button>
 												{/if}
-												{#if kind === 'live'}
+												{#if chatOpen}
 													<div class="mt-1.5 flex items-end gap-1">
 														<div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
 															{#if currentUserId && currentUserId === message.userId}
@@ -1894,7 +1981,7 @@
 						</div>
 					</div>
 				{/if}
-				{#if kind === 'live' && data.chatEnabled}
+				{#if chatOpen}
 					<form
 						class="border-t border-border/40 p-3 max-lg:landscape:p-2 {mobileTab !== 'chat'
 							? 'max-lg:portrait:hidden'
