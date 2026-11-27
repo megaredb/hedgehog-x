@@ -3,6 +3,7 @@
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import ImageLightbox from '$lib/components/ui/lightbox/ImageLightbox.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { Switch } from '$lib/components/ui/switch';
 	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
 	import { Image as ImageIcon, Lock, ZoomIn } from '@lucide/svelte';
 	import { audioStore } from '$lib/audio-store.svelte';
@@ -35,6 +36,7 @@
 
 	let selectedIllustration = $state<OfflineIllustration | null>(null);
 	let isLightboxOpen = $state(false);
+	let showAllIllustrations = $state(false);
 
 	const progressQuery = useDexie(
 		() => db.progress.toArray(),
@@ -79,7 +81,7 @@
 	}
 
 	function isLocked(item: OfflineIllustration): boolean {
-		return isChapterLocked(item) || isTimingLocked(item);
+		return !showAllIllustrations && (isChapterLocked(item) || isTimingLocked(item));
 	}
 
 	function lockLabel(item: OfflineIllustration): string {
@@ -114,6 +116,15 @@
 			</p>
 		</div>
 	{:else}
+		<label
+			class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/60 px-4 py-3 text-xs"
+		>
+			<span class="flex items-center gap-2 font-semibold">
+				<ImageIcon class="h-4 w-4 text-primary" />
+				{showAllIllustrations ? 'Заблюрить иллюстрации' : 'Разблюрить иллюстрации'}
+			</span>
+			<Switch bind:checked={showAllIllustrations} aria-label="Разблюрить иллюстрации" />
+		</label>
 		<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 			{#each illustrationsQuery.data as ill (ill.id)}
 				<div

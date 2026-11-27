@@ -12,6 +12,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import TimecodeInput from '$lib/components/audio/TimecodeInput.svelte';
 	import BlurhashImage from '$lib/components/common/BlurhashImage.svelte';
+	import MarqueeText from '$lib/components/ui/MarqueeText.svelte';
 	import { db } from '$lib/client/db';
 	import { useDexie } from '$lib/client/db/useLiveQuery.svelte';
 	import { bookmarkService } from '$lib/client/services/bookmarkService';
@@ -22,6 +23,17 @@
 	import { fly } from 'svelte/transition';
 
 	let isDrawerOpen = $state(false);
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const media = window.matchMedia('(min-width: 768px)');
+		const closeOnDesktop = () => {
+			if (media.matches) isDrawerOpen = false;
+		};
+		closeOnDesktop();
+		media.addEventListener('change', closeOnDesktop);
+		return () => media.removeEventListener('change', closeOnDesktop);
+	});
 	const isLiveBroadcast = $derived(Boolean(audioStore.currentTrack?.broadcastLive));
 	const isBroadcast = $derived(Boolean(audioStore.currentTrack?.broadcastId));
 	const playbackSource = $derived(isLiveBroadcast ? 'live' : isBroadcast ? 'replay' : 'regular');
@@ -233,10 +245,11 @@
 					loading="eager"
 				/>
 				<div class="flex min-w-0 flex-col">
-					<p class="flex items-center gap-1.5 truncate text-sm font-medium">
-						<span class="truncate"
-							>{audioStore.currentTrack?.title ?? strings.player.chapterFallback}</span
-						>
+					<p class="flex items-center gap-1.5 text-sm font-medium">
+						<MarqueeText
+							class="min-w-0 flex-1"
+							text={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+						/>
 						{@render sourceBadge()}
 					</p>
 					<p class="truncate text-xs text-muted-foreground">
@@ -255,9 +268,10 @@
 				loading="eager"
 			/>
 			<div class="flex min-w-0 flex-col">
-				<p class="truncate text-sm font-medium">
-					{audioStore.currentTrack?.title ?? strings.player.chapterFallback}
-				</p>
+				<MarqueeText
+					class="text-sm font-medium"
+					text={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+				/>
 				<p class="truncate text-xs text-muted-foreground">
 					{audioStore.currentTrack?.album ?? strings.player.volumeFallback}
 				</p>
@@ -373,7 +387,7 @@
 
 		<!-- ── Desktop ── -->
 		<div class="player-desktop hidden px-4 py-2 md:block">
-			<AudioPlayer.ControlBar class="flex items-center justify-between">
+			<AudioPlayer.ControlBar class="relative flex items-center justify-between">
 				<div class="flex w-fit min-w-0 items-center gap-2">
 					{@render shortBookInfo()}
 					{#if !isLiveBroadcast}
@@ -399,7 +413,9 @@
 					{/if}
 				</div>
 
-				<div class="flex max-w-2xl flex-1 flex-col items-center gap-2">
+				<div
+					class="absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2"
+				>
 					{@render desktopControls()}
 				</div>
 
@@ -440,10 +456,11 @@
 
 							<!-- Track info — takes remaining space, truncates -->
 							<div class="flex min-w-0 flex-1 flex-col text-left">
-								<p class="flex items-center gap-1.5 truncate text-sm leading-tight font-medium">
-									<span class="truncate"
-										>{audioStore.currentTrack?.title ?? strings.player.chapterFallback}</span
-									>
+								<p class="flex items-center gap-1.5 text-sm leading-tight font-medium">
+									<MarqueeText
+										class="min-w-0 flex-1"
+										text={audioStore.currentTrack?.title ?? strings.player.chapterFallback}
+									/>
 									{@render sourceBadge()}
 								</p>
 								<p class="truncate text-xs leading-tight text-muted-foreground">

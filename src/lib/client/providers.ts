@@ -22,7 +22,7 @@ export const AUTH_PROVIDERS: AuthProvider[] = [
 		label: 'Telegram',
 		description: 'Вход через Telegram',
 		icon: TelegramIcon,
-		brandColor: '#0B6F9E',
+		brandColor: '#26A5E4',
 		brandForeground: '#ffffff',
 		userAvatarField: 'telegramAvatar',
 		userUsernameField: 'telegramOidcUsername'

@@ -722,6 +722,9 @@
 			return;
 		}
 		if (mentionMode) {
+			// Let native deletion run so a bare "@" can be removed and the
+			// picker can close through updateMentionState().
+			if (event.key === 'Backspace' || event.key === 'Delete') return;
 			event.preventDefault();
 			return;
 		}
@@ -1292,7 +1295,7 @@
 		{#if isChatCollapsed}
 			<button
 				type="button"
-				class="absolute top-14 right-2 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/95 text-foreground shadow-xl backdrop-blur-md transition hover:bg-muted lg:top-16 lg:right-3 lg:flex landscape:flex"
+				class="absolute top-14 right-3 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/95 text-foreground shadow-xl backdrop-blur-md transition hover:bg-muted lg:top-16 lg:right-3 lg:flex landscape:flex"
 				onclick={showChat}
 				aria-label="Открыть чат"><MessageCircle class="h-5 w-5" /></button
 			>
@@ -1694,7 +1697,9 @@
 							>{/if}
 						<span
 							class="inline-flex items-center gap-1 rounded-full border border-border/60 px-2 py-1 text-[10px] font-semibold"
-							><Users class="h-3 w-3" /> {listeners}</span
+							title={kind === 'published' ? 'Слушало' : undefined}
+							><Users class="h-3 w-3" />
+							{kind === 'published' ? data.viewersCount : listeners}</span
 						>
 
 						{#if kind === 'published'}<label
@@ -1703,10 +1708,6 @@
 									bind:checked={chatByRecording}
 									aria-label="Чат по записи"
 								/></label
-							>{/if}
-						{#if kind === 'published'}<span
-								class="rounded-full bg-muted px-2 py-1 text-[9px] font-semibold text-muted-foreground"
-								>Слушало: {data.viewersCount}</span
 							>{/if}
 						<button
 							type="button"
@@ -1850,7 +1851,8 @@
 									<div
 										id={'broadcast-message-' + message.id}
 										in:fly={{ y: 8, duration: 180 }}
-										class="flex items-start gap-2.5"
+										class="chat-message-row flex items-start gap-2.5"
+										class:blurred={taggedSpoiler}
 									>
 										<div class="relative shrink-0 pt-0.5">
 											<div
@@ -1889,12 +1891,11 @@
 													>{/if}
 											</div>
 											<div
-												class="mt-1 rounded-2xl rounded-tl-sm border px-2.5 py-2 transition-colors duration-500 {lifetime
+												class="chat-message-bubble mt-1 rounded-2xl rounded-tl-sm border px-2.5 py-2 transition-colors duration-500 {lifetime
 													? 'border-amber-400/25 bg-amber-500/10'
 													: subscribed
 														? 'border-emerald-400/20 bg-emerald-500/8'
 														: 'border-border/50 bg-muted/50'}"
-												class:blurred={taggedSpoiler}
 												style={highlightedMessageId === message.id
 													? 'background-color: color-mix(in oklch, var(--color-primary) 16%, transparent);'
 													: ''}
@@ -1909,7 +1910,7 @@
 															{message.replyToName ?? 'Сообщение'}
 														</p>
 														<p
-															class="line-clamp-2 text-[9px] whitespace-pre-wrap text-muted-foreground"
+															class="line-clamp-1 text-[9px] whitespace-pre-wrap text-muted-foreground"
 														>
 															{message.replyToBody ?? ''}
 														</p>
@@ -1971,7 +1972,14 @@
 												{#if chatOpen}
 													<div class="mt-1.5 flex items-end gap-1">
 														<div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-															{#if currentUserId && currentUserId === message.userId}
+															{#if kind === 'published'}
+																{#each Object.entries(message.reactions ?? {}).sort((a, b) => b[1] - a[1]) as [emoji, count] (emoji)}
+																	<span
+																		class="rounded-full border border-border/40 bg-background/70 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+																		>{emoji} {count}</span
+																	>
+																{/each}
+															{:else if currentUserId && currentUserId === message.userId}
 																{#each Object.entries(message.reactions ?? {}).sort((a, b) => b[1] - a[1]) as [emoji, count] (emoji)}
 																	<span
 																		class="rounded-full border border-border/40 bg-background/70 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
@@ -1999,7 +2007,10 @@
 														</div>
 														<button
 															type="button"
-															class="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
+															class="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] text-muted-foreground transition hover:bg-muted hover:text-foreground {kind ===
+															'published'
+																? 'hidden'
+																: ''}"
 															onclick={() => setReplyTo(message)}
 															aria-label="Ответить"><Reply class="h-3 w-3" /> Ответить</button
 														>
@@ -2023,7 +2034,7 @@
 						</div>
 					</div>
 				{/if}
-				{#if chatOpen}
+				{#if chatOpen && kind !== 'published'}
 					<form
 						class="border-t border-border/40 p-3 max-lg:landscape:p-2 {mobileTab !== 'chat'
 							? 'max-lg:portrait:hidden'
@@ -2203,6 +2214,20 @@
 </div>
 
 <style>
+	.chat-message-row {
+		align-self: flex-start;
+		flex: 0 0 auto;
+		height: auto;
+		min-height: 0;
+		contain: layout paint;
+	}
+
+	.chat-message-bubble {
+		align-self: flex-start;
+		height: auto;
+		min-height: 0;
+	}
+
 	.chat-scroll {
 		scrollbar-width: none;
 		-ms-overflow-style: none;
@@ -2210,6 +2235,7 @@
 
 	.blurred {
 		filter: blur(5px);
+		pointer-events: none;
 		user-select: none;
 	}
 

@@ -21,6 +21,7 @@
 		Users
 	} from '@lucide/svelte';
 	import LiveBars from '$lib/components/broadcasts/LiveBars.svelte';
+	import MarqueeText from '$lib/components/ui/MarqueeText.svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { Button } from '$lib/components/ui/button';
@@ -100,6 +101,17 @@
 	let y = $state(0);
 	let isMobileMenuOpen = $state(false);
 	let otherOpen = $state(false);
+
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		const media = window.matchMedia('(min-width: 1024px)');
+		const closeOnDesktop = () => {
+			if (media.matches) isMobileMenuOpen = false;
+		};
+		closeOnDesktop();
+		media.addEventListener('change', closeOnDesktop);
+		return () => media.removeEventListener('change', closeOnDesktop);
+	});
 
 	const premiumUntil = $derived.by(() => {
 		if (!subscriptionActive) return 'Оформить подписку';
@@ -234,7 +246,7 @@
 				{#each broadcast.participants.slice(0, 3) as participant (participant.id)}
 					<span
 						title={participant.name}
-						class="relative flex h-4.5 w-4.5 overflow-hidden rounded-full border bg-black/30 text-[7px] font-bold {live
+						class="relative flex h-4.5 w-4.5 items-center justify-center overflow-hidden rounded-full border bg-black/30 text-[7px] font-bold {live
 							? 'border-white/70 text-white'
 							: 'border-amber-700/30 text-foreground'}"
 					>
@@ -243,7 +255,7 @@
 								alt=""
 								class="h-full w-full object-cover"
 								loading="lazy"
-							/>{:else}{participant.name.charAt(0).toUpperCase()}{/if}
+							/>{:else}{participant.name.trim().charAt(0).toUpperCase() || '?'}{/if}
 					</span>
 				{/each}
 			</div>
@@ -489,7 +501,7 @@
 						<CalendarClock class="h-2.5 w-2.5" />
 						Запланировано
 					</p>
-					<p class="mt-0.5 truncate text-[10px] font-bold">{scheduledBroadcast.title}</p>
+					<MarqueeText class="mt-0.5 text-[10px] font-bold" text={scheduledBroadcast.title} />
 					<p class="truncate text-[8px] text-muted-foreground">
 						{formatScheduledAt(scheduledBroadcast.scheduledStartAt)}
 					</p>
@@ -524,7 +536,7 @@
 						<span class="truncate">Сейчас слушают</span>
 						<LiveBars tone="light" size="xs" class="shrink-0" />
 					</p>
-					<p class="mt-0.5 truncate text-[10px] font-bold">{liveBroadcast.title}</p>
+					<MarqueeText class="mt-0.5 text-[10px] font-bold" text={liveBroadcast.title} />
 					{@render broadcastAvatars(liveBroadcast, true)}
 				</div>
 				<ArrowUpRight class="h-3.5 w-3.5 text-white/80" />

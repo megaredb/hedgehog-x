@@ -158,14 +158,14 @@
 					{#each activeBroadcast.participants.slice(0, 3) as participant (participant.id)}
 						<span
 							title={participant.name}
-							class="relative flex h-4 w-4 overflow-hidden rounded-full border border-background bg-muted text-[6px] font-bold"
+							class="relative flex h-4 w-4 items-center justify-center overflow-hidden rounded-full border border-background bg-muted text-[6px] font-bold"
 						>
 							{#if participant.image}<img
 									src={participant.image}
 									alt=""
 									class="h-full w-full object-cover"
 									loading="lazy"
-								/>{:else}{participant.name.charAt(0).toUpperCase()}{/if}
+								/>{:else}{participant.name.trim().charAt(0).toUpperCase() || '?'}{/if}
 						</span>
 					{/each}
 					{#if activeBroadcast.listeners > 3}
