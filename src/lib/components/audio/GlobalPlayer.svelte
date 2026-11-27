@@ -229,7 +229,7 @@
 
 {#snippet shortBookInfo()}
 	<!-- Book info — tapping navigates to the volume page -->
-	<div class="flex h-fit min-w-0 items-center gap-2">
+	<div class="flex h-fit max-w-[min(42vw,560px)] min-w-0 items-center gap-2">
 		{#if volumeHref}
 			<a
 				href={resolve(volumeHref as '/')}
