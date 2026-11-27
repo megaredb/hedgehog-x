@@ -515,23 +515,17 @@
 						</div>{/if}
 					<span class="absolute top-0.5 right-0.5 h-1.5 w-1.5 animate-pulse rounded-full bg-white"
 					></span>
-					<div
-						class="absolute inset-x-0 bottom-0 flex justify-center bg-black/30 py-0.5"
-						aria-hidden="true"
-					>
-						<LiveBars tone="light" class="scale-75" />
-					</div>
 				</div>
 				<div class="min-w-0 flex-1">
 					<p
 						class="flex items-center gap-1 text-[8px] font-bold tracking-[0.08em] text-white uppercase"
 					>
 						<span class="h-1 w-1 rounded-full bg-white"></span>
-						Сейчас слушают
+						<span class="truncate">Сейчас слушают</span>
+						<LiveBars tone="light" size="xs" class="ml-auto shrink-0" />
 					</p>
 					<p class="mt-0.5 truncate text-[10px] font-bold">{liveBroadcast.title}</p>
 					{@render broadcastAvatars(liveBroadcast, true)}
-					<p class="truncate text-[8px] text-white">{liveBroadcast.listeners} слушают в эфире</p>
 				</div>
 				<ArrowUpRight class="h-3.5 w-3.5 text-white/80" />
 			</a>

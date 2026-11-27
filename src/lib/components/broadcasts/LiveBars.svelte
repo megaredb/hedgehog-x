@@ -1,9 +1,12 @@
 <script lang="ts">
-	let { tone = 'red', class: className = '' }: { tone?: 'red' | 'light'; class?: string } =
-		$props();
+	let {
+		tone = 'red',
+		size = 'md',
+		class: className = ''
+	}: { tone?: 'red' | 'light'; size?: 'md' | 'xs'; class?: string } = $props();
 </script>
 
-<span class="live-bars {tone} {className}" aria-hidden="true">
+<span class="live-bars {tone} {size} {className}" aria-hidden="true">
 	<span></span>
 	<span></span>
 	<span></span>
@@ -11,6 +14,7 @@
 
 <style>
 	.live-bars {
+		--bar-unit: 1px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -18,6 +22,14 @@
 		height: 20px;
 		padding: 3px 5px;
 		border-radius: 7px;
+	}
+
+	.live-bars.xs {
+		--bar-unit: 0.5px;
+		gap: 1px;
+		height: 8px;
+		padding: 0 2px;
+		border-radius: 3px;
 	}
 
 	.live-bars.red {
@@ -31,8 +43,12 @@
 	.live-bars span {
 		display: block;
 		width: 3px;
-		height: 4px;
+		height: calc(var(--bar-unit) * 4);
 		border-radius: 999px;
+	}
+
+	.live-bars.xs span {
+		width: 1px;
 	}
 
 	.live-bars.red span {
@@ -58,58 +74,58 @@
 	@keyframes live-voice-1 {
 		0%,
 		100% {
-			height: 4px;
+			height: calc(var(--bar-unit) * 4);
 		}
 		25% {
-			height: 12px;
+			height: calc(var(--bar-unit) * 12);
 		}
 		50% {
-			height: 6px;
+			height: calc(var(--bar-unit) * 6);
 		}
 		75% {
-			height: 14px;
+			height: calc(var(--bar-unit) * 14);
 		}
 	}
 
 	@keyframes live-voice-2 {
 		0%,
 		100% {
-			height: 6px;
+			height: calc(var(--bar-unit) * 6);
 		}
 		20% {
-			height: 16px;
+			height: calc(var(--bar-unit) * 16);
 		}
 		45% {
-			height: 5px;
+			height: calc(var(--bar-unit) * 5);
 		}
 		70% {
-			height: 13px;
+			height: calc(var(--bar-unit) * 13);
 		}
 		85% {
-			height: 8px;
+			height: calc(var(--bar-unit) * 8);
 		}
 	}
 
 	@keyframes live-voice-3 {
 		0%,
 		100% {
-			height: 4px;
+			height: calc(var(--bar-unit) * 4);
 		}
 		30% {
-			height: 10px;
+			height: calc(var(--bar-unit) * 10);
 		}
 		60% {
-			height: 15px;
+			height: calc(var(--bar-unit) * 15);
 		}
 		80% {
-			height: 5px;
+			height: calc(var(--bar-unit) * 5);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.live-bars span {
 			animation: none;
-			height: 6px;
+			height: calc(var(--bar-unit) * 6);
 		}
 	}
 </style>
