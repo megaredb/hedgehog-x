@@ -26,6 +26,23 @@ async function queueCount(page: Page): Promise<number> {
 	});
 }
 
+async function setSyncOwner(page: Page, userId: string): Promise<void> {
+	await page.evaluate(async (ownerId) => {
+		const db = await new Promise<IDBDatabase>((resolve, reject) => {
+			const req = indexedDB.open('HedgehogDB');
+			req.onerror = () => reject(req.error);
+			req.onsuccess = () => resolve(req.result);
+		});
+		await new Promise<void>((resolve, reject) => {
+			const tx = db.transaction('meta', 'readwrite');
+			tx.onerror = () => reject(tx.error);
+			tx.oncomplete = () => resolve();
+			tx.objectStore('meta').put({ key: 'syncOwner', userId: ownerId, updatedAt: Date.now() });
+		});
+		db.close();
+	}, userId);
+}
+
 test.describe('P0-03: bookmark offline queue', () => {
 	test('offline bookmark is sent when the browser goes back online', async ({ page, context }) => {
 		let posted: Record<string, unknown> | null = null;
@@ -53,6 +70,10 @@ test.describe('P0-03: bookmark offline queue', () => {
 			.first()
 			.click();
 		await page.waitForTimeout(1200);
+
+		// The reviewed queue is owner-aware and refuses to flush guest mutations.
+		// Simulate a signed-in owner; the mocked sync endpoint then accepts the batch.
+		await setSyncOwner(page, 'e2e-bookmark-owner');
 
 		const note = 'offline-sync-' + Date.now();
 		await context.setOffline(true);

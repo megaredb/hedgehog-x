@@ -11,7 +11,7 @@
 > исправлен: `svelte-check` — 0 ошибок. P0-01 исправлен: 401 для гостя,
 > owner-aware sync, guest data загружается при входе; e2e `sync-data-safety` — 7/7.
 > Остальные находки ниже актуальны, если не помечены иначе.
-> **Актуальная проверка 2026-11-25:** unit — 250/250 (35 файлов), e2e — 48/48
+> **Актуальная проверка 2026-11-25:** unit — 268/268 (37 файлов), e2e — 48/48
 > (9 файлов, `--workers=1`, включая a11y), build/check/lint — зелёные. Покрытие unit:
 > 88.00% строк / 82.89% ветвей / 65.66% функций для загруженных тестами модулей;
 > route handlers, admin/UI, downloadManager/audioStore/audio-provider остаются без unit-тестов.
@@ -45,7 +45,7 @@ limits; admin redirect/403/CLI; analytics partial/rate/window; индексы 00
 **P2/P3, реализовано 2026-11-19:** SSR-каталог и поиск; sync API с лимитами,
 валидацией и транзакциями; плеер (Space/repeat/sleep/seek/OPFS); CSP, SW-кэши и
 PWA; пагинация и confirm-модалки админки; роли пользователей; a11y-фокус и
-keyboard; metrics endpoint; 250 unit и 48 e2e; чистка мёртвого кода и словаря.
+keyboard; metrics endpoint; 268 unit и 48 e2e; чистка мёртвого кода и словаря.
 
 ## 2. Проверочная база
 
@@ -65,7 +65,7 @@ keyboard; metrics endpoint; 250 unit и 48 e2e; чистка мёртвого к
 | Typecheck          | svelte-check --tsconfig ./tsconfig.json                   | exit 0, 0 errors                                           |
 | Prettier           | prettier --check .                                        | OK                                                         |
 | ESLint             | eslint .                                                  | OK                                                         |
-| Unit               | node --import tsx --test "src/**/*.test.ts"               | 250 tests, 0 fail                                          |
+| Unit               | node --import tsx --test "src/**/*.test.ts"               | 268 tests, 0 fail                                          |
 | E2E (3 файла)      | playwright auth/profile/navigation                        | ✅ 23/23 (в текущем прогоне)                               |
 | E2E full, 1 worker | playwright test --workers=1                               | ✅ 48/48 (a11y + OAuth-моки; сеть для OAuth всё ещё нужна) |
 | Unit coverage      | node --import tsx --test --experimental-test-coverage     | 88.00% строк / 82.89% ветвей                               |

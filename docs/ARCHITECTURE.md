@@ -693,7 +693,7 @@ R2-пикер файлов использует `ListObjectsV2` **без Prefix*
 
 ## 13. Тестирование и проверка
 
-- Unit — node:test + tsx; **250 тестов в 35 файлах**; `pnpm test:coverage` даёт
+- Unit — node:test + tsx; **268 тестов в 37 файлах**; `pnpm test:coverage` даёт
   **88.00% строк / 82.89% ветвей / 65.66% функций** для модулей, загруженных тестами
   (не для всего приложения). Не покрыты downloadManager/audioStore/audio-provider,
   admin form actions и большинство route handlers/UI.

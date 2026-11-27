@@ -56,7 +56,7 @@ pnpm preview             # preview собранного приложения
 pnpm check               # svelte-check + sync — проходит
 pnpm lint                # prettier --check . && eslint . — проходит
 pnpm format              # prettier --write .
-pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 250 тестов, зелёные
+pnpm test:unit           # node --import tsx --test "src/**/*.test.ts" — 268 тестов, зелёные
 pnpm test:coverage       # unit + экспериментальное покрытие Node
 pnpm test:e2e            # playwright install && playwright test — 48/48, требует env
 pnpm test:docker         # docker compose -f compose.test.yml up --build ...

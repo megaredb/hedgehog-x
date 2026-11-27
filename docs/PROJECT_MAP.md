@@ -15,8 +15,8 @@
 | API-эндпоинтов своих               | 22 `+server.ts` + `/api/auth/*` better-auth |
 | Таблиц БД                          | 30 в `schema.ts` + 4 auth                   |
 | Dexie-хранилищ                     | 11 (v3; `meta` + `syncQueue.ownerUserId`)   |
-| Unit-тестов                        | 250 в 35 файлах                             |
-| E2E-тестов                         | 47 в 9 файлах                               |
+| Unit-тестов                        | 268 в 37 файлах                             |
+| E2E-тестов                         | 48 в 9 файлах                               |
 
 ```
 .
@@ -455,7 +455,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 | `test:e2e`                        | `playwright install && playwright test`       | сеть; env обязателен                   |
 | `test:docker`                     | compose test up/down                          | db:migrate+seed+build+e2e              |
 | `test`                            | `npm run test:e2e`                            | npm внутри pnpm-проекта                |
-| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 250 pass в 35 файлах                   |
+| `test:unit`                       | `node --import tsx --test "src/**/*.test.ts"` | 268 pass в 37 файлах                   |
 | `test:coverage`                   | unit + `--experimental-test-coverage`         | 88.00% строк / 82.89% ветвей           |
 | `dev:all`                         | compose up -d + pnpm dev                      | —                                      |
 | `docker:up/down/logs`             | compose                                       | —                                      |
@@ -500,7 +500,7 @@ brand-icons (Telegram/Discord/Boosty/Ton)`.
 
 ### 10.1. Unit (`node:test` + tsx)
 
-Текущий прогон: **250 тестов, 61 suite, 0 fail**.
+Текущий прогон: **268 тестов, 65 suites, 0 fail**.
 
 `src/lib/logger.test.ts`, `delete-confirm.test.ts`, `volume-audio.test.ts`,
 `constants/strings.test.ts`, `client/auth-storage.test.ts`, `client/services/likeService.test.ts`,

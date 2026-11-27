@@ -376,7 +376,7 @@ curl http://127.0.0.1:3000/health
 pnpm test:unit
 ```
 
-- 35 файлов, 250 тестов; в снимке — все зелёные.
+- 37 файлов, 268 тестов; в снимке — все зелёные.
 - `r2.test.ts` пишет файлы в `static/uploads/test*` (или в R2, если env настроен)
   и пытается удалить; побочный эффект.
 - `listeningTracker.test.ts` использует Dexie без браузера; часть проверок
@@ -558,7 +558,7 @@ node ./node_modules/vite/bin/vite.js build
 | Build               | `node vite build`                             | ✅ exit 0                                                           |
 | Typecheck           | `svelte-check`                                | ✅ 0 errors                                                         |
 | Lint                | prettier + eslint                             | ✅                                                                  |
-| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 250 pass                                                         |
+| Unit                | `node --import tsx --test "src/**/*.test.ts"` | ✅ 268 pass                                                         |
 | E2E (3 файла)       | `playwright test auth profile navigation`     | ✅ 23/23 (в текущем прогоне)                                        |
 | E2E full (1 worker) | `playwright test --workers=1`                 | ✅ 48/48 (включая a11y; сеть для OAuth-редиректов всё ещё нужна)    |
 | Sync safety e2e     | `e2e/sync-data-safety.e2e.ts`                 | ✅ 9/9 (P0-01 + guest consent)                                      |

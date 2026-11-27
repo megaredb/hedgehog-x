@@ -64,7 +64,12 @@ test.describe('POST /api/user/delete (реальная БД)', () => {
 		// использует префикс __Secure- для session cookie.
 		const cookieName = '__Secure-better-auth.session_token';
 		const res = await request.post('http://localhost:4173/api/user/delete', {
-			headers: { cookie: cookieName + '=' + cookie }
+			headers: {
+				cookie: cookieName + '=' + cookie,
+				// The reviewed endpoint now rejects cross-origin mutations. A browser
+				// sends Origin even for same-origin fetch, so mirror that here.
+				origin: 'http://localhost:4173'
+			}
 		});
 		expect(res.status()).toBe(200);
 		expect(await res.json()).toEqual({ ok: true });
