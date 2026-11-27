@@ -19,8 +19,8 @@
 | Миграций                     |               36 (`0000–0035`) | `ls drizzle/*.sql`                                               |
 | Dexie stores                 |                        13 (v6) | `src/lib/client/db/index.ts`                                     |
 | Действий очереди             |                              8 | `SyncItem.action`                                                |
-| Unit-файлов                  |                             37 | `find src -name '*.test.ts'`                                     |
-| Unit-тестов                  |                            270 | `grep -rhoE '\b(test\|it)\(' src --include='*.test.ts'`          |
+| Unit-файлов                  |                             38 | `find src -name '*.test.ts'`                                     |
+| Unit-тестов                  |                            275 | `grep -rhoE '\b(test\|it)\(' src --include='*.test.ts'`          |
 | E2E-файлов                   |                              9 | `ls e2e/*.e2e.ts`                                                |
 | E2E-тестов                   |   45 (+1 условный `test.skip`) | `grep -rhoE '\btest\(' e2e/*.e2e.ts`                             |
 | UI-каталогов                 |                             28 | `find src/lib/components/ui -maxdepth 1 -type d`                 |
@@ -400,7 +400,7 @@ register:false, allowedHosts, `ssr.noExternal:['bits-ui']`), `playwright.config.
 
 ## 15. Тесты и CI
 
-- Unit: 37 файлов, 270 тестов; см. TESTING.
+- Unit: 38 файлов, 275 тестов; см. TESTING.
 - E2E: 9 файлов, 45 тестов (+1 условный skip интеграционного); preview 4173.
 - CI: Postgres 18, Node 26, pnpm 11.7.0; `lint`, `check`, `test:unit`,
   `db:migrate`, `db:generate`, drift-check, `seed`, `build`, Playwright

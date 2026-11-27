@@ -10,6 +10,7 @@ import { env } from '$env/dynamic/private';
 import { createLogger } from '$lib/logger';
 import { getSubscriptionRecord } from '$lib/server/subscriptions/entitlement';
 import { checkAllSubscriptionSources } from '$lib/server/subscriptions/sources';
+import { telegramUserIdFromClaims } from '$lib/server/telegram-id';
 
 const log = createLogger('Auth');
 
@@ -72,14 +73,6 @@ if (!building && (!authSecret || authSecret.length < 32)) {
 		'BETTER_AUTH_SECRET is required and must be at least 32 characters. ' +
 			'Generate one with: openssl rand -base64 32'
 	);
-}
-
-/**
- * Extracts real Telegram user ID from OIDC claims.
- */
-function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): string | null {
-	if (claims.id == null || !Number.isFinite(claims.id)) return null;
-	return String(claims.id);
 }
 
 export const auth = betterAuth({

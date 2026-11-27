@@ -79,7 +79,7 @@ Dexie; аудио — OPFS. Главная, каталог, книга, том, 
 | `pnpm preview`             | Preview 4173               | SSR/бандл                         |
 | `pnpm check`               | sync + svelte-check        | Перед PR                          |
 | `pnpm lint`                | prettier + eslint          | Перед PR                          |
-| `pnpm test:unit`           | 270 unit                   | Логика                            |
+| `pnpm test:unit`           | 275 unit                   | Логика                            |
 | `pnpm test:coverage`       | Unit + coverage            | По необходимости                  |
 | `pnpm test:e2e`            | Playwright                 | UI/потоки                         |
 | `pnpm test:docker`         | E2E Docker                 | CI/по необходимости               |
@@ -265,7 +265,7 @@ PWA: SW injectManifest, pages denylist, audio cache
 
 ## 8. Перед сдачей
 
-- [ ] `pnpm test:unit` (270).
+- [ ] `pnpm test:unit` (275).
 - [ ] `pnpm check` 0 ошибок.
 - [ ] `pnpm lint`.
 - [ ] `pnpm build`.

@@ -17,7 +17,7 @@ pnpm test:unit
 pnpm test:coverage   # experimental-test-coverage
 ```
 
-37 файлов, 270 вызовов `test()/it()`.
+38 файлов, 275 вызовов `test()/it()`.
 
 | Файл                                                  | Тестов | Что проверяет                   |
 | ----------------------------------------------------- | -----: | ------------------------------- |
@@ -35,6 +35,7 @@ pnpm test:coverage   # experimental-test-coverage
 | `src/lib/client/services/syncPolicy.test.ts`          |      6 | skip/merge/replace/switch       |
 | `src/lib/delete-confirm.test.ts`                      |      6 | Кнопки удаления                 |
 | `src/lib/server/site-settings.test.ts`                |      6 | Media/mirrors normalizers       |
+| `src/lib/server/telegram-id.test.ts`                  |      5 | Telegram ID из OIDC claims      |
 | `src/lib/client/auth-storage.test.ts`                 |      5 | Кэш без токена/TTL              |
 | `src/lib/server/storage/r2.test.ts`                   |      5 | WebP/blurhash/upload/delete     |
 | `src/lib/client/services/listeningTracker.test.ts`    |      4 | Heartbeat/offline               |
