@@ -32,14 +32,6 @@
 		border-radius: 3px;
 	}
 
-	.live-bars.red {
-		background-color: rgba(255, 59, 48, 0.18);
-	}
-
-	.live-bars.light {
-		background-color: rgba(0, 0, 0, 0.35);
-	}
-
 	.live-bars span {
 		display: block;
 		width: 3px;
