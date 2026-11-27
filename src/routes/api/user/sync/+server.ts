@@ -185,20 +185,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				: time(item.endTimestampSeconds);
 		const note = typeof item?.note === 'string' ? item.note.slice(0, 500) : '';
 		const action = item?.action === 'delete' ? 'delete' : 'upsert';
-		if (!id || !chapterId || (action === 'upsert' && timestampSeconds === null)) {
+		if (!id || (action === 'upsert' && (!chapterId || timestampSeconds === null))) {
 			if (errors.length < 5) errors.push('Invalid bookmark update');
 			continue;
 		}
-		if (endTimestampSeconds !== null && endTimestampSeconds <= (timestampSeconds ?? 0)) {
+		if (
+			action === 'upsert' &&
+			endTimestampSeconds !== null &&
+			endTimestampSeconds <= (timestampSeconds ?? 0)
+		) {
 			if (errors.length < 5) errors.push('Bookmark end must be after start');
 			continue;
 		}
 		bookmarkUpdates.push({
 			id,
-			chapterId,
+			chapterId: chapterId ?? '',
 			versionId: normalizeVersionId(item?.versionId),
 			timestampSeconds: timestampSeconds ?? 0,
-			endTimestampSeconds,
+			endTimestampSeconds: action === 'upsert' ? endTimestampSeconds : null,
 			note,
 			action
 		});
@@ -241,7 +245,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const chapterIds = [
 				...new Set([
 					...progress.map((item) => item.chapterId),
-					...bookmarkUpdates.map((item) => item.chapterId),
+					...bookmarkUpdates
+						.filter((item) => item.action === 'upsert')
+						.map((item) => item.chapterId),
 					...chapterLikeUpdates.map((item) => item.chapterId)
 				])
 			];
@@ -259,11 +265,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const knownVolumeIds = new Set(knownVolumes.map((item) => item.id));
 			const skipped =
 				progress.filter((item) => !knownChapterIds.has(item.chapterId)).length +
-				bookmarkUpdates.filter((item) => !knownChapterIds.has(item.chapterId)).length +
+				bookmarkUpdates.filter(
+					(item) => item.action === 'upsert' && !knownChapterIds.has(item.chapterId)
+				).length +
 				chapterLikeUpdates.filter((item) => !knownChapterIds.has(item.chapterId)).length +
 				volumeLikeUpdates.filter((item) => !knownVolumeIds.has(item.volumeId)).length;
 			const validProgress = progress.filter((item) => knownChapterIds.has(item.chapterId));
-			const validBookmarks = bookmarkUpdates.filter((item) => knownChapterIds.has(item.chapterId));
+			const validBookmarks = bookmarkUpdates.filter(
+				(item) => item.action === 'delete' || knownChapterIds.has(item.chapterId)
+			);
 			const validChapterLikes = chapterLikeUpdates.filter((item) =>
 				knownChapterIds.has(item.chapterId)
 			);

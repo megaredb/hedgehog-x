@@ -13,12 +13,22 @@ for (let i = 2; i < process.argv.length; i += 2) {
 	args.set(process.argv[i]?.replace(/^--/, ''), process.argv[i + 1]);
 }
 
+function parseNumericArg(raw, fallback, min, name) {
+	if (raw === undefined) return fallback;
+	const value = Number(raw);
+	if (!Number.isFinite(value)) {
+		console.error(`Invalid numeric value for --${name}: ${raw}`);
+		process.exit(1);
+	}
+	return Math.max(min, value);
+}
+
 const baseUrl = (args.get('url') ?? 'http://127.0.0.1:5180').replace(/\/$/, '');
 const path = args.get('path') ?? '/api/broadcasts/active';
-const concurrency = Math.max(1, Number(args.get('concurrency') ?? 50));
-const durationSeconds = Math.max(1, Number(args.get('duration') ?? 15));
-const intervalMs = Math.max(100, Number(args.get('interval') ?? 2000));
-const cookie = args.get('cookie');
+const concurrency = Math.floor(parseNumericArg(args.get('concurrency'), 50, 1, 'concurrency'));
+const durationSeconds = parseNumericArg(args.get('duration'), 15, 1, 'duration');
+const intervalMs = parseNumericArg(args.get('interval'), 2000, 100, 'interval');
+const cookie = args.get('cookie') ?? process.env.COOKIE;
 const url = baseUrl + path;
 const headers = cookie ? { cookie } : {};
 const latencies = [];
@@ -71,7 +81,7 @@ console.log(
 			p50Ms: Number(percentile(latencies, 0.5).toFixed(1)),
 			p95Ms: Number(percentile(latencies, 0.95).toFixed(1)),
 			p99Ms: Number(percentile(latencies, 0.99).toFixed(1)),
-			maxMs: Number(Math.max(0, ...latencies).toFixed(1)),
+			maxMs: Number(latencies.reduce((max, value) => (value > max ? value : max), 0).toFixed(1)),
 			responseMiB: Number((bytes / 1024 / 1024).toFixed(2)),
 			elapsedSeconds: Number(elapsed.toFixed(1))
 		},

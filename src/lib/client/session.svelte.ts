@@ -168,29 +168,42 @@ export function useSession() {
 			// still valid. If offline, cleanup below still wins for privacy.
 			try {
 				if (typeof navigator !== 'undefined' && navigator.onLine) {
-					const [{ likeService }, { flushBookmarkQueue }, { progressSync }, { listeningTracker }] =
-						await Promise.all([
-							import('./services/likeService'),
-							import('./services/bookmarkSync'),
-							import('./services/progressSync.svelte'),
-							import('./services/listeningTracker.svelte')
-						]);
+					const [
+						{ likeService },
+						{ flushBookmarkQueue },
+						{ progressSync },
+						{ listeningTracker },
+						{ broadcastProgressSync }
+					] = await Promise.all([
+						import('./services/likeService'),
+						import('./services/bookmarkSync'),
+						import('./services/progressSync.svelte'),
+						import('./services/listeningTracker.svelte'),
+						import('./services/broadcastProgressSync')
+					]);
 
+					await listeningTracker.flush().catch(() => {});
+					await progressSync.flushImmediately().catch(() => {});
+					await progressSync.flushOfflineQueue().catch(() => {});
 					await Promise.allSettled([
 						likeService.syncLikesQueue(),
 						flushBookmarkQueue(),
-						progressSync.flushImmediately(),
-						listeningTracker.flushOfflineQueue()
+						listeningTracker.flushOfflineQueue(),
+						broadcastProgressSync.flush()
 					]);
 					progressSync.clearPending();
 					listeningTracker.reset();
+					(broadcastProgressSync as { clear?: () => void }).clear?.();
 				} else {
-					const [{ progressSync }, { listeningTracker }] = await Promise.all([
-						import('./services/progressSync.svelte'),
-						import('./services/listeningTracker.svelte')
-					]);
+					const [{ progressSync }, { listeningTracker }, { broadcastProgressSync }] =
+						await Promise.all([
+							import('./services/progressSync.svelte'),
+							import('./services/listeningTracker.svelte'),
+							import('./services/broadcastProgressSync')
+						]);
 					progressSync.clearPending();
 					listeningTracker.reset();
+					(broadcastProgressSync as { clear?: () => void }).clear?.();
 				}
 			} catch (e) {
 				log.warn('Ошибка flush перед signOut:', e);
@@ -204,6 +217,9 @@ export function useSession() {
 				// Local personal data must never survive into a guest session or
 				// another account, even if the server signOut failed offline.
 				await clearSessionLocalState();
+				if (typeof caches !== 'undefined') {
+					await caches.delete('pages-cache').catch(() => {});
+				}
 				knownSessionUserId = null;
 				clearCachedSession();
 				clearCachedAccounts();

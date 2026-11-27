@@ -29,6 +29,7 @@ export interface ManualGrantInput {
 	amountRub?: number | null;
 	lifetime?: boolean;
 	note?: string | null;
+	idempotencyKey?: string | null;
 	pricePerDay: number;
 	now?: Date;
 }
@@ -176,10 +177,15 @@ export async function grantManual(input: ManualGrantInput) {
 	const now = input.now ?? new Date();
 	const price = Math.max(1, Math.floor(input.pricePerDay));
 	const days = normalizeDays(input, price);
-	const amountRub =
-		input.amountRub != null
-			? Math.min(Math.floor(Number(input.amountRub)), MAX_MANUAL_AMOUNT_RUB)
-			: null;
+	let amountRub: number | null = null;
+	if (input.amountRub != null) {
+		const rawAmount = Number(input.amountRub);
+		if (!Number.isFinite(rawAmount) || Math.floor(rawAmount) <= 0) {
+			throw new SubscriptionError('Сумма доната должна быть положительным числом');
+		}
+		amountRub = Math.min(Math.floor(rawAmount), MAX_MANUAL_AMOUNT_RUB);
+	}
+	const idempotencyKey = input.idempotencyKey?.trim() || null;
 
 	const result = await db.transaction(async (tx) => {
 		await tx.insert(subscriptions).values({ userId: input.userId }).onConflictDoNothing();
@@ -190,6 +196,22 @@ export async function grantManual(input: ManualGrantInput) {
 			.for('update');
 		if (!current) throw new SubscriptionError('Не удалось создать запись подписки');
 
+		if (idempotencyKey) {
+			const [existingLedger] = await tx
+				.select({ amountRub: donationLedger.amountRub })
+				.from(donationLedger)
+				.where(eq(donationLedger.idempotencyKey, idempotencyKey))
+				.limit(1);
+			if (existingLedger) {
+				return {
+					days: current.isLifetime ? null : days,
+					amountRub: existingLedger.amountRub,
+					expiresAt: current.manualExpiresAt,
+					isLifetime: current.isLifetime
+				};
+			}
+		}
+
 		const beforeExpiresAt = current.manualExpiresAt;
 		const beforeLifetime = current.isLifetime;
 		if (current.revokedAt) {
@@ -199,12 +221,22 @@ export async function grantManual(input: ManualGrantInput) {
 			throw new SubscriptionError('У пользователя уже вечная подписка');
 		}
 
+		const MAX_MANUAL_MS = MAX_MANUAL_DAYS * 86_400_000;
 		let manualExpiresAt: Date | null = null;
 		let isLifetime = false;
 		let bookedDays: number | null = null;
+		let blockedRemainingMs = current.blockedRemainingMs;
 
 		if (input.lifetime) {
 			isLifetime = true;
+			if (current.blockedAt != null) blockedRemainingMs = null;
+		} else if (current.blockedAt != null) {
+			blockedRemainingMs = Math.min(
+				(current.blockedRemainingMs ?? 0) + days * 86_400_000,
+				MAX_MANUAL_MS
+			);
+			manualExpiresAt = null;
+			bookedDays = days;
 		} else {
 			const expiresAt = computeManualExpiry(current.manualExpiresAt, days, now);
 			manualExpiresAt = expiresAt;
@@ -219,11 +251,7 @@ export async function grantManual(input: ManualGrantInput) {
 			.set({
 				manualExpiresAt,
 				isLifetime,
-				blockedRemainingMs: current.blockedAt
-					? manualExpiresAt
-						? Math.max(0, manualExpiresAt.getTime() - now.getTime())
-						: null
-					: current.blockedRemainingMs,
+				blockedRemainingMs,
 				updatedBy: input.adminUserId
 			})
 			.where(eq(subscriptions.userId, input.userId));
@@ -253,7 +281,7 @@ export async function grantManual(input: ManualGrantInput) {
 					createdAt: now,
 					source: 'manual',
 					note: input.note,
-					idempotencyKey: `grant:${eventId}`
+					idempotencyKey: idempotencyKey ?? `grant:${eventId}`
 				})
 			);
 		}
@@ -334,13 +362,22 @@ export async function restoreSubscription(
 		if (!current?.revokedAt) return false;
 
 		const remainingMs = current.revokedRemainingMs ?? 0;
+		const isBlocked = current.blockedAt != null;
 		const manualExpiresAt =
-			current.isLifetime || remainingMs <= 0 ? null : new Date(now.getTime() + remainingMs);
+			isBlocked || current.isLifetime || remainingMs <= 0
+				? null
+				: new Date(now.getTime() + remainingMs);
+		const blockedRemainingMs = isBlocked
+			? current.isLifetime
+				? null
+				: remainingMs
+			: current.blockedRemainingMs;
 
 		await tx
 			.update(subscriptions)
 			.set({
 				manualExpiresAt,
+				blockedRemainingMs,
 				revokedAt: null,
 				revokedRemainingMs: null,
 				updatedBy: adminUserId

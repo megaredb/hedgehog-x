@@ -21,6 +21,7 @@
 	import { env } from '$env/dynamic/public';
 	import { configureMirrors } from '$lib/utils/mirror';
 	import { BROADCAST_CHECK_INTERVAL_MS, broadcastWasDeleted } from '$lib/client/broadcast-player';
+	import { isPageCacheDenied } from '$lib/client/page-cache';
 
 	const log = createLogger('SW');
 
@@ -36,7 +37,7 @@
 	configureMirrors(untrack(() => data.mirrors ?? []));
 
 	$effect(() => {
-		configureMirrors(untrack(() => data.mirrors ?? []));
+		configureMirrors(data.mirrors ?? []);
 	});
 
 	const umamiWebsiteId = env.PUBLIC_UMAMI_WEBSITE_ID || import.meta.env.PUBLIC_UMAMI_WEBSITE_ID;
@@ -74,12 +75,36 @@
 		const broadcastId = audioStore.currentTrack?.broadcastId;
 		const isLive = audioStore.currentTrack?.broadcastLive === true;
 		if (!broadcastId || !isLive || !audioStore.isPlaying) return;
-		const sendHeartbeat = () => {
-			void fetch(`/api/broadcasts/${broadcastId}/heartbeat`, { method: 'POST' }).catch(() => {});
+		let stopped = false;
+		let timer: ReturnType<typeof setInterval> | null = null;
+		const stop = () => {
+			stopped = true;
+			if (timer) {
+				clearInterval(timer);
+				timer = null;
+			}
 		};
-		sendHeartbeat();
-		const timer = setInterval(sendHeartbeat, 10_000);
-		return () => clearInterval(timer);
+		const sendHeartbeat = async () => {
+			if (stopped) return;
+			try {
+				const res = await fetch(`/api/broadcasts/${broadcastId}/heartbeat`, { method: 'POST' });
+				if (stopped) return;
+				if (res.status === 409 || res.status === 404) {
+					stop();
+					if (audioStore.currentTrack?.broadcastId === broadcastId) {
+						audioStore.currentTrack = {
+							...audioStore.currentTrack,
+							broadcastLive: false
+						};
+					}
+				}
+			} catch {
+				// Ignore transient network errors
+			}
+		};
+		void sendHeartbeat();
+		timer = setInterval(() => void sendHeartbeat(), 10_000);
+		return () => stop();
 	});
 
 	// Load server-side personal data as soon as a user signs in, regardless of
@@ -123,6 +148,7 @@
 
 	afterNavigate(async ({ to }) => {
 		if (to && typeof navigator !== 'undefined' && navigator.onLine) {
+			if (isPageCacheDenied(to.url.pathname)) return;
 			try {
 				const cache = await caches.open('pages-cache');
 				const exists = await cache.match(to.url.pathname);

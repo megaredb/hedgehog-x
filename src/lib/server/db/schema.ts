@@ -255,6 +255,7 @@ export const chapterIllustrations = pgTable(
 	},
 	(t) => [
 		index('chapter_illustrations_chapter_idx').on(t.chapterId),
+		index('chapter_illustrations_illustration_idx').on(t.illustrationId),
 		uniqueIndex('chapter_illustrations_chapter_illustration_unique').on(
 			t.chapterId,
 			t.illustrationId
@@ -334,6 +335,7 @@ export const broadcasts = pgTable(
 			.$onUpdate(() => new Date())
 	},
 	(t) => [
+		index('broadcasts_chapter_idx').on(t.chapterId),
 		index('broadcasts_start_idx').on(t.scheduledStartAt),
 		index('broadcasts_published_idx').on(t.publishedAt)
 	]
@@ -381,7 +383,8 @@ export const broadcastListeners = pgTable(
 	},
 	(t) => [
 		primaryKey({ columns: [t.broadcastId, t.userId] }),
-		index('broadcast_listeners_seen_idx').on(t.lastSeenAt)
+		index('broadcast_listeners_seen_idx').on(t.lastSeenAt),
+		index('broadcast_listeners_broadcast_seen_idx').on(t.broadcastId, t.lastSeenAt)
 	]
 );
 
@@ -432,7 +435,10 @@ export const broadcastViews = pgTable(
 		startedAt: timestamp('started_at').defaultNow().notNull(),
 		lastSeenAt: timestamp('last_seen_at').defaultNow().notNull()
 	},
-	(t) => [index('broadcast_views_broadcast_idx').on(t.broadcastId, t.startedAt)]
+	(t) => [
+		index('broadcast_views_broadcast_idx').on(t.broadcastId, t.startedAt),
+		index('broadcast_views_broadcast_user_kind_idx').on(t.broadcastId, t.userId, t.kind)
+	]
 );
 
 export const broadcastProgress = pgTable(

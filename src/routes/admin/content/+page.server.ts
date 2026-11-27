@@ -11,6 +11,7 @@ import {
 } from '$lib/server/db/schema';
 import { asc, count, eq, ilike, inArray, max, or } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/admin';
+import { sanitizeHttpUrl } from '$lib/server/site-content';
 import {
 	deleteFromStorage,
 	MAX_AUDIO_BYTES,
@@ -38,6 +39,7 @@ import type {
 } from '$lib/components/admin/content/types';
 
 const VERSION_ID_PATTERN = /^[a-z0-9_-]{1,64}$/i;
+const BOOK_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const VALID_TABS: ContentTab[] = ['chapters', 'illustrations', 'volume'];
 const VALID_INTENTS: ContentIntent[] = ['book', 'volume', 'chapter', 'illustration'];
 const BUILTIN_VERSION_PRESETS: Record<
@@ -201,34 +203,36 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 		const chapterIds = chapterList.map((chapter) => chapter.id);
 		if (chapterIds.length) {
-			trackList = await db
-				.select({
-					id: chapterAudioVersions.id,
-					chapterId: chapterAudioVersions.chapterId,
-					versionId: chapterAudioVersions.versionId,
-					title: chapterAudioVersions.title,
-					audioUrl: chapterAudioVersions.audioUrl,
-					durationSeconds: chapterAudioVersions.durationSeconds,
-					chapterStart: chapterAudioVersions.chapterStart,
-					chapterEnd: chapterAudioVersions.chapterEnd,
-					createdAt: chapterAudioVersions.createdAt,
-					chapterNumber: chapters.chapterNumber,
-					chapterTitle: chapters.title,
-					chapterAudioUrl: chapters.audioUrl
-				})
-				.from(chapterAudioVersions)
-				.innerJoin(chapters, eq(chapterAudioVersions.chapterId, chapters.id))
-				.where(inArray(chapterAudioVersions.chapterId, chapterIds))
-				.orderBy(asc(chapters.chapterNumber), asc(chapterAudioVersions.createdAt));
+			[trackList, chapterIllustrationTimings] = await Promise.all([
+				db
+					.select({
+						id: chapterAudioVersions.id,
+						chapterId: chapterAudioVersions.chapterId,
+						versionId: chapterAudioVersions.versionId,
+						title: chapterAudioVersions.title,
+						audioUrl: chapterAudioVersions.audioUrl,
+						durationSeconds: chapterAudioVersions.durationSeconds,
+						chapterStart: chapterAudioVersions.chapterStart,
+						chapterEnd: chapterAudioVersions.chapterEnd,
+						createdAt: chapterAudioVersions.createdAt,
+						chapterNumber: chapters.chapterNumber,
+						chapterTitle: chapters.title,
+						chapterAudioUrl: chapters.audioUrl
+					})
+					.from(chapterAudioVersions)
+					.innerJoin(chapters, eq(chapterAudioVersions.chapterId, chapters.id))
+					.where(inArray(chapterAudioVersions.chapterId, chapterIds))
+					.orderBy(asc(chapters.chapterNumber), asc(chapterAudioVersions.createdAt)),
+				db
+					.select({
+						chapterId: chapterIllustrations.chapterId,
+						illustrationId: chapterIllustrations.illustrationId,
+						showAtSeconds: chapterIllustrations.showAtSeconds
+					})
+					.from(chapterIllustrations)
+					.where(inArray(chapterIllustrations.chapterId, chapterIds))
+			]);
 		}
-		chapterIllustrationTimings = await db
-			.select({
-				chapterId: chapterIllustrations.chapterId,
-				illustrationId: chapterIllustrations.illustrationId,
-				showAtSeconds: chapterIllustrations.showAtSeconds
-			})
-			.from(chapterIllustrations)
-			.where(inArray(chapterIllustrations.chapterId, chapterIds));
 	}
 
 	if (openChapterId && !chapterList.some((chapter) => chapter.id === openChapterId)) {
@@ -666,8 +670,20 @@ export const actions: Actions = {
 			return fail(400, { error: 'Цвет темы должен состоять из 6 HEX-символов' });
 		}
 
-		const isUpdate = Boolean(idInput);
-		const id = isUpdate ? idInput : slugify(title) || randomUUID().slice(0, 8);
+		const mode = text(form, 'mode');
+		const isUpdate = mode ? mode === 'update' : Boolean(idInput);
+		if (isUpdate && !idInput) {
+			return fail(400, { error: 'ID книги обязателен' });
+		}
+		if (!isUpdate && idInput) {
+			if (idInput.length > 128 || !BOOK_SLUG_PATTERN.test(idInput)) {
+				return fail(400, {
+					error:
+						'ID книги должен содержать только строчные латинские буквы, цифры, «-» и «_» (до 128 символов)'
+				});
+			}
+		}
+		const id = isUpdate ? idInput : idInput || slugify(title) || randomUUID().slice(0, 8);
 		let oldCoverUrl: string | null = null;
 		let oldHomeImageUrl: string | null = null;
 		let oldHomeVideoUrl: string | null = null;
@@ -685,6 +701,13 @@ export const actions: Actions = {
 			oldCoverUrl = existing.coverUrl;
 			oldHomeImageUrl = existing.homeImageUrl;
 			oldHomeVideoUrl = existing.homeVideoUrl;
+		} else {
+			const [existing] = await db
+				.select({ id: books.id })
+				.from(books)
+				.where(eq(books.id, id))
+				.limit(1);
+			if (existing) return fail(409, { error: 'Книга с таким ID уже существует' });
 		}
 
 		const uploaded = await uploadImageFile(form.get('coverFile'), 'books', id);
@@ -777,7 +800,7 @@ export const actions: Actions = {
 			if (uploadedHomeImage) await deleteFromStorage(uploadedHomeImage.url).catch(() => {});
 			if (uploadedHomeVideo) await deleteFromStorage(uploadedHomeVideo.url).catch(() => {});
 			if (isUniqueViolation(e)) {
-				return fail(400, { error: 'Книга с таким ID уже существует' });
+				return fail(409, { error: 'Книга с таким ID уже существует' });
 			}
 			return fail(500, {
 				error: 'Ошибка сохранения книги: ' + (e instanceof Error ? e.message : String(e))
@@ -901,8 +924,15 @@ export const actions: Actions = {
 		if (!Number.isInteger(chapterNumber) || chapterNumber < 0) {
 			return fail(400, { error: 'Номер главы должен быть целым неотрицательным числом' });
 		}
-		if (telegramPostUrl && telegramPostUrl.length > 1024) {
-			return fail(400, { error: 'Ссылка на Telegram длиннее 1024 символов' });
+		if (telegramPostUrl) {
+			if (telegramPostUrl.length > 1024) {
+				return fail(400, { error: 'Ссылка на Telegram длиннее 1024 символов' });
+			}
+			if (!sanitizeHttpUrl(telegramPostUrl, { allowTg: true })) {
+				return fail(400, {
+					error: 'Ссылка на Telegram должна использовать протокол http, https или tg'
+				});
+			}
 		}
 
 		const [volumeRow] = await db
@@ -1054,27 +1084,27 @@ export const actions: Actions = {
 		const id = text(form, 'id');
 		if (!id) return fail(400, { error: 'Не указана версия' });
 
-		const [track] = await db
-			.select()
-			.from(chapterAudioVersions)
-			.where(eq(chapterAudioVersions.id, id))
-			.limit(1);
-		if (!track) return fail(404, { error: 'Версия не найдена' });
-		if (track.chapterStart !== track.chapterEnd) {
-			return fail(400, { error: 'Нельзя сделать основной объединённую версию' });
-		}
+		const errorResult = await db.transaction(async (tx) => {
+			const [track] = await tx
+				.select()
+				.from(chapterAudioVersions)
+				.where(eq(chapterAudioVersions.id, id))
+				.limit(1);
+			if (!track) return { status: 404 as const, error: 'Версия не найдена' };
+			if (track.chapterStart !== track.chapterEnd) {
+				return { status: 400 as const, error: 'Нельзя сделать основной объединённую версию' };
+			}
 
-		const [chapter] = await db
-			.select()
-			.from(chapters)
-			.where(eq(chapters.id, track.chapterId))
-			.limit(1);
-		if (!chapter) return fail(404, { error: 'Глава не найдена' });
-		if (track.audioUrl === chapter.audioUrl) {
-			return fail(400, { error: 'Эта версия уже совпадает с текущей озвучкой' });
-		}
+			const [chapter] = await tx
+				.select()
+				.from(chapters)
+				.where(eq(chapters.id, track.chapterId))
+				.limit(1);
+			if (!chapter) return { status: 404 as const, error: 'Глава не найдена' };
+			if (track.audioUrl === chapter.audioUrl) {
+				return { status: 400 as const, error: 'Эта версия уже совпадает с текущей озвучкой' };
+			}
 
-		await db.transaction(async (tx) => {
 			await tx
 				.update(chapters)
 				.set({ audioUrl: track.audioUrl, durationSeconds: track.durationSeconds })
@@ -1089,7 +1119,9 @@ export const actions: Actions = {
 					chapterEnd: chapter.chapterNumber
 				})
 				.where(eq(chapterAudioVersions.id, track.id));
+			return null;
 		});
+		if (errorResult) return fail(errorResult.status, { error: errorResult.error });
 		return { success: true };
 	},
 
@@ -1191,35 +1223,37 @@ export const actions: Actions = {
 		}
 
 		try {
-			if (isUpdate) {
-				const data: Partial<typeof illustrations.$inferInsert> = {
-					volumeId,
-					caption,
-					sortOrder,
-					imageUrl
-				};
-				if (uploaded?.blurhash) data.blurhash = uploaded.blurhash;
-				await db.update(illustrations).set(data).where(eq(illustrations.id, id));
-				if (oldImageUrl && oldImageUrl !== imageUrl) {
-					await deleteFromStorage(oldImageUrl).catch(() => {});
+			await db.transaction(async (tx) => {
+				if (isUpdate) {
+					const data: Partial<typeof illustrations.$inferInsert> = {
+						volumeId,
+						caption,
+						sortOrder,
+						imageUrl
+					};
+					if (uploaded?.blurhash) data.blurhash = uploaded.blurhash;
+					await tx.update(illustrations).set(data).where(eq(illustrations.id, id));
+					await tx.delete(chapterIllustrations).where(eq(chapterIllustrations.illustrationId, id));
+					if (timingRows.length) {
+						await tx.insert(chapterIllustrations).values(timingRows);
+					}
+					return;
 				}
-				await db.delete(chapterIllustrations).where(eq(chapterIllustrations.illustrationId, id));
-				if (timingRows.length) {
-					await db.insert(chapterIllustrations).values(timingRows);
-				}
-				return { success: true, illustrationId: id };
-			}
 
-			await db.insert(illustrations).values({
-				id,
-				volumeId,
-				imageUrl,
-				blurhash: uploaded?.blurhash ?? null,
-				caption,
-				sortOrder
+				await tx.insert(illustrations).values({
+					id,
+					volumeId,
+					imageUrl,
+					blurhash: uploaded?.blurhash ?? null,
+					caption,
+					sortOrder
+				});
+				if (timingRows.length) {
+					await tx.insert(chapterIllustrations).values(timingRows);
+				}
 			});
-			if (timingRows.length) {
-				await db.insert(chapterIllustrations).values(timingRows);
+			if (isUpdate && oldImageUrl && oldImageUrl !== imageUrl) {
+				await deleteFromStorage(oldImageUrl).catch(() => {});
 			}
 			return { success: true, illustrationId: id };
 		} catch (e) {

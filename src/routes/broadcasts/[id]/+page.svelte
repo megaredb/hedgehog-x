@@ -1,6 +1,6 @@
 <!-- eslint-disable svelte/no-navigation-without-resolve -->
 <script lang="ts">
-	import { onMount, onDestroy, tick, untrack } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
 	import { resolve } from '$app/paths';
@@ -75,8 +75,8 @@
 	let listeners = $state(0);
 	type BroadcastParticipant = { id: string; name: string; image: string | null };
 	let participants = $state<BroadcastParticipant[]>(untrack(() => data.participants ?? []));
-	const support: SiteSupportSettings = untrack(
-		() => (data.support as SiteSupportSettings | null) ?? DEFAULT_SUPPORT_SETTINGS
+	const support = $derived<SiteSupportSettings>(
+		(data.support as SiteSupportSettings | null) ?? DEFAULT_SUPPORT_SETTINGS
 	);
 	type SupportPayment = {
 		qrValue: string;
@@ -147,10 +147,8 @@
 	}
 
 	let serverNow = $state(untrack(() => new Date(data.serverNow).toISOString()));
-	let clockSkew = 0;
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let clockSkew = $state(0);
 	let portraitQuery: MediaQueryList | null = null;
-	let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 	let chatText = $state('');
 	let chatError = $state('');
 	let showLinkHint = $state(false);
@@ -281,16 +279,19 @@
 			].filter((name): name is string => Boolean(name))
 		)
 	]);
-	const chatTextSegments = $derived(splitMentions(chatText, knownMentionNames));
-
-	function splitMentions(text: string, names: string[]) {
-		if (!text) return [{ text: '', mention: false }];
-		const escaped = names
+	const mentionPattern = $derived.by(() => {
+		const escaped = knownMentionNames
 			.filter(Boolean)
 			.sort((a, b) => b.length - a.length)
 			.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-		if (!escaped.length) return [{ text, mention: false }];
-		const pattern = new RegExp(`@(?:${escaped.join('|')})(?=\\s|$|[.,!?;:])`, 'gu');
+		if (!escaped.length) return null;
+		return new RegExp(`@(?:${escaped.join('|')})(?=\\s|$|[.,!?;:])`, 'gu');
+	});
+	const chatTextSegments = $derived(splitMentions(chatText, mentionPattern));
+
+	function splitMentions(text: string, pattern: RegExp | null) {
+		if (!text) return [{ text: '', mention: false }];
+		if (!pattern) return [{ text, mention: false }];
 		const parts: Array<{ text: string; mention: boolean }> = [];
 		let last = 0;
 		for (const match of text.matchAll(pattern)) {
@@ -409,10 +410,13 @@
 		if (!hasMoreMessages || loadingOlder || messages.length === 0) return;
 		loadingOlder = true;
 		try {
-			const oldest = messages[0]?.createdAt;
-			const before = oldest ? new Date(oldest).toISOString() : '';
+			const oldest = messages[0];
+			const before = oldest?.createdAt ? new Date(oldest.createdAt).toISOString() : '';
+			const queryParts: string[] = [];
+			if (before) queryParts.push('before=' + encodeURIComponent(before));
+			if (oldest?.id) queryParts.push('beforeId=' + encodeURIComponent(oldest.id));
 			const res = await fetch(
-				'/api/broadcasts/' + broadcast.id + '/messages?before=' + encodeURIComponent(before),
+				'/api/broadcasts/' + broadcast.id + '/messages?' + queryParts.join('&'),
 				{ cache: 'no-store' }
 			);
 			if (!res.ok) return;
@@ -726,8 +730,13 @@
 	}
 
 	function updateClock(server: string) {
+		const parsed = new Date(server).getTime();
+		if (Number.isNaN(parsed)) return;
 		serverNow = server;
-		clockSkew = Date.now() - new Date(server).getTime();
+		clockSkew = Date.now() - parsed;
+		if (kind === 'live' && isCurrentBroadcast) {
+			audioStore.updateTrackMetadata({ clockSkewMs: clockSkew });
+		}
 	}
 
 	function startListening() {
@@ -762,6 +771,7 @@
 					broadcastStartedAt: broadcast.startedAt
 						? new Date(broadcast.startedAt).getTime()
 						: undefined,
+					clockSkewMs: kind === 'live' ? clockSkew : undefined,
 					illustrationTimes: data.images.map((image) => image.showAtSeconds),
 					illustrations: data.images.map((image) => ({
 						id: image.id,
@@ -773,26 +783,29 @@
 			],
 			0
 		);
-		void fetch('/api/broadcasts/' + broadcast.id + '/view', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ kind: kind === 'published' ? 'replay' : 'live' })
-		});
 	}
 
-	async function poll() {
+	async function poll(broadcastId: string, signal: AbortSignal) {
 		try {
-			const after = messages.length
-				? '?after=' +
-					encodeURIComponent(
-						new Date(messages[messages.length - 1]?.createdAt ?? Date.now()).toISOString()
-					)
-				: '';
-			const res = await fetch('/api/broadcasts/' + broadcast.id + '/state' + after, {
-				cache: 'no-store'
-			});
-			if (!res.ok) return;
+			const lastMessage = messages[messages.length - 1];
+			const queryParts: string[] = [];
+			if (lastMessage?.createdAt) {
+				queryParts.push(
+					'after=' + encodeURIComponent(new Date(lastMessage.createdAt).toISOString())
+				);
+				if (lastMessage.id) queryParts.push('afterId=' + encodeURIComponent(lastMessage.id));
+			}
+			const query = queryParts.join('&');
+			const res = await fetch(
+				'/api/broadcasts/' + broadcastId + '/state' + (query ? '?' + query : ''),
+				{
+					cache: 'no-store',
+					signal
+				}
+			);
+			if (!res.ok || signal.aborted || broadcast.id !== broadcastId) return;
 			const payload = await res.json();
+			if (signal.aborted || broadcast.id !== broadcastId) return;
 			updateClock(payload.serverNow);
 			broadcast = payload.broadcast;
 			kind = payload.broadcast.kind;
@@ -818,10 +831,13 @@
 		}
 	}
 
-	async function heartbeat() {
+	async function heartbeat(broadcastId: string, signal: AbortSignal) {
 		try {
-			const res = await fetch('/api/broadcasts/' + broadcast.id + '/heartbeat', { method: 'POST' });
-			if (res.ok) {
+			const res = await fetch('/api/broadcasts/' + broadcastId + '/heartbeat', {
+				method: 'POST',
+				signal
+			});
+			if (res.ok && !signal.aborted && broadcast.id === broadcastId) {
 				const payload = await res.json();
 				listeners = payload.listeners;
 				participants = Array.isArray(payload.participants) ? payload.participants : participants;
@@ -913,8 +929,6 @@
 		if (event.key === 'Escape' && isExpanded) {
 			isExpanded = false;
 			document.body.classList.remove('broadcast-expanded');
-			document.body.classList.remove('broadcast-page');
-			document.body.classList.remove('broadcast-chat-collapsed');
 		}
 	}
 
@@ -935,38 +949,132 @@
 		portraitQuery.addEventListener('change', handlePortraitOrientation);
 		document.body.style.overflow = 'hidden';
 		document.body.classList.add('broadcast-page');
-		updateClock(serverNow);
-		if (data.canWatch && (kind === 'live' || kind === 'published')) {
-			void fetch('/api/broadcasts/' + broadcast.id + '/view', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ kind: kind === 'published' ? 'replay' : 'live' })
-			});
-		}
-		if (data.canWatch) {
-			pollTimer = setInterval(poll, 2000);
-			heartbeatTimer = setInterval(() => {
-				if (kind === 'live' && data.canWatch) void heartbeat();
-			}, 10000);
-			if (kind === 'live') void heartbeat();
-		}
 		return () => {
 			document.removeEventListener('pointerdown', handleAttachOutside);
-			window
-				.matchMedia('(max-width: 1023px) and (orientation: portrait)')
-				.removeEventListener('change', handlePortraitOrientation);
+			portraitQuery?.removeEventListener('change', handlePortraitOrientation);
+			portraitQuery = null;
 			document.body.style.overflow = previousOverflow;
 			document.body.classList.remove('broadcast-expanded');
 			document.body.classList.remove('broadcast-page');
 			document.body.classList.remove('broadcast-chat-collapsed');
-			if (pollTimer) clearInterval(pollTimer);
-			if (heartbeatTimer) clearInterval(heartbeatTimer);
 		};
 	});
 
-	onDestroy(() => {
-		if (pollTimer) clearInterval(pollTimer);
-		if (heartbeatTimer) clearInterval(heartbeatTimer);
+	$effect(() => {
+		const currentId = data.broadcast.id;
+		const canWatch = data.canWatch;
+		const initialKind = data.kind;
+		untrack(() => {
+			if (broadcast.id !== currentId) {
+				broadcast = data.broadcast;
+				kind = data.kind;
+				messages = data.messages as unknown as ChatMessage[];
+				participants = data.participants ?? [];
+				hasMoreMessages = data.hasMoreMessages ?? false;
+				serverNow = new Date(data.serverNow).toISOString();
+				clockSkew = 0;
+				listeners = 0;
+				selectedImageId = null;
+				savedChatForDownload = false;
+				lastNewestMessageId = null;
+				replyToMessage = null;
+				pendingLink = null;
+				pendingPreview = null;
+				pendingIllustrations = [];
+				chatText = '';
+				chatError = '';
+				showLinkHint = false;
+				mentionTags = [];
+				closeChatOverlays();
+			}
+		});
+
+		const controller = new AbortController();
+		let active = true;
+		let pollTimeout: ReturnType<typeof setTimeout> | null = null;
+		let heartbeatTimeout: ReturnType<typeof setTimeout> | null = null;
+		let leaveSent = false;
+
+		function sendLeaveBeacon() {
+			if (leaveSent || !canWatch) return;
+			if (untrack(() => kind) !== 'live') return;
+			leaveSent = true;
+			try {
+				navigator.sendBeacon('/api/broadcasts/' + currentId + '/leave');
+			} catch {
+				// Best-effort leave notification.
+			}
+		}
+
+		if (canWatch && (initialKind === 'live' || initialKind === 'published')) {
+			void fetch('/api/broadcasts/' + currentId + '/view', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ kind: initialKind === 'published' ? 'replay' : 'live' }),
+				signal: controller.signal
+			}).catch(() => {});
+		}
+
+		function schedulePoll(delay = 2000) {
+			if (!active || !canWatch || document.hidden) return;
+			if (pollTimeout) clearTimeout(pollTimeout);
+			pollTimeout = setTimeout(async () => {
+				if (!active || document.hidden) return;
+				await poll(currentId, controller.signal);
+				schedulePoll(2000);
+			}, delay);
+		}
+
+		function scheduleHeartbeat(delay = 10_000) {
+			if (!active || !canWatch || document.hidden) return;
+			if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+			heartbeatTimeout = setTimeout(async () => {
+				if (!active || document.hidden) return;
+				if (untrack(() => kind) === 'live') {
+					await heartbeat(currentId, controller.signal);
+				}
+				scheduleHeartbeat(10_000);
+			}, delay);
+		}
+
+		function handleVisibilityChange() {
+			if (document.hidden) {
+				if (pollTimeout) {
+					clearTimeout(pollTimeout);
+					pollTimeout = null;
+				}
+				if (heartbeatTimeout) {
+					clearTimeout(heartbeatTimeout);
+					heartbeatTimeout = null;
+				}
+			} else if (canWatch && active) {
+				schedulePoll(0);
+				if (untrack(() => kind) === 'live') {
+					void heartbeat(currentId, controller.signal);
+				}
+				scheduleHeartbeat(10_000);
+			}
+		}
+
+		if (canWatch) {
+			if (!document.hidden) {
+				schedulePoll(2000);
+				if (initialKind === 'live') void heartbeat(currentId, controller.signal);
+				scheduleHeartbeat(10_000);
+			}
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+			window.addEventListener('pagehide', sendLeaveBeacon);
+		}
+
+		return () => {
+			active = false;
+			controller.abort();
+			if (pollTimeout) clearTimeout(pollTimeout);
+			if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.removeEventListener('pagehide', sendLeaveBeacon);
+			sendLeaveBeacon();
+		};
 	});
 </script>
 
@@ -1268,7 +1376,9 @@
 			{#if mobileTab === 'donate'}
 				<div
 					class="flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-2xl border border-border/50 bg-card/90 p-4 shadow-xl backdrop-blur-xl lg:hidden landscape:hidden"
-				></div>
+				>
+					{@render donationMethods()}
+				</div>
 			{/if}
 
 			<aside
@@ -1375,9 +1485,9 @@
 						</div>
 					</div>
 				{:else if landscapeTab === 'donate'}
-					<div
-						class="hidden min-h-0 flex-1 flex-col overflow-y-auto p-3 max-lg:landscape:flex"
-					></div>
+					<div class="hidden min-h-0 flex-1 flex-col overflow-y-auto p-3 max-lg:landscape:flex">
+						{@render donationMethods()}
+					</div>
 				{/if}
 				<div
 					class="hidden min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:hidden {mobileTab === 'info'
@@ -1607,7 +1717,7 @@
 										timingIllustrations &&
 										message.userId !== currentUserId &&
 										taggedImages.some((image) => image.showAtSeconds > pageTimelineTime)}
-									{@const bodySegments = splitMentions(bodyText ?? '', knownMentionNames)}
+									{@const bodySegments = splitMentions(bodyText ?? '', mentionPattern)}
 									<div
 										id={'broadcast-message-' + message.id}
 										in:fly={{ y: 8, duration: 180 }}
@@ -1709,8 +1819,8 @@
 																loading="lazy"
 															/>{/if}
 														<span class="flex w-full items-center gap-2">
-															{#if pendingPreview?.image}<img
-																	src={pendingPreview.image}
+															{#if message.linkImage}<img
+																	src={message.linkImage}
 																	alt=""
 																	class="h-10 w-10 shrink-0 rounded-lg object-cover"
 																	loading="lazy"

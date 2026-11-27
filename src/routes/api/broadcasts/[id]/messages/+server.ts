@@ -3,10 +3,9 @@ import {
 	addMessage,
 	broadcastKind,
 	canReplay,
-	chatRateLimitMessage,
 	getBroadcastIllustrations,
 	CHAT_PAGE_SIZE,
-	hasBroadcastSubscription,
+	hasBroadcastAccess,
 	listMessages,
 	syncBroadcast,
 	validateChatBodyDetailed
@@ -16,7 +15,7 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ params, locals, request, url }) => {
 	const currentUser = locals.user;
 	if (!currentUser) throw error(401, 'Требуется вход');
-	if (!(await hasBroadcastSubscription(currentUser.id))) throw error(403, 'Нужна подписка');
+	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state) throw error(404, 'Трансляция не найдена');
 	if (broadcastKind(state) !== 'live') throw error(409, 'Чат доступен только во время трансляции');
@@ -46,10 +45,7 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
 	]);
 	if (illustrationIds.some((id) => !allowedIllustrationIds.has(id)))
 		throw error(400, 'Иллюстрация не найдена');
-	if (!(await chatRateLimitMessage(state.id, currentUser.id))) {
-		throw error(429, 'Слишком много сообщений, подождите немного');
-	}
-	const message = await addMessage(
+	const result = await addMessage(
 		state.id,
 		currentUser.id,
 		body,
@@ -57,10 +53,11 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
 		replyToId,
 		illustrationIds
 	);
-	if (!message) {
-		if (replyToId) throw error(400, 'Сообщение для ответа не найдено');
+	if (!result.message) {
+		if (result.error === 'reply_not_found') throw error(400, 'Сообщение для ответа не найдено');
 		throw error(429, 'Слишком много сообщений, подождите немного');
 	}
+	const message = result.message;
 	return json({
 		message: {
 			...message,
@@ -74,13 +71,14 @@ export const POST: RequestHandler = async ({ params, locals, request, url }) => 
 export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const currentUser = locals.user;
 	if (!currentUser) throw error(401, 'Требуется вход');
-	if (!(await hasBroadcastSubscription(currentUser.id))) throw error(403, 'Нужна подписка');
+	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state) throw error(404, 'Трансляция не найдена');
 	const kind = broadcastKind(state);
 	if (kind !== 'live' && !canReplay(state)) throw error(409, 'Чат недоступен');
 	if (!state.startedAt || !state.chatEnabled) throw error(409, 'Чат недоступен');
 	const beforeRaw = url.searchParams.get('before');
+	const beforeId = url.searchParams.get('beforeId') ?? undefined;
 	const before = beforeRaw ? new Date(beforeRaw) : undefined;
 	if (beforeRaw && (!before || Number.isNaN(before.getTime())))
 		throw error(400, 'Некорректная дата');
@@ -90,7 +88,9 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		undefined,
 		currentUser.id,
 		CHAT_PAGE_SIZE + 1,
-		before
+		before,
+		undefined,
+		beforeId
 	);
 	const hasMore = rows.length > CHAT_PAGE_SIZE;
 	return json({ messages: hasMore ? rows.slice(1) : rows, hasMore });

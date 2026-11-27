@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { and, asc, count, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	books,
@@ -14,16 +14,37 @@ import {
 } from '$lib/server/db/schema';
 import { user } from '$lib/server/db/auth.schema';
 import { requireAdmin } from '$lib/server/admin';
-import { uploadImage } from '$lib/server/storage/r2';
+import { deleteFromStorage, uploadImage } from '$lib/server/storage/r2';
 import {
-	activeListenerCount,
+	ACTIVE_LISTENER_WINDOW_MS,
 	broadcastKind,
+	invalidateActiveBroadcastCache,
 	markBroadcastEnded,
 	markBroadcastStarted,
 	publishBroadcast,
 	syncBroadcast
 } from '$lib/server/broadcasts';
 import type { Actions, PageServerLoad } from './$types';
+
+async function maybeDeleteUnusedCover(
+	oldCoverUrl: string | null | undefined,
+	excludeBroadcastId?: string
+): Promise<void> {
+	if (!oldCoverUrl) return;
+	const [stillUsed] = await db
+		.select({ id: broadcasts.id })
+		.from(broadcasts)
+		.where(
+			and(
+				eq(broadcasts.coverUrl, oldCoverUrl),
+				excludeBroadcastId ? ne(broadcasts.id, excludeBroadcastId) : undefined
+			)
+		)
+		.limit(1);
+	if (!stillUsed) {
+		await deleteFromStorage(oldCoverUrl);
+	}
+}
 
 function text(form: FormData, key: string, max = 2000): string {
 	return String(form.get(key) ?? '')
@@ -66,64 +87,124 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(broadcasts.scheduledStartAt));
 
 	const synced = await Promise.all(rows.map(async (row) => (await syncBroadcast(row.id)) ?? row));
-	const liveRows = await Promise.all(
-		synced.map(async (row) => {
-			const now = new Date();
-			const listeners = await activeListenerCount(row.id, now);
-			const [viewRow] = await db
-				.select({ value: count() })
-				.from(broadcastViews)
-				.where(eq(broadcastViews.broadcastId, row.id));
-			const [viewerRow] = await db
-				.select({ value: sql<number>`count(distinct ${broadcastViews.userId})` })
-				.from(broadcastViews)
-				.where(eq(broadcastViews.broadcastId, row.id));
-			const viewers = await db
-				.select({ id: user.id, name: user.name })
-				.from(broadcastViews)
-				.innerJoin(user, eq(user.id, broadcastViews.userId))
-				.where(eq(broadcastViews.broadcastId, row.id))
-				.groupBy(user.id, user.name)
-				.orderBy(asc(user.name));
-			const [messageRow] = await db
-				.select({ value: count() })
-				.from(broadcastMessages)
-				.where(eq(broadcastMessages.broadcastId, row.id));
-			const [reactionRow] = await db
-				.select({ value: count() })
-				.from(broadcastReactions)
-				.innerJoin(broadcastMessages, eq(broadcastMessages.id, broadcastReactions.messageId))
-				.where(eq(broadcastMessages.broadcastId, row.id));
-			const [illustrationRow] = await db
-				.select({ value: count() })
-				.from(chapterIllustrations)
-				.where(eq(chapterIllustrations.chapterId, row.chapterId));
-			const people = await db
-				.select({ id: user.id, name: user.name })
-				.from(broadcastListeners)
-				.innerJoin(user, eq(user.id, broadcastListeners.userId))
-				.where(
-					and(
-						eq(broadcastListeners.broadcastId, row.id),
-						isNull(broadcastListeners.leftAt),
-						gt(broadcastListeners.lastSeenAt, new Date(now.getTime() - 30_000))
-					)
-				)
-				.orderBy(asc(user.name));
-			return {
-				...row,
-				kind: broadcastKind(row as never, now),
-				listeners,
-				views: Number(viewRow?.value ?? 0),
-				uniqueViewers: Number(viewerRow?.value ?? 0),
-				messageCount: Number(messageRow?.value ?? 0),
-				reactionCount: Number(reactionRow?.value ?? 0),
-				illustrationCount: Number(illustrationRow?.value ?? 0),
-				people,
-				viewers
-			};
-		})
+	const now = new Date();
+	const since = new Date(now.getTime() - ACTIVE_LISTENER_WINDOW_MS);
+	const broadcastIds = synced.map((row) => row.id);
+	const chapterIds = [...new Set(synced.map((row) => row.chapterId))];
+
+	const [viewStats, viewerRows, messageStats, reactionStats, illustrationStats, activePeopleRows] =
+		broadcastIds.length > 0
+			? await Promise.all([
+					db
+						.select({
+							broadcastId: broadcastViews.broadcastId,
+							views: count(),
+							uniqueViewers: sql<number>`count(distinct ${broadcastViews.userId})`
+						})
+						.from(broadcastViews)
+						.where(inArray(broadcastViews.broadcastId, broadcastIds))
+						.groupBy(broadcastViews.broadcastId),
+					db
+						.select({
+							broadcastId: broadcastViews.broadcastId,
+							id: user.id,
+							name: user.name
+						})
+						.from(broadcastViews)
+						.innerJoin(user, eq(user.id, broadcastViews.userId))
+						.where(inArray(broadcastViews.broadcastId, broadcastIds))
+						.groupBy(broadcastViews.broadcastId, user.id, user.name)
+						.orderBy(asc(user.name)),
+					db
+						.select({
+							broadcastId: broadcastMessages.broadcastId,
+							value: count()
+						})
+						.from(broadcastMessages)
+						.where(inArray(broadcastMessages.broadcastId, broadcastIds))
+						.groupBy(broadcastMessages.broadcastId),
+					db
+						.select({
+							broadcastId: broadcastMessages.broadcastId,
+							value: count()
+						})
+						.from(broadcastReactions)
+						.innerJoin(broadcastMessages, eq(broadcastMessages.id, broadcastReactions.messageId))
+						.where(inArray(broadcastMessages.broadcastId, broadcastIds))
+						.groupBy(broadcastMessages.broadcastId),
+					chapterIds.length > 0
+						? db
+								.select({
+									chapterId: chapterIllustrations.chapterId,
+									value: count()
+								})
+								.from(chapterIllustrations)
+								.where(inArray(chapterIllustrations.chapterId, chapterIds))
+								.groupBy(chapterIllustrations.chapterId)
+						: Promise.resolve([]),
+					db
+						.select({
+							broadcastId: broadcastListeners.broadcastId,
+							id: user.id,
+							name: user.name
+						})
+						.from(broadcastListeners)
+						.innerJoin(user, eq(user.id, broadcastListeners.userId))
+						.where(
+							and(
+								inArray(broadcastListeners.broadcastId, broadcastIds),
+								isNull(broadcastListeners.leftAt),
+								gt(broadcastListeners.lastSeenAt, since)
+							)
+						)
+						.orderBy(asc(user.name))
+				])
+			: [[], [], [], [], [], []];
+
+	const viewsByBroadcast = new Map(
+		viewStats.map((row) => [
+			row.broadcastId,
+			{ views: Number(row.views ?? 0), uniqueViewers: Number(row.uniqueViewers ?? 0) }
+		])
 	);
+	const viewersByBroadcast = new Map<string, Array<{ id: string; name: string }>>();
+	for (const row of viewerRows) {
+		const list = viewersByBroadcast.get(row.broadcastId) ?? [];
+		list.push({ id: row.id, name: row.name });
+		viewersByBroadcast.set(row.broadcastId, list);
+	}
+	const messagesByBroadcast = new Map(
+		messageStats.map((row) => [row.broadcastId, Number(row.value ?? 0)])
+	);
+	const reactionsByBroadcast = new Map(
+		reactionStats.map((row) => [row.broadcastId, Number(row.value ?? 0)])
+	);
+	const illustrationsByChapter = new Map(
+		illustrationStats.map((row) => [row.chapterId, Number(row.value ?? 0)])
+	);
+	const peopleByBroadcast = new Map<string, Array<{ id: string; name: string }>>();
+	for (const row of activePeopleRows) {
+		const list = peopleByBroadcast.get(row.broadcastId) ?? [];
+		list.push({ id: row.id, name: row.name });
+		peopleByBroadcast.set(row.broadcastId, list);
+	}
+
+	const liveRows = synced.map((row) => {
+		const viewInfo = viewsByBroadcast.get(row.id);
+		const people = peopleByBroadcast.get(row.id) ?? [];
+		return {
+			...row,
+			kind: broadcastKind(row as never, now),
+			listeners: people.length,
+			views: viewInfo?.views ?? 0,
+			uniqueViewers: viewInfo?.uniqueViewers ?? 0,
+			messageCount: messagesByBroadcast.get(row.id) ?? 0,
+			reactionCount: reactionsByBroadcast.get(row.id) ?? 0,
+			illustrationCount: illustrationsByChapter.get(row.chapterId) ?? 0,
+			people,
+			viewers: viewersByBroadcast.get(row.id) ?? []
+		};
+	});
 
 	const chapterRows = await db
 		.select({
@@ -182,13 +263,15 @@ export const actions: Actions = {
 			.where(eq(chapters.id, chapterId))
 			.limit(1);
 		if (!chapter) return fail(404, { error: 'Глава не найдена' });
-		if (id && !coverBlurhash) {
+		let existingCoverUrl: string | null = null;
+		if (id) {
 			const [existing] = await db
-				.select({ coverBlurhash: broadcasts.coverBlurhash })
+				.select({ coverUrl: broadcasts.coverUrl, coverBlurhash: broadcasts.coverBlurhash })
 				.from(broadcasts)
 				.where(eq(broadcasts.id, id))
 				.limit(1);
-			coverBlurhash = existing?.coverBlurhash ?? null;
+			existingCoverUrl = existing?.coverUrl ?? null;
+			if (!coverBlurhash) coverBlurhash = existing?.coverBlurhash ?? null;
 		}
 
 		if (id) {
@@ -207,6 +290,9 @@ export const actions: Actions = {
 					updatedAt: new Date()
 				})
 				.where(eq(broadcasts.id, id));
+			if (existingCoverUrl && existingCoverUrl !== coverUrl) {
+				await maybeDeleteUnusedCover(existingCoverUrl, id);
+			}
 		} else {
 			await db.insert(broadcasts).values({
 				chapterId,
@@ -221,6 +307,7 @@ export const actions: Actions = {
 				createdBy: locals.user?.id ?? null
 			});
 		}
+		invalidateActiveBroadcastCache(id || undefined);
 		return { success: true, message: 'Трансляция сохранена' };
 	},
 	startBroadcast: async ({ request, locals }) => {
@@ -248,7 +335,16 @@ export const actions: Actions = {
 	deleteBroadcast: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const id = text(await request.formData(), 'id', 36);
+		const [existing] = await db
+			.select({ coverUrl: broadcasts.coverUrl })
+			.from(broadcasts)
+			.where(eq(broadcasts.id, id))
+			.limit(1);
 		await db.delete(broadcasts).where(eq(broadcasts.id, id));
+		if (existing?.coverUrl) {
+			await maybeDeleteUnusedCover(existing.coverUrl);
+		}
+		invalidateActiveBroadcastCache(id);
 		return { success: true, message: 'Трансляция удалена' };
 	}
 };

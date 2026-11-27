@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	addDays,
 	computeManualExpiry,
 	daysFromAmount,
 	pluralDays,
@@ -28,6 +29,17 @@ test('price change reprices remaining time proportionally', () => {
 	assert.equal(repriceRemainingMs(10 * DAY, 20, 10), 20 * DAY);
 	assert.equal(repriceRemainingMs(0, 7, 10), 0);
 	assert.equal(repriceRemainingMs(10 * DAY, 7, 0), 0);
+});
+
+test('addDays uses fixed UTC 24h days regardless of DST', () => {
+	// Around spring-forward and fall-back DST dates in Europe/US timezones
+	const springStart = new Date('2026-03-28T12:00:00.000Z');
+	assert.equal(addDays(springStart, 2).getTime() - springStart.getTime(), 2 * DAY);
+	assert.equal(addDays(springStart, 2).toISOString(), '2026-03-30T12:00:00.000Z');
+
+	const fallStart = new Date('2026-10-24T12:00:00.000Z');
+	assert.equal(addDays(fallStart, 2).getTime() - fallStart.getTime(), 2 * DAY);
+	assert.equal(addDays(fallStart, 2).toISOString(), '2026-10-26T12:00:00.000Z');
 });
 
 test('manual expiry stacks from the later of now and current expiry', () => {
@@ -88,7 +100,7 @@ test('summary: lifetime wins over dates', () => {
 	assert.equal(summary.daysLeft, null);
 });
 
-test('summary: block disables access but keeps source flags', () => {
+test('summary: block disables access, hides expiry/source, and keeps source flags', () => {
 	const summary = summarizeSubscription({
 		subscription: {
 			manualExpiresAt: new Date(NOW.getTime() + 30 * DAY),
@@ -99,11 +111,19 @@ test('summary: block disables access but keeps source flags', () => {
 			blockedReason: 'refund',
 			blockedRemainingMs: 30 * DAY
 		},
+		sources: [
+			{ provider: 'telegram', externalId: '42', active: true, checkedAt: NOW, lastError: null }
+		],
 		now: NOW
 	});
 	assert.equal(summary.active, false);
 	assert.equal(summary.blocked, true);
 	assert.equal(summary.blockedReason, 'refund');
+	assert.equal(summary.source, 'none');
+	assert.equal(summary.expiresAt, null);
+	assert.equal(summary.daysLeft, null);
+	assert.equal(summary.telegramActive, true);
+	assert.equal(summary.boostyActive, true);
 });
 
 test('summary: revoked subscription keeps remaining days but disables access', () => {

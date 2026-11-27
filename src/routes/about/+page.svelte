@@ -108,7 +108,7 @@
 								{/if}
 								{#if translator.links.some((link) => link.enabled !== false)}
 									<div class="flex flex-wrap items-center gap-2">
-										{#each translator.links.filter((link) => link.enabled !== false) as link (link.type)}
+										{#each translator.links.filter((link) => link.enabled !== false) as link, linkIndex (`${link.type}-${link.url}-${linkIndex}`)}
 											<a
 												href={link.url}
 												target="_blank"
@@ -138,7 +138,7 @@
 			</div>
 
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-				{#each data.page.data.developers ?? [] as dev (dev.name)}
+				{#each (data.page.data.developers ?? []).filter((dev) => dev.enabled) as dev, devIndex (`${dev.name}-${devIndex}`)}
 					<div
 						class="group relative overflow-hidden rounded-2xl border border-border/50 bg-card p-6 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-primary/20 hover:shadow-md"
 					>
@@ -174,7 +174,7 @@
 
 								{#if dev.links.some((link) => link.enabled !== false)}
 									<div class="flex flex-wrap items-center gap-2 pt-2">
-										{#each dev.links.filter((link) => link.enabled !== false) as link (link.type)}
+										{#each dev.links.filter((link) => link.enabled !== false) as link, linkIndex (`${link.type}-${link.url}-${linkIndex}`)}
 											<a
 												href={link.url}
 												target="_blank"

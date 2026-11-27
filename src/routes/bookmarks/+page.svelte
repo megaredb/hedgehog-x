@@ -134,6 +134,8 @@
 					.first();
 			}
 			if (!version) return;
+			const hasClip =
+				item.endTimestampSeconds != null && item.endTimestampSeconds > item.timestampSeconds;
 			audioStore.setQueueAndPlay(
 				[
 					{
@@ -148,12 +150,13 @@
 						blurhash: item.volume?.blurhash || item.book?.blurhash,
 						bookId: item.book?.id,
 						volumeId: item.volume?.id,
-						startTime: item.timestampSeconds
+						startTime: item.timestampSeconds,
+						clipStart: hasClip ? item.timestampSeconds : null,
+						clipEnd: hasClip ? item.endTimestampSeconds : null
 					}
 				],
 				0
 			);
-			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 			return;
 		}
 
@@ -179,9 +182,15 @@
 
 		const startIndex = tracks.findIndex((t) => t.id === item.chapterId);
 		if (startIndex !== -1) {
-			tracks[startIndex] = { ...tracks[startIndex], startTime: item.timestampSeconds };
+			const hasClip =
+				item.endTimestampSeconds != null && item.endTimestampSeconds > item.timestampSeconds;
+			tracks[startIndex] = {
+				...tracks[startIndex],
+				startTime: item.timestampSeconds,
+				clipStart: hasClip ? item.timestampSeconds : null,
+				clipEnd: hasClip ? item.endTimestampSeconds : null
+			};
 			audioStore.setQueueAndPlay(tracks, startIndex);
-			audioStore.setClipRange(item.timestampSeconds, item.endTimestampSeconds);
 		}
 	}
 
@@ -341,7 +350,7 @@
 											{formatDate(item.createdAt)}
 										</span>
 									{/if}
-									{#if item.versionId !== 'default' || item.hasMultipleVersions}
+									{#if (item.versionId ?? 'default') !== 'default' || item.hasMultipleVersions}
 										<span
 											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {item.versionId ===
 												'default' || !item.versionId

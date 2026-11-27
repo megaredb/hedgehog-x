@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	chapterIllustrations,
@@ -14,6 +14,7 @@ import {
 	volumes
 } from '$lib/server/db/schema';
 import { user } from '$lib/server/db/auth.schema';
+import { isAdminRole } from '$lib/server/admin';
 import {
 	getSubscriptionSummary,
 	getSubscriptionSummaries
@@ -49,8 +50,41 @@ export {
 export const ACTIVE_LISTENER_WINDOW_MS = 30_000;
 export const CHAT_PAGE_SIZE = 30;
 
+const MAX_ACTIVE_BROADCAST_CACHE = 200;
+const MAX_LISTENER_COUNT_CACHE = 500;
+const MAX_SUBSCRIPTION_CACHE = 2000;
+const VIEW_DEDUP_WINDOW_MS = 60_000;
+
 const activeBroadcastCache = new Map<string, { value: BroadcastState; expiresAt: number }>();
 const listenerCountCache = new Map<string, { value: number; expiresAt: number }>();
+
+function setBoundedCache<T extends { expiresAt: number }>(
+	cache: Map<string, T>,
+	key: string,
+	value: T,
+	maxSize: number
+): void {
+	const now = Date.now();
+	if (cache.size >= maxSize) {
+		for (const [k, entry] of cache) {
+			if (entry.expiresAt <= now) cache.delete(k);
+		}
+	}
+	while (cache.size >= maxSize) {
+		const oldestKey = cache.keys().next().value;
+		if (oldestKey === undefined) break;
+		cache.delete(oldestKey);
+	}
+	cache.set(key, value);
+}
+
+export function invalidateActiveBroadcastCache(id?: string): void {
+	if (id) {
+		activeBroadcastCache.delete(id);
+	} else {
+		activeBroadcastCache.clear();
+	}
+}
 
 export interface ChatMessage {
 	id: string;
@@ -149,6 +183,7 @@ export async function syncBroadcast(id: string, now = new Date()): Promise<Broad
 			.update(broadcasts)
 			.set({ startedAt, endedAt, publishedAt, updatedAt: new Date() })
 			.where(eq(broadcasts.id, id));
+		invalidateActiveBroadcastCache(id);
 	}
 	return { ...state, startedAt, endedAt, publishedAt };
 }
@@ -163,6 +198,7 @@ export async function markBroadcastStarted(id: string): Promise<BroadcastState |
 			.where(eq(broadcasts.id, id));
 		await db.update(chapters).set({ published: true }).where(eq(chapters.id, state.chapterId));
 	}
+	invalidateActiveBroadcastCache(id);
 	return (await syncBroadcast(id)) ?? state;
 }
 
@@ -181,6 +217,7 @@ export async function markBroadcastEnded(id: string): Promise<BroadcastState | n
 	if (!state.saveRecording) {
 		await db.delete(broadcastMessages).where(eq(broadcastMessages.broadcastId, id));
 	}
+	invalidateActiveBroadcastCache(id);
 	return (await syncBroadcast(id)) ?? state;
 }
 
@@ -189,12 +226,13 @@ export async function publishBroadcast(id: string): Promise<void> {
 		.update(broadcasts)
 		.set({ publishedAt: new Date(), updatedAt: new Date() })
 		.where(and(eq(broadcasts.id, id), eq(broadcasts.saveRecording, true)));
+	invalidateActiveBroadcastCache(id);
 }
 
 const subscriptionCache = new Map<string, { active: boolean; expiresAt: number }>();
 
 export async function loadActiveBroadcast(now = new Date()): Promise<BroadcastState | null> {
-	const [row] = await db
+	const rows = await db
 		.select({ id: broadcasts.id })
 		.from(broadcasts)
 		.where(
@@ -204,14 +242,28 @@ export async function loadActiveBroadcast(now = new Date()): Promise<BroadcastSt
 			)
 		)
 		.orderBy(asc(broadcasts.scheduledStartAt))
-		.limit(1);
-	if (!row) return null;
-	const cached = activeBroadcastCache.get(row.id);
-	if (cached && cached.expiresAt > Date.now()) return cached.value;
-	const state = await syncBroadcast(row.id, now);
-	if (!state) return null;
-	activeBroadcastCache.set(row.id, { value: state, expiresAt: Date.now() + 1200 });
-	return state;
+		.limit(10);
+	for (const row of rows) {
+		const cached = activeBroadcastCache.get(row.id);
+		if (cached && cached.expiresAt > Date.now()) {
+			const cachedKind = broadcastKind(cached.value, now);
+			if (cachedKind === 'live' || cachedKind === 'scheduled') return cached.value;
+			activeBroadcastCache.delete(row.id);
+		}
+		const state = await syncBroadcast(row.id, now);
+		if (!state) continue;
+		const kind = broadcastKind(state, now);
+		if (kind === 'live' || kind === 'scheduled') {
+			setBoundedCache(
+				activeBroadcastCache,
+				row.id,
+				{ value: state, expiresAt: Date.now() + 1200 },
+				MAX_ACTIVE_BROADCAST_CACHE
+			);
+			return state;
+		}
+	}
+	return null;
 }
 
 export async function hasBroadcastSubscription(userId: string): Promise<boolean> {
@@ -219,8 +271,21 @@ export async function hasBroadcastSubscription(userId: string): Promise<boolean>
 	if (cached && cached.expiresAt > Date.now()) return cached.active;
 	const summary = await getSubscriptionSummary(userId);
 	const active = Boolean(summary.active);
-	subscriptionCache.set(userId, { active, expiresAt: Date.now() + 10_000 });
+	setBoundedCache(
+		subscriptionCache,
+		userId,
+		{ active, expiresAt: Date.now() + 10_000 },
+		MAX_SUBSCRIPTION_CACHE
+	);
 	return active;
+}
+
+export async function hasBroadcastAccess(
+	currentUser: { id: string; role?: string | null } | null | undefined
+): Promise<boolean> {
+	if (!currentUser) return false;
+	if (isAdminRole(currentUser.role)) return true;
+	return hasBroadcastSubscription(currentUser.id);
 }
 
 export async function activeListenerCount(broadcastId: string, now = new Date()): Promise<number> {
@@ -238,7 +303,12 @@ export async function activeListenerCount(broadcastId: string, now = new Date())
 			)
 		);
 	const value = Number(row?.value ?? 0);
-	listenerCountCache.set(broadcastId, { value, expiresAt: Date.now() + 1000 });
+	setBoundedCache(
+		listenerCountCache,
+		broadcastId,
+		{ value, expiresAt: Date.now() + 1000 },
+		MAX_LISTENER_COUNT_CACHE
+	);
 	return value;
 }
 
@@ -330,7 +400,7 @@ export async function loadBroadcastProgress(
 	return { ...row, kind: row.kind === 'live' ? 'live' : 'replay' };
 }
 
-/** Upsert by furthest position, matching chapter progress conflict semantics. */
+/** Upsert progress: last-write-wins for replay so seeking backwards and re-watching work. */
 export async function saveBroadcastProgress(params: {
 	userId: string;
 	broadcastId: string;
@@ -351,21 +421,53 @@ export async function saveBroadcastProgress(params: {
 		})
 		.onConflictDoUpdate({
 			target: [broadcastProgress.userId, broadcastProgress.broadcastId],
-			set: {
-				kind: params.kind,
-				positionSeconds: sql`GREATEST(${broadcastProgress.positionSeconds}, ${params.positionSeconds})`,
-				isCompleted: sql`${broadcastProgress.isCompleted} OR ${params.isCompleted}`,
-				updatedAt: now
-			}
+			set:
+				params.kind === 'replay'
+					? {
+							kind: params.kind,
+							positionSeconds: params.positionSeconds,
+							isCompleted: params.isCompleted,
+							updatedAt: now
+						}
+					: {
+							kind: params.kind,
+							positionSeconds: sql`GREATEST(${broadcastProgress.positionSeconds}, ${params.positionSeconds})`,
+							isCompleted: sql`${broadcastProgress.isCompleted} OR ${params.isCompleted}`,
+							updatedAt: now
+						}
 		});
 }
 
 export async function recordBroadcastView(
 	broadcastId: string,
 	userId: string,
-	kind: 'live' | 'replay'
+	kind: 'live' | 'replay',
+	now = new Date()
 ): Promise<void> {
-	await db.insert(broadcastViews).values({ broadcastId, userId, kind });
+	const since = new Date(now.getTime() - VIEW_DEDUP_WINDOW_MS);
+	const [recent] = await db
+		.select({ id: broadcastViews.id })
+		.from(broadcastViews)
+		.where(
+			and(
+				eq(broadcastViews.broadcastId, broadcastId),
+				eq(broadcastViews.userId, userId),
+				eq(broadcastViews.kind, kind),
+				gt(broadcastViews.lastSeenAt, since)
+			)
+		)
+		.orderBy(desc(broadcastViews.lastSeenAt))
+		.limit(1);
+	if (recent) {
+		await db
+			.update(broadcastViews)
+			.set({ lastSeenAt: now })
+			.where(eq(broadcastViews.id, recent.id));
+		return;
+	}
+	await db
+		.insert(broadcastViews)
+		.values({ broadcastId, userId, kind, startedAt: now, lastSeenAt: now });
 }
 
 export async function touchBroadcastView(
@@ -391,8 +493,28 @@ export async function listMessages(
 	afterCreatedAt?: Date,
 	viewerUserId?: string | null,
 	limit = CHAT_PAGE_SIZE,
-	beforeCreatedAt?: Date
+	beforeCreatedAt?: Date,
+	afterId?: string,
+	beforeId?: string
 ): Promise<ChatMessage[]> {
+	const afterCond = afterCreatedAt
+		? afterId
+			? or(
+					gt(broadcastMessages.createdAt, afterCreatedAt),
+					and(eq(broadcastMessages.createdAt, afterCreatedAt), gt(broadcastMessages.id, afterId))
+				)
+			: gt(broadcastMessages.createdAt, afterCreatedAt)
+		: undefined;
+	const beforeCond = beforeCreatedAt
+		? beforeId
+			? or(
+					lt(broadcastMessages.createdAt, beforeCreatedAt),
+					and(eq(broadcastMessages.createdAt, beforeCreatedAt), lt(broadcastMessages.id, beforeId))
+				)
+			: lt(broadcastMessages.createdAt, beforeCreatedAt)
+		: undefined;
+	const isForward = Boolean(afterCreatedAt);
+
 	const rows = await db
 		.select({
 			id: broadcastMessages.id,
@@ -414,27 +536,52 @@ export async function listMessages(
 		})
 		.from(broadcastMessages)
 		.leftJoin(user, eq(user.id, broadcastMessages.userId))
-		.where(
-			and(
-				eq(broadcastMessages.broadcastId, broadcastId),
-				afterCreatedAt ? gt(broadcastMessages.createdAt, afterCreatedAt) : undefined,
-				beforeCreatedAt ? lt(broadcastMessages.createdAt, beforeCreatedAt) : undefined
-			)
+		.where(and(eq(broadcastMessages.broadcastId, broadcastId), afterCond, beforeCond))
+		.orderBy(
+			...(isForward
+				? [asc(broadcastMessages.createdAt), asc(broadcastMessages.id)]
+				: [desc(broadcastMessages.createdAt), desc(broadcastMessages.id)])
 		)
-		.orderBy(desc(broadcastMessages.createdAt))
 		.limit(limit);
 	const messageIds = rows.map((row) => row.id);
-	const reactionRows = messageIds.length
-		? await db
-				.select({
-					messageId: broadcastReactions.messageId,
-					emoji: broadcastReactions.emoji,
-					value: sql<number>`count(*)`
-				})
-				.from(broadcastReactions)
-				.where(inArray(broadcastReactions.messageId, messageIds))
-				.groupBy(broadcastReactions.messageId, broadcastReactions.emoji)
-		: [];
+	const replyToIds = [
+		...new Set(rows.map((row) => row.replyToId).filter((id): id is string => Boolean(id)))
+	];
+	const [reactionRows, myReactionRows, replyTargetRows] = await Promise.all([
+		messageIds.length
+			? db
+					.select({
+						messageId: broadcastReactions.messageId,
+						emoji: broadcastReactions.emoji,
+						value: sql<number>`count(*)`
+					})
+					.from(broadcastReactions)
+					.where(inArray(broadcastReactions.messageId, messageIds))
+					.groupBy(broadcastReactions.messageId, broadcastReactions.emoji)
+			: Promise.resolve([]),
+		viewerUserId && messageIds.length
+			? db
+					.select({ messageId: broadcastReactions.messageId, emoji: broadcastReactions.emoji })
+					.from(broadcastReactions)
+					.where(
+						and(
+							inArray(broadcastReactions.messageId, messageIds),
+							eq(broadcastReactions.userId, viewerUserId)
+						)
+					)
+			: Promise.resolve([]),
+		replyToIds.length
+			? db
+					.select({
+						id: broadcastMessages.id,
+						userId: broadcastMessages.userId,
+						name: user.name
+					})
+					.from(broadcastMessages)
+					.leftJoin(user, eq(user.id, broadcastMessages.userId))
+					.where(inArray(broadcastMessages.id, replyToIds))
+			: Promise.resolve([])
+	]);
 	const reactionsByMessage = new Map<string, Record<string, number>>();
 	for (const reaction of reactionRows) {
 		const current = reactionsByMessage.get(reaction.messageId) ?? {};
@@ -447,49 +594,47 @@ export async function listMessages(
 			Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]))
 		);
 	}
-	const myReactionRows =
-		viewerUserId && messageIds.length
-			? await db
-					.select({ messageId: broadcastReactions.messageId, emoji: broadcastReactions.emoji })
-					.from(broadcastReactions)
-					.where(
-						and(
-							inArray(broadcastReactions.messageId, messageIds),
-							eq(broadcastReactions.userId, viewerUserId)
-						)
-					)
-			: [];
 	const myReactionByMessage = new Map(myReactionRows.map((row) => [row.messageId, row.emoji]));
+	const replyTargetById = new Map(replyTargetRows.map((row) => [row.id, row]));
 	const userIds = [
 		...new Set(rows.map((row) => row.userId).filter((id): id is string => Boolean(id)))
 	];
 	const summaries = await getSubscriptionSummaries(userIds);
-	return rows.reverse().map((row) => ({
-		id: row.id,
-		userId: row.userId,
-		name: row.name ?? 'Гость',
-		avatar: row.image || row.telegramAvatar || row.discordAvatar || null,
-		body: row.body,
-		createdAt: row.createdAt,
-		replyToId: row.replyToId,
-		replyToName: row.replyToName,
-		replyToBody: row.replyToBody,
-		linkUrl: row.linkUrl,
-		linkTitle: row.linkTitle,
-		linkDescription: row.linkDescription,
-		linkImage: row.linkImage,
-		taggedIllustrationIds: row.taggedIllustrationIds ?? [],
-		offsetSeconds: startedAt
-			? Math.max(0, Math.round((row.createdAt.getTime() - startedAt.getTime()) / 1000))
-			: 0,
-		subscription: summaries.get(row.userId ?? '')?.isLifetime
-			? 'lifetime'
-			: summaries.get(row.userId ?? '')?.active
-				? 'active'
-				: 'none',
-		reactions: reactionsByMessage.get(row.id) ?? {},
-		myReaction: myReactionByMessage.get(row.id) ?? null
-	}));
+	const orderedRows = isForward ? rows : rows.reverse();
+	return orderedRows.map((row) => {
+		const replyTarget = row.replyToId ? replyTargetById.get(row.replyToId) : undefined;
+		const resolvedReplyToName = row.replyToId
+			? replyTarget?.userId
+				? (replyTarget.name ?? 'Гость')
+				: 'Гость'
+			: null;
+		return {
+			id: row.id,
+			userId: row.userId,
+			name: row.name ?? 'Гость',
+			avatar: row.image || row.telegramAvatar || row.discordAvatar || null,
+			body: row.body,
+			createdAt: row.createdAt,
+			replyToId: row.replyToId,
+			replyToName: resolvedReplyToName,
+			replyToBody: row.replyToBody,
+			linkUrl: row.linkUrl,
+			linkTitle: row.linkTitle,
+			linkDescription: row.linkDescription,
+			linkImage: row.linkImage,
+			taggedIllustrationIds: row.taggedIllustrationIds ?? [],
+			offsetSeconds: startedAt
+				? Math.max(0, Math.round((row.createdAt.getTime() - startedAt.getTime()) / 1000))
+				: 0,
+			subscription: summaries.get(row.userId ?? '')?.isLifetime
+				? 'lifetime'
+				: summaries.get(row.userId ?? '')?.active
+					? 'active'
+					: 'none',
+			reactions: reactionsByMessage.get(row.id) ?? {},
+			myReaction: myReactionByMessage.get(row.id) ?? null
+		};
+	});
 }
 
 export async function chatRateLimitMessage(
@@ -511,6 +656,10 @@ export async function chatRateLimitMessage(
 	return Number(row?.value ?? 0) < CHAT_RATE_LIMIT;
 }
 
+export type AddMessageResult =
+	| { message: ChatMessage; error: null }
+	| { message: null; error: 'rate_limited' | 'reply_not_found' };
+
 export async function addMessage(
 	broadcastId: string,
 	userId: string,
@@ -518,42 +667,63 @@ export async function addMessage(
 	currentHost?: string,
 	replyToId?: string,
 	taggedIllustrationIds: string[] = []
-): Promise<ChatMessage | null> {
-	if (!(await chatRateLimitMessage(broadcastId, userId))) return null;
+): Promise<AddMessageResult> {
 	let replyToName: string | null = null;
 	let replyToBody: string | null = null;
 	if (replyToId) {
 		const [target] = await db
-			.select({ body: broadcastMessages.body, name: user.name })
+			.select({ body: broadcastMessages.body, userId: broadcastMessages.userId, name: user.name })
 			.from(broadcastMessages)
 			.leftJoin(user, eq(user.id, broadcastMessages.userId))
 			.where(
 				and(eq(broadcastMessages.id, replyToId), eq(broadcastMessages.broadcastId, broadcastId))
 			)
 			.limit(1);
-		if (!target) return null;
-		replyToName = target.name ?? 'Гость';
+		if (!target) return { message: null, error: 'reply_not_found' };
+		replyToName = target.userId ? (target.name ?? 'Гость') : 'Гость';
 		replyToBody = target.body;
 	}
 	const link = body.match(/https?:\/\/[^\s<>"']+/i)?.[0] ?? null;
 	const preview = link ? await fetchLinkPreview(link, currentHost) : null;
-	const [row] = await db
-		.insert(broadcastMessages)
-		.values({
-			broadcastId,
-			userId,
-			body,
-			replyToId: replyToId ?? null,
-			replyToName,
-			replyToBody,
-			linkUrl: link,
-			linkTitle: preview?.title ?? null,
-			linkDescription: preview?.description ?? null,
-			linkImage: preview?.image ?? null,
-			taggedIllustrationIds
-		})
-		.returning({ id: broadcastMessages.id, createdAt: broadcastMessages.createdAt });
-	if (!row) return null;
+
+	const inserted = await db.transaction(async (tx) => {
+		await tx.execute(
+			sql`SELECT pg_advisory_xact_lock(hashtext(${broadcastId}), hashtext(${userId}))`
+		);
+		const since = new Date(Date.now() - CHAT_RATE_WINDOW_MS);
+		const [countRow] = await tx
+			.select({ value: sql<number>`count(*)` })
+			.from(broadcastMessages)
+			.where(
+				and(
+					eq(broadcastMessages.broadcastId, broadcastId),
+					eq(broadcastMessages.userId, userId),
+					gt(broadcastMessages.createdAt, since)
+				)
+			);
+		if (Number(countRow?.value ?? 0) >= CHAT_RATE_LIMIT) {
+			return null;
+		}
+		const [row] = await tx
+			.insert(broadcastMessages)
+			.values({
+				broadcastId,
+				userId,
+				body,
+				replyToId: replyToId ?? null,
+				replyToName,
+				replyToBody,
+				linkUrl: link,
+				linkTitle: preview?.title ?? null,
+				linkDescription: preview?.description ?? null,
+				linkImage: preview?.image ?? null,
+				taggedIllustrationIds
+			})
+			.returning({ id: broadcastMessages.id, createdAt: broadcastMessages.createdAt });
+		return row ?? null;
+	});
+
+	if (!inserted) return { message: null, error: 'rate_limited' };
 	const [profile] = await db
 		.select({
 			name: user.name,
@@ -566,24 +736,27 @@ export async function addMessage(
 		.limit(1);
 	const summary = await getSubscriptionSummary(userId);
 	return {
-		id: row.id,
-		userId,
-		name: profile?.name ?? 'Гость',
-		avatar: profile?.image || profile?.telegramAvatar || profile?.discordAvatar || null,
-		body,
-		createdAt: row.createdAt,
-		offsetSeconds: 0,
-		subscription: summary.isLifetime ? 'lifetime' : summary.active ? 'active' : 'none',
-		replyToId: replyToId ?? null,
-		replyToName,
-		replyToBody,
-		linkUrl: link,
-		linkTitle: preview?.title ?? null,
-		linkDescription: preview?.description ?? null,
-		linkImage: preview?.image ?? null,
-		taggedIllustrationIds,
-		reactions: {},
-		myReaction: null
+		error: null,
+		message: {
+			id: inserted.id,
+			userId,
+			name: profile?.name ?? 'Гость',
+			avatar: profile?.image || profile?.telegramAvatar || profile?.discordAvatar || null,
+			body,
+			createdAt: inserted.createdAt,
+			offsetSeconds: 0,
+			subscription: summary.isLifetime ? 'lifetime' : summary.active ? 'active' : 'none',
+			replyToId: replyToId ?? null,
+			replyToName,
+			replyToBody,
+			linkUrl: link,
+			linkTitle: preview?.title ?? null,
+			linkDescription: preview?.description ?? null,
+			linkImage: preview?.image ?? null,
+			taggedIllustrationIds,
+			reactions: {},
+			myReaction: null
+		}
 	};
 }
 

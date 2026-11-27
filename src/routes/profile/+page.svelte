@@ -39,9 +39,13 @@
 		}
 	});
 
-	// Redirect unauthenticated visitors to auth page
+	// Redirect unauthenticated visitors to auth page (only when online)
 	$effect(() => {
-		if (!session.isPending && !session.user) {
+		if (
+			!session.isPending &&
+			!session.user &&
+			(typeof navigator === 'undefined' || navigator.onLine)
+		) {
 			void goto(
 				resolve(`${resolve('/auth')}?from=${encodeURIComponent(resolve('/profile'))}` as '/')
 			);
@@ -432,6 +436,13 @@
 					<p class="mt-3 text-center text-sm text-destructive">{unlinkError}</p>
 				{/if}
 			</ConfirmModal>
+		{:else if !isOnline}
+			<section
+				class="mt-8 rounded-2xl border border-border/60 bg-card p-6 text-sm text-muted-foreground"
+			>
+				Данные профиля недоступны без подключения к сети. Подключитесь к интернету, чтобы войти в
+				аккаунт.
+			</section>
 		{/if}
 	{/if}
 </div>

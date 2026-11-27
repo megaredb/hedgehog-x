@@ -52,7 +52,9 @@
 			if (!saved.isCompleted && saved.progressSeconds <= 0) continue;
 			played.add(saved.baseChapterId ?? splitAudioVersionKey(saved.chapterId).chapterId);
 		}
-		const currentChapterId = String(audioStore.currentTrack?.id ?? '');
+		const currentChapterId = !audioStore.currentTrack?.broadcastId
+			? String(audioStore.currentTrack?.id ?? '')
+			: '';
 		if (currentChapterId && (audioStore.currentTime > 0 || audioStore.isPlaying)) {
 			played.add(currentChapterId);
 		}

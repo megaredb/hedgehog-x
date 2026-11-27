@@ -18,11 +18,13 @@ const log = createLogger('API');
 /** Same-origin check that also works behind the local Traefik HTTPS proxy. */
 function isTrustedOrigin(request: Request, url: URL): boolean {
 	const origin = request.headers.get('origin');
-	if (!origin) return true;
+	const secFetchSite = request.headers.get('sec-fetch-site');
+	if (!origin) return secFetchSite === 'same-origin';
 	if (origin === url.origin) return true;
-	if (request.headers.get('sec-fetch-site') === 'same-origin') return true;
+	if (secFetchSite === 'same-origin') return true;
 
-	const forwardedHost = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+	const rawForwardedHost = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+	const forwardedHost = rawForwardedHost?.split(',')[0]?.trim();
 	if (!forwardedHost) return false;
 	const forwardedProto = (request.headers.get('x-forwarded-proto') ?? url.protocol.slice(0, -1))
 		.split(',')[0]

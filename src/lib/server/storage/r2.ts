@@ -25,6 +25,43 @@ export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['.mp3', '.m4a', '.mp4', '.ogg', '.opus', '.wav', '.aac']);
 const ALLOWED_VIDEO_EXTENSIONS = new Set(['.webm', '.mp4', '.mov', '.m4v']);
 
+const AUDIO_CONTENT_TYPES: Record<string, string> = {
+	'.mp3': 'audio/mpeg',
+	'.m4a': 'audio/mp4',
+	'.mp4': 'audio/mp4',
+	'.ogg': 'audio/ogg',
+	'.opus': 'audio/opus',
+	'.wav': 'audio/wav',
+	'.aac': 'audio/aac'
+};
+
+const VIDEO_CONTENT_TYPES: Record<string, string> = {
+	'.webm': 'video/webm',
+	'.mp4': 'video/mp4',
+	'.mov': 'video/quicktime',
+	'.m4v': 'video/x-m4v'
+};
+
+export function audioContentTypeForExt(ext: string): string {
+	return AUDIO_CONTENT_TYPES[ext.toLowerCase()] ?? 'audio/mpeg';
+}
+
+export function videoContentTypeForExt(ext: string): string {
+	return VIDEO_CONTENT_TYPES[ext.toLowerCase()] ?? 'video/mp4';
+}
+
+export function resolveLocalUploadPath(rootDir: string, relativeKey: string): string | null {
+	if (!relativeKey || relativeKey.includes('\0') || relativeKey.includes('\\')) return null;
+	if (path.isAbsolute(relativeKey) || relativeKey.startsWith('/')) return null;
+	const segments = relativeKey.split('/');
+	if (segments.some((seg) => seg === '' || seg === '.' || seg === '..')) return null;
+
+	const root = path.resolve(rootDir);
+	const resolved = path.resolve(root, ...segments);
+	if (!resolved.startsWith(root + path.sep)) return null;
+	return resolved;
+}
+
 export class StorageValidationError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -208,9 +245,12 @@ export async function uploadImage(
 	}
 
 	// Fallback for local development if R2 credentials are not set
-	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
-	await fs.mkdir(localDir, { recursive: true });
-	const localFilePath = path.resolve(localDir, `${prefix}${path.basename(key)}`);
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
 	await fs.writeFile(localFilePath, webpBuffer);
 	log.info(`Saved image locally (fallback): ${localFilePath}`);
 
@@ -244,7 +284,7 @@ export async function uploadAudio(
 		: '.mp3';
 	const safeExt = ALLOWED_AUDIO_EXTENSIONS.has(rawExt) ? rawExt : '.mp3';
 	const key = `${folder}/${randomUUID()}${safeExt}`;
-	const contentType = options.contentType || 'audio/mpeg';
+	const contentType = audioContentTypeForExt(safeExt);
 
 	const r2 = getS3Client();
 	if (r2) {
@@ -268,9 +308,12 @@ export async function uploadAudio(
 	}
 
 	// Fallback for local development
-	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
-	await fs.mkdir(localDir, { recursive: true });
-	const localFilePath = path.resolve(localDir, path.basename(key));
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
 	await fs.writeFile(localFilePath, buffer);
 	log.info(`Saved audio locally (fallback): ${localFilePath}`);
 
@@ -300,7 +343,7 @@ export async function uploadVideo(
 		: '.mp4';
 	const safeExt = ALLOWED_VIDEO_EXTENSIONS.has(rawExt) ? rawExt : '.mp4';
 	const key = `${folder}/${randomUUID()}${safeExt}`;
-	const contentType = options.contentType || 'video/mp4';
+	const contentType = videoContentTypeForExt(safeExt);
 
 	const r2 = getS3Client();
 	if (r2) {
@@ -323,9 +366,12 @@ export async function uploadVideo(
 		throw new Error('R2 is not configured; uploads are disabled in production');
 	}
 
-	const localDir = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', folder);
-	await fs.mkdir(localDir, { recursive: true });
-	const localFilePath = path.resolve(localDir, path.basename(key));
+	const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+	const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+	if (!localFilePath) {
+		throw new StorageValidationError('Invalid upload path');
+	}
+	await fs.mkdir(path.dirname(localFilePath), { recursive: true });
 	await fs.writeFile(localFilePath, buffer);
 	log.info(`Saved video locally (fallback): ${localFilePath}`);
 
@@ -446,20 +492,53 @@ export async function listMediaFiles(options: {
  */
 export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 	const r2 = getS3Client();
-	let key = keyOrUrl;
+	let key = keyOrUrl.trim();
+	if (!key) return false;
 
-	if (keyOrUrl.startsWith('http')) {
+	if (key.startsWith('http://') || key.startsWith('https://')) {
+		if (!r2) return false;
+		let parsed: URL;
 		try {
-			const u = new URL(keyOrUrl);
-			key = u.pathname.replace(/^\/+/, '');
+			parsed = new URL(key);
 		} catch {
-			key = keyOrUrl;
+			return false;
 		}
-	} else if (keyOrUrl.startsWith('/uploads/')) {
-		key = keyOrUrl.replace(/^\/uploads\//, '');
-	} else if (keyOrUrl.startsWith('/api/media/')) {
-		key = keyOrUrl.replace(/^\/api\/media\//, '');
+		const allowedOrigins = new Set<string>();
+		try {
+			allowedOrigins.add(new URL(r2.publicUrl).origin);
+		} catch {
+			// ignore invalid publicUrl
+		}
+		const media = await loadMediaSettings().catch(() => null);
+		if (media?.mediaDirectBaseUrl) {
+			try {
+				allowedOrigins.add(new URL(media.mediaDirectBaseUrl).origin);
+			} catch {
+				// ignore invalid mediaDirectBaseUrl
+			}
+		}
+		if (!allowedOrigins.has(parsed.origin)) {
+			return false;
+		}
+		try {
+			const segments = parsed.pathname
+				.replace(/^\/+/, '')
+				.split('/')
+				.map((segment) => decodeURIComponent(segment));
+			if (segments.some((seg) => seg === '' || seg === '.' || seg === '..' || seg.includes('\0'))) {
+				return false;
+			}
+			key = segments.join('/');
+		} catch {
+			return false;
+		}
+	} else if (key.startsWith('/uploads/')) {
+		key = key.replace(/^\/uploads\//, '');
+	} else if (key.startsWith('/api/media/')) {
+		key = key.replace(/^\/api\/media\//, '');
 	}
+
+	if (!key || key.includes('\0')) return false;
 
 	if (r2) {
 		try {
@@ -483,7 +562,9 @@ export async function deleteFromStorage(keyOrUrl: string): Promise<boolean> {
 
 	// Local file fallback
 	try {
-		const localFilePath = path.resolve(process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads', key);
+		const uploadRoot = process.env.LOCAL_UPLOAD_DIR ?? 'static/uploads';
+		const localFilePath = resolveLocalUploadPath(uploadRoot, key);
+		if (!localFilePath) return false;
 		await fs.unlink(localFilePath);
 		return true;
 	} catch {

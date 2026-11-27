@@ -18,7 +18,8 @@ import {
 	loadSitePages,
 	loadTranslators,
 	normalizeSitePageData,
-	normalizeSocialLinks
+	normalizeSocialLinks,
+	sanitizeHttpUrl
 } from '$lib/server/site-content';
 import type { PageServerLoad } from './$types';
 
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		loadSitePages(),
 		loadTranslators(),
 		loadMediaSettings(true),
-		loadMirrors()
+		loadMirrors(true)
 	]);
 	return { pages, translators: translatorRows, mediaSettings, mirrors };
 };
@@ -57,7 +58,13 @@ export const actions: Actions = {
 	saveFeedbackSettings: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const form = await request.formData();
-		const feedbackUrl = text(form, 'feedbackUrl', 1024);
+		const rawFeedbackUrl = text(form, 'feedbackUrl', 1024);
+		const feedbackUrl = rawFeedbackUrl ? sanitizeHttpUrl(rawFeedbackUrl, { allowTg: true }) : '';
+		if (rawFeedbackUrl && !feedbackUrl) {
+			return fail(400, {
+				error: 'Адрес обратной связи должен использовать протокол http, https или tg'
+			});
+		}
 		const about = await loadSitePage('about');
 		const data = { ...about.data, feedbackUrl };
 		await db

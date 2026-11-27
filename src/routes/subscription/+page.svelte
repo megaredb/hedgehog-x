@@ -401,7 +401,9 @@
 							class="mt-2 flex flex-wrap items-center gap-2 text-2xl font-extrabold tracking-tight sm:text-3xl"
 						>
 							{statusTitle}
-							{#if data.summary.isLifetime}<InfinityIcon class="h-6 w-6 text-amber-500" />{/if}
+							{#if data.summary.isLifetime && !data.summary.blocked && !data.summary.revoked}<InfinityIcon
+									class="h-6 w-6 text-amber-500"
+								/>{/if}
 						</h2>
 						<p class="mt-1 max-w-xl text-sm text-muted-foreground">{statusText}</p>
 						<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -443,7 +445,10 @@
 						<div
 							class="flex h-20 w-20 items-center justify-center rounded-full border bg-background/70 shadow-xs"
 						>
-							{#if data.summary.isLifetime}<InfinityIcon class="h-8 w-8 text-amber-500" />
+							{#if data.summary.blocked || data.summary.revoked}<Lock
+									class="h-8 w-8 text-muted-foreground"
+								/>
+							{:else if data.summary.isLifetime}<InfinityIcon class="h-8 w-8 text-amber-500" />
 							{:else if data.summary.active}<CheckCircle2 class="h-8 w-8 text-emerald-500" />
 							{:else}<Lock class="h-8 w-8 text-muted-foreground" />{/if}
 						</div>
@@ -555,11 +560,13 @@
 									? 'text-amber-600 dark:text-amber-400'
 									: 'text-muted-foreground'}"
 							>
-								{data.summary.isLifetime
-									? 'Навсегда'
-									: data.summary.active
-										? 'Активен'
-										: 'Недоступен'}
+								{data.summary.blocked || data.summary.revoked
+									? 'Недоступен'
+									: data.summary.isLifetime
+										? 'Навсегда'
+										: data.summary.active
+											? 'Активен'
+											: 'Недоступен'}
 							</p>
 						</div>
 					</CardContent>

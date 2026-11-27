@@ -151,11 +151,41 @@ function string(value: unknown, maxLength = 4000): string {
 	return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+export function sanitizeHttpUrl(
+	raw: unknown,
+	opts?: { allowTg?: boolean; allowRelative?: boolean }
+): string {
+	if (typeof raw !== 'string') return '';
+	const value = raw.trim().slice(0, 1024);
+	if (!value) return '';
+	if (
+		opts?.allowRelative &&
+		value.startsWith('/') &&
+		!value.startsWith('//') &&
+		!value.startsWith('/\\')
+	) {
+		return value;
+	}
+	try {
+		const parsed = new URL(value);
+		if (
+			parsed.protocol === 'http:' ||
+			parsed.protocol === 'https:' ||
+			(opts?.allowTg && parsed.protocol === 'tg:')
+		) {
+			return value;
+		}
+		return '';
+	} catch {
+		return '';
+	}
+}
+
 export function normalizeSocialLinks(value: unknown, legacyUrl?: string | null): SiteSocialLink[] {
 	const raw = Array.isArray(value) ? value : [];
 	const links = raw.slice(0, 30).flatMap((item) => {
 		const row = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
-		const url = string(row.url, 1024);
+		const url = sanitizeHttpUrl(row.url);
 		if (!url) return [];
 		const type = string(row.type, 32);
 		const allowed: SocialIconType[] = ['vk', 'telegram', 'discord', 'boosty', 'github', 'website'];
@@ -169,10 +199,9 @@ export function normalizeSocialLinks(value: unknown, legacyUrl?: string | null):
 			}
 		];
 	});
-	if (links.length === 0 && legacyUrl?.trim()) {
-		return [
-			{ enabled: true, type: detectSocialType(legacyUrl), url: legacyUrl.trim().slice(0, 1024) }
-		];
+	const safeLegacyUrl = sanitizeHttpUrl(legacyUrl);
+	if (links.length === 0 && safeLegacyUrl) {
+		return [{ enabled: true, type: detectSocialType(safeLegacyUrl), url: safeLegacyUrl }];
 	}
 	return links;
 }
@@ -223,7 +252,7 @@ function normalizeLinks(value: unknown) {
 			enabled: row.enabled !== false,
 			title: string(row.title, 255),
 			description: string(row.description, 1000),
-			url: string(row.url, 1024),
+			url: sanitizeHttpUrl(row.url),
 			icon: ['vk', 'telegram', 'discord', 'boosty', 'website'].includes(icon)
 				? (icon as 'vk' | 'telegram' | 'discord' | 'boosty' | 'website')
 				: 'website'
@@ -254,8 +283,8 @@ function normalizeBankCards(value: unknown) {
 			brand: string(row.brand, 120) || 'HEDGEHOG.INC',
 			label: string(row.label, 120),
 			number: formatCardNumber(string(row.number, 64)),
-			payUrl: string(row.payUrl, 1024),
-			qrUrl: string(row.qrUrl, 1024),
+			payUrl: sanitizeHttpUrl(row.payUrl),
+			qrUrl: sanitizeHttpUrl(row.qrUrl, { allowRelative: true }),
 			colorFrom: /^#[0-9a-fA-F]{6}$/.test(string(row.colorFrom, 7))
 				? string(row.colorFrom, 7)
 				: '#0f172a',
@@ -294,7 +323,7 @@ function normalizeWallets(value: unknown, legacyAddress?: unknown, legacyQr?: un
 				network,
 				coins: [...new Set(coins)] as ('ton' | 'eth' | 'btc' | 'usdt' | 'trx' | 'xaut')[],
 				address,
-				qrUrl: string(row.qrUrl, 1024)
+				qrUrl: sanitizeHttpUrl(row.qrUrl, { allowRelative: true })
 			}
 		];
 	});
@@ -305,7 +334,7 @@ function normalizeWallets(value: unknown, legacyAddress?: unknown, legacyQr?: un
 				network: 'ton' as const,
 				coins: ['ton' as const],
 				address: legacyAddress.trim().slice(0, 255),
-				qrUrl: string(legacyQr, 1024)
+				qrUrl: sanitizeHttpUrl(legacyQr, { allowRelative: true })
 			}
 		];
 	}
@@ -332,7 +361,7 @@ function normalizeSupport(value: unknown) {
 			: DEFAULT_SUPPORT_SETTINGS.cards;
 	return {
 		boostyEnabled: row.boostyEnabled !== false,
-		boostyUrl: string(row.boostyUrl, 1024),
+		boostyUrl: sanitizeHttpUrl(row.boostyUrl),
 		boostyTitle: string(row.boostyTitle, 255),
 		boostyDescription: string(row.boostyDescription, 1000),
 		cards,
@@ -347,10 +376,11 @@ export function normalizeSitePageData(key: SitePageKey, input: unknown): SitePag
 	const source = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
 	if (key === 'about') {
 		return {
-			feedbackUrl: string(source.feedbackUrl, 1024) || defaults.feedbackUrl,
+			feedbackUrl: sanitizeHttpUrl(source.feedbackUrl, { allowTg: true }) || defaults.feedbackUrl,
 			authorEnabled: source.authorEnabled !== false,
 			authorName: string(source.authorName, 255) || defaults.authorName,
-			authorLogoUrl: string(source.authorLogoUrl, 1024) || defaults.authorLogoUrl,
+			authorLogoUrl:
+				sanitizeHttpUrl(source.authorLogoUrl, { allowRelative: true }) || defaults.authorLogoUrl,
 			developers:
 				source.developers === undefined ? defaults.developers : normalizePeople(source.developers)
 		};

@@ -45,16 +45,24 @@ export async function getIntegrationStatus(userId?: string): Promise<{
 		error: null
 	};
 
-	if (config.telegramConfigured) {
-		const bot = await safeStatus('bot', getMe);
+	const loadTelegram = async () => {
+		if (!config.telegramConfigured) {
+			telegram.error = 'Не заданы TELEGRAM_SUBSCRIPTION_CHAT_ID или TELEGRAM_BOT_TOKEN';
+			return;
+		}
+		const [bot, chat, webhook] = await Promise.all([
+			safeStatus('bot', getMe),
+			subscriptionConfig.telegramChatId
+				? safeStatus('chat', () => getChat(subscriptionConfig.telegramChatId))
+				: Promise.resolve(null),
+			safeStatus('webhook', getWebhookInfo)
+		]);
 		if (bot.ok && bot.value) telegram.bot = bot.value;
 		else telegram.error = bot.error ?? 'Не удалось получить данные бота';
-		if (bot.ok && subscriptionConfig.telegramChatId) {
-			const chat = await safeStatus('chat', () => getChat(subscriptionConfig.telegramChatId));
+		if (bot.ok && chat) {
 			if (chat.ok && chat.value) telegram.chat = chat.value;
 			else telegram.error = chat.error ?? telegram.error;
 		}
-		const webhook = await safeStatus('webhook', getWebhookInfo);
 		if (webhook.ok && webhook.value) {
 			telegram.webhook = {
 				url: webhook.value.url,
@@ -63,9 +71,7 @@ export async function getIntegrationStatus(userId?: string): Promise<{
 				allowed: webhook.value.allowed_updates ?? []
 			};
 		}
-	} else {
-		telegram.error = 'Не заданы TELEGRAM_SUBSCRIPTION_CHAT_ID или TELEGRAM_BOT_TOKEN';
-	}
+	};
 
 	const discord: DiscordStatus = {
 		configured: config.discordConfigured,
@@ -77,20 +83,28 @@ export async function getIntegrationStatus(userId?: string): Promise<{
 		error: null
 	};
 
-	if (config.discordConfigured) {
+	const loadDiscord = async () => {
+		if (!config.discordConfigured) {
+			discord.error = 'Не заданы DISCORD_GUILD_ID или DISCORD_SUBSCRIBER_ROLE_IDS';
+			return;
+		}
 		if (config.discordBotConfigured) {
-			const bot = await safeStatus('discord bot', getBotUser);
+			const [bot, guild, roles] = await Promise.all([
+				safeStatus('discord bot', getBotUser),
+				safeStatus('discord guild', () => getGuildWithBot(subscriptionConfig.discordGuildId)),
+				Promise.all(
+					subscriptionConfig.discordRoleIds.map((roleId) =>
+						safeStatus('discord role', () =>
+							getGuildRoleWithBot(subscriptionConfig.discordGuildId, roleId)
+						)
+					)
+				)
+			]);
 			if (bot.ok && bot.value) discord.bot = { id: bot.value.id, username: bot.value.username };
 			else discord.error = bot.error ?? 'Не удалось получить данные Discord-бота';
-			const guild = await safeStatus('discord guild', () =>
-				getGuildWithBot(subscriptionConfig.discordGuildId)
-			);
 			if (guild.ok && guild.value) discord.guild = { id: guild.value.id, name: guild.value.name };
 			else discord.error = guild.error ?? discord.error;
-			for (const roleId of subscriptionConfig.discordRoleIds) {
-				const role = await safeStatus('discord role', () =>
-					getGuildRoleWithBot(subscriptionConfig.discordGuildId, roleId)
-				);
+			for (const role of roles) {
 				if (role.ok && role.value) discord.roles.push({ id: role.value.id, name: role.value.name });
 			}
 		} else if (userId) {
@@ -98,9 +112,9 @@ export async function getIntegrationStatus(userId?: string): Promise<{
 			discord.oauthCheck = check.message;
 			if (check.status === 'error' || check.status === 'reauth') discord.error = check.message;
 		}
-	} else {
-		discord.error = 'Не заданы DISCORD_GUILD_ID или DISCORD_SUBSCRIBER_ROLE_IDS';
-	}
+	};
+
+	await Promise.all([loadTelegram(), loadDiscord()]);
 
 	return { telegram, discord };
 }

@@ -558,7 +558,7 @@
 			sourceOptions={donationSourceOptions}
 			sortOptions={donationSortOptions}
 			resultCount={filteredDonations.length}
-			totalCount={data.revenue.recent.length}
+			totalCount={data.revenue.donationsCount}
 		/>
 
 		<div class="max-h-[55vh] overflow-y-auto rounded-lg border">

@@ -25,6 +25,10 @@ async function setWebhook(url) {
 			drop_pending_updates: false
 		})
 	});
+	if (!response.ok) {
+		const body = await response.text().catch(() => '');
+		throw new Error(`setWebhook failed: HTTP ${response.status}${body ? ` ${body}` : ''}`);
+	}
 	const data = await response.json();
 	if (!data.ok) throw new Error(data.description ?? 'setWebhook failed');
 	console.log(`[serveo-webhook] Telegram webhook -> ${url}/api/telegram/webhook`);
@@ -46,9 +50,7 @@ function connect() {
 		'ssh',
 		[
 			'-o',
-			'StrictHostKeyChecking=no',
-			'-o',
-			'UserKnownHostsFile=/dev/null',
+			'StrictHostKeyChecking=accept-new',
 			'-o',
 			'ServerAliveInterval=30',
 			'-o',
@@ -61,20 +63,41 @@ function connect() {
 	);
 	child = proc;
 
-	const onOutput = (chunk) => {
-		// eslint-disable-next-line no-control-regex -- strip ANSI colors from SSH output
-		const text = chunk.toString().replace(/\x1b\[[0-9;]*m/g, '');
-		process.stdout.write(text);
-		const match = text.match(/https:\/\/[a-z0-9-]+\.serveousercontent\.com/);
-		if (!match || match[0] === currentUrl) return;
-		currentUrl = match[0];
-		void setWebhook(currentUrl).catch((error) => {
-			console.error(`[serveo-webhook] ${error instanceof Error ? error.message : String(error)}`);
-		});
+	const createLineHandler = () => {
+		let buffer = '';
+		const handleLine = (line) => {
+			const match = line.match(/https:\/\/[a-z0-9-]+\.serveousercontent\.com/);
+			if (!match || match[0] === currentUrl) return;
+			currentUrl = match[0];
+			void setWebhook(currentUrl).catch((error) => {
+				console.error(`[serveo-webhook] ${error instanceof Error ? error.message : String(error)}`);
+			});
+		};
+		return {
+			push(chunk) {
+				// eslint-disable-next-line no-control-regex -- strip ANSI colors from SSH output
+				const text = chunk.toString().replace(/\x1b\[[0-9;]*m/g, '');
+				process.stdout.write(text);
+				buffer += text;
+				const lines = buffer.split(/\r?\n/);
+				buffer = lines.pop() ?? '';
+				for (const line of lines) handleLine(line);
+			},
+			flush() {
+				if (buffer) {
+					handleLine(buffer);
+					buffer = '';
+				}
+			}
+		};
 	};
 
-	proc.stdout.on('data', onOutput);
-	proc.stderr.on('data', onOutput);
+	const stdoutHandler = createLineHandler();
+	const stderrHandler = createLineHandler();
+	proc.stdout.on('data', (chunk) => stdoutHandler.push(chunk));
+	proc.stderr.on('data', (chunk) => stderrHandler.push(chunk));
+	proc.stdout.on('end', () => stdoutHandler.flush());
+	proc.stderr.on('end', () => stderrHandler.flush());
 	proc.on('error', (error) => {
 		console.error(`[serveo-webhook] ssh error: ${error.message}`);
 		scheduleReconnect('ssh error');

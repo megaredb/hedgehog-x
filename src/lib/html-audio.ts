@@ -19,15 +19,22 @@ export type Track = {
 	startTime?: number;
 	/** Audio version selected for this track; undefined means the default version. */
 	versionId?: string;
+	/** Optional bookmark fragment start/end in seconds. */
+	clipStart?: number | null;
+	clipEnd?: number | null;
+	/** Server-vs-client clock skew in ms (Date.now() - serverNow) for live broadcasts. */
+	clockSkewMs?: number;
 	[key: string]: unknown;
 };
 
 import { createLogger } from './logger';
+import { opfsAudioFileName } from './audio-version';
 const log = createLogger('Audio');
 
 type LoadParams = {
 	url: string;
 	id?: string | number;
+	versionId?: string | null;
 	startTime?: number;
 	isLiveStream?: boolean;
 };
@@ -113,8 +120,13 @@ class HtmlAudio {
 	}
 
 	private currentBlobUrl: string | null = null;
+	private loadSeq = 0;
+	private abortPendingLoad: (() => void) | null = null;
 
 	cleanup(): void {
+		this.loadSeq++;
+		this.abortPendingLoad?.();
+		this.abortPendingLoad = null;
 		if (this.audio) {
 			this.audio.pause();
 			this.audio.src = '';
@@ -152,32 +164,39 @@ class HtmlAudio {
 	}
 
 	async load(params: LoadParams): Promise<void> {
-		const { url, id, startTime = 0, isLiveStream = false } = params;
-		const result = this.ifClient(() => this._load({ url, id, startTime, isLiveStream }));
+		const { url, id, versionId, startTime = 0, isLiveStream = false } = params;
+		const result = this.ifClient(() => this._load({ url, id, versionId, startTime, isLiveStream }));
 		if (result) await result;
 	}
 
 	private async _load(params: {
 		url: string;
 		id?: string | number;
+		versionId?: string | null;
 		startTime: number;
 		isLiveStream: boolean;
 	}): Promise<void> {
-		const { url, id, startTime, isLiveStream } = params;
+		const { url, id, versionId, startTime, isLiveStream } = params;
 		const audio = this.ensureAudio();
 		if (!audio) return;
+
+		const seq = ++this.loadSeq;
+		this.abortPendingLoad?.();
+		this.abortPendingLoad = null;
 
 		try {
 			this.retryAttempts = 0;
 
 			let finalUrl = url;
+			let createdBlobUrl: string | null = null;
 			if (!isLiveStream && id) {
-				const idStr = String(id);
+				const fileName = opfsAudioFileName(String(id), versionId);
 				try {
 					const opfsRoot = await navigator.storage.getDirectory();
-					const fileHandle = await opfsRoot.getFileHandle(idStr);
+					const fileHandle = await opfsRoot.getFileHandle(fileName);
 					const file = await fileHandle.getFile();
-					finalUrl = URL.createObjectURL(file);
+					createdBlobUrl = URL.createObjectURL(file);
+					finalUrl = createdBlobUrl;
 				} catch {
 					// Fallback to checking legacy CacheStorage (for files downloaded before OPFS migration)
 					try {
@@ -185,12 +204,18 @@ class HtmlAudio {
 						const cachedResponse = await cache.match(url, { ignoreSearch: true, ignoreVary: true });
 						if (cachedResponse) {
 							const blob = await cachedResponse.blob();
-							finalUrl = URL.createObjectURL(blob);
+							createdBlobUrl = URL.createObjectURL(blob);
+							finalUrl = createdBlobUrl;
 						}
 					} catch (err) {
 						log.warn('Не удалось прочитать аудио из кэша/OPFS:', err);
 					}
 				}
+			}
+
+			if (seq !== this.loadSeq) {
+				if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
+				return;
 			}
 
 			// Clean up previous blob URL if we are loading a new one
@@ -227,12 +252,26 @@ class HtmlAudio {
 					audio.removeEventListener('canplay', handleLoadSuccess);
 					audio.removeEventListener('canplaythrough', handleLoadSuccess);
 					audio.removeEventListener('error', handleErrorLoading);
+					if (this.abortPendingLoad === handleAbort) {
+						this.abortPendingLoad = null;
+					}
+				};
+
+				const handleAbort = () => {
+					if (isResolved) return;
+					isResolved = true;
+					cleanup();
+					resolve();
 				};
 
 				const handleTimeout = () => {
 					if (isResolved) return;
 					isResolved = true;
 					cleanup();
+					if (seq !== this.loadSeq) {
+						resolve();
+						return;
+					}
 					reject(new Error(`Audio load timeout (${loadTimeout / 1000}s)`));
 				};
 
@@ -240,6 +279,10 @@ class HtmlAudio {
 					if (isResolved) return;
 					isResolved = true;
 					cleanup();
+					if (seq !== this.loadSeq) {
+						resolve();
+						return;
+					}
 					if (startTime > 0 && !isLiveStream) audio.currentTime = startTime;
 					resolve();
 				};
@@ -248,12 +291,17 @@ class HtmlAudio {
 					if (isResolved) return;
 					isResolved = true;
 					cleanup();
+					if (seq !== this.loadSeq) {
+						resolve();
+						return;
+					}
 					const error = audio.error;
 					reject(
 						new Error(`Audio load failed: ${error?.message || `code ${error?.code ?? 'unknown'}`}`)
 					);
 				};
 
+				this.abortPendingLoad = handleAbort;
 				timeoutId = setTimeout(handleTimeout, loadTimeout);
 				audio.addEventListener('loadedmetadata', handleLoadSuccess);
 				audio.addEventListener('canplay', handleLoadSuccess);
@@ -262,6 +310,7 @@ class HtmlAudio {
 				audio.load();
 			});
 		} catch (error) {
+			if (seq !== this.loadSeq) return;
 			log.error('Ошибка в процессе загрузки аудио:', error);
 			throw error;
 		}
@@ -318,6 +367,9 @@ class HtmlAudio {
 
 	/** Stop and detach the current source so a deleted track cannot resume. */
 	stop(): void {
+		this.loadSeq++;
+		this.abortPendingLoad?.();
+		this.abortPendingLoad = null;
 		if (this.isClient() && this.audio) {
 			this.audio.pause();
 			this.audio.removeAttribute('src');

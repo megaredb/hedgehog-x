@@ -71,9 +71,7 @@ export function repriceRemainingMs(
 }
 
 export function addDays(date: Date, days: number): Date {
-	const result = new Date(date.getTime());
-	result.setDate(result.getDate() + days);
-	return result;
+	return new Date(date.getTime() + days * 86_400_000);
 }
 
 /** Manual grants always extend from the later of now and the current expiry. */
@@ -116,7 +114,7 @@ export function summarizeSubscription(params: {
 	const active = !blocked && !revoked && (isLifetime || manualActive || boostyActive);
 
 	let source: SubscriptionSourceKind = 'none';
-	if (revoked) source = 'none';
+	if (blocked || revoked) source = 'none';
 	else if (isLifetime) source = 'lifetime';
 	else if (manualActive && boostyActive) source = 'both';
 	else if (manualActive) source = 'manual';
@@ -125,9 +123,9 @@ export function summarizeSubscription(params: {
 	else if (discordActive) source = 'discord';
 
 	const expiresAt =
-		revoked || isLifetime ? null : manualActive ? subscription.manualExpiresAt : null;
+		blocked || revoked || isLifetime ? null : manualActive ? subscription.manualExpiresAt : null;
 	const daysLeft =
-		revoked || isLifetime
+		blocked || revoked || isLifetime
 			? null
 			: manualActive
 				? daysLeftUntil(subscription.manualExpiresAt, now)

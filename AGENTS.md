@@ -84,7 +84,8 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
                                    │
                     syncService (клиент) ── mappers ── hydrate() ── Dexie
                                    │
-Страницы ── useDexie(liveQuery) ───┘        (книги/тома SSR; остальные client)
+Страницы ── useDexie(liveQuery) ───┘        (главная, каталог, книги/тома, публичные,
+                                            трансляции, подписка и админка — SSR; остальные client)
 ```
 
 - Контент (книги/тома/главы/иллюстрации) живёт в Dexie; страница книги `/books/:bookId`
@@ -94,7 +95,7 @@ pnpm auth:schema         # guard: требует ALLOW_AUTH_SCHEMA_OVERWRITE=1
 - Главная `/` — SSR-витрина из БД (отдельные изображение/видео и порядок книг); полный каталог — `/books`.
 - `/books` — SSR-каталог книг с поиском; доступен из навигации.
 - Аналитика прослушивания — отдельный поток `/api/analytics/listen` (не в user sync).
-- Админка `/admin/**` — единственные SSR-страницы с данными из БД; доступ по `locals.user.role в ('admin','author')`.
+- Админка `/admin/**` — SSR-панель управления контентом, сайтом, пользователями и трансляциями; доступ по `locals.user.role в ('admin','author')`. Публичные и доменные страницы (`/`, `/books`, `/books/[bookId]`, `/about`, `/support`, `/community`, `/broadcasts`, `/subscription`) также загружаются на сервере (SSR) из БД.
 
 ## 5. Главные правила (нарушение = риск потери данных)
 
@@ -171,9 +172,9 @@ src/
       overlay/GuestDataAdoptionModal.svelte
     types/showcase.ts, constants/strings.ts, actions/inview.ts, utils/*
   routes/
-    +layout.svelte, +page.svelte
-    about/ admin/ auth/ bookmarks/ books/ broadcasts/ community/ downloads/ history/
-    profile/ settings/ support/ api/
+    +layout.server.ts, +layout.svelte, +page.server.ts, +page.svelte, +error.svelte
+    about/ admin/ api/ auth/ bookmarks/ books/ broadcasts/ community/ downloads/
+    feedback/ health/ history/ profile/ settings/ sitemap.xml/ subscription/ support/
 drizzle/                  # SQL-миграции 0000–0034 (актуальны; 0005 — no-op)
 e2e/                      # 9 Playwright-файлов
 static/                   # аудио/картинки/видео/QR/PWA-иконки

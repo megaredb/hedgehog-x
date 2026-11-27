@@ -41,12 +41,19 @@ function toUpdate(item: SyncItem): BookmarkUpdate | null {
 
 	if (item.action === 'ADD_BOOKMARK') {
 		if (!payload.chapterId || typeof payload.timestampSeconds !== 'number') return null;
+		const start = Math.max(0, Math.floor(payload.timestampSeconds));
+		const end =
+			payload.endTimestampSeconds != null &&
+			Number.isFinite(payload.endTimestampSeconds) &&
+			Math.floor(payload.endTimestampSeconds) > start
+				? Math.floor(payload.endTimestampSeconds)
+				: null;
 		return {
 			id: payload.id,
 			chapterId: payload.chapterId,
 			versionId: payload.versionId ?? 'default',
-			timestampSeconds: payload.timestampSeconds,
-			endTimestampSeconds: payload.endTimestampSeconds ?? null,
+			timestampSeconds: start,
+			endTimestampSeconds: end,
 			note: payload.note ?? '',
 			action: 'upsert'
 		};
@@ -57,6 +64,7 @@ function toUpdate(item: SyncItem): BookmarkUpdate | null {
 
 async function flush(fetchFn: typeof fetch): Promise<number> {
 	const ownerUserId = await getCurrentOwnerId();
+	if (!ownerUserId) return 0;
 	const items = (
 		await db.syncQueue
 			.where('action')

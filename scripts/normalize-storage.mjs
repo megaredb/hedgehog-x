@@ -20,8 +20,20 @@ import {
 
 const apply = process.argv.includes('--apply');
 const deleteOld = process.argv.includes('--delete-old');
+const allowProdBucket = process.argv.includes('--allow-prod-bucket');
 const sourceBucket = process.env.SOURCE_R2_BUCKET ?? 'hedgehog-files';
 const targetBucket = process.env.R2_BUCKET_NAME ?? 'dev-hedgehog-files';
+
+if (targetBucket === sourceBucket) {
+	throw new Error(
+		`Refusing to run: targetBucket (${targetBucket}) must not equal sourceBucket (${sourceBucket})`
+	);
+}
+if (targetBucket === 'hedgehog-files' && !allowProdBucket) {
+	throw new Error(
+		'Refusing to run against production bucket "hedgehog-files" without explicit --allow-prod-bucket flag'
+	);
+}
 
 const client = new S3Client({
 	region: 'auto',
@@ -145,7 +157,7 @@ for (let offset = 0; offset < copies.length; offset += CONCURRENCY) {
 				new CopyObjectCommand({
 					Bucket: targetBucket,
 					Key: copy.to,
-					CopySource: encodeURIComponent(`${targetBucket}/${copy.from}`),
+					CopySource: `${targetBucket}/${copy.from.split('/').map(encodeURIComponent).join('/')}`,
 					MetadataDirective: 'COPY'
 				})
 			);
@@ -194,7 +206,7 @@ await sql.begin(async (tx) => {
 		}
 	}
 
-	const volumes = await tx`select id, book_id, cover_url from volumes`;
+	const volumes = await tx`select id, book_id, cover_url from volumes order by volume_number asc`;
 	const bookCovers = new Map();
 	for (const volume of volumes) {
 		const currentKey = dbKeyFromUrl(volume.cover_url);
@@ -211,7 +223,7 @@ await sql.begin(async (tx) => {
 		if (!bookCovers.has(volume.book_id)) bookCovers.set(volume.book_id, nextUrl);
 	}
 	for (const [bookId, coverUrl] of bookCovers) {
-		await tx`update books set cover_url = ${coverUrl} where id = ${bookId} and (cover_url is null or cover_url <> ${coverUrl})`;
+		await tx`update books set cover_url = ${coverUrl} where id = ${bookId} and (cover_url is null or cover_url = '')`;
 	}
 });
 
@@ -225,6 +237,8 @@ const dbChapters = await sql`
 	join books b on b.id = v.book_id
 	order by b.id, v.volume_number, c.chapter_number
 `;
+const dbBookRows = await sql`select id from books`;
+const validBookIds = new Set(dbBookRows.map((row) => row.id));
 const oldRows = source.filter((item) => item.key.includes('/OLD VERSION/'));
 
 await sql.begin(async (tx) => {
@@ -240,7 +254,11 @@ await sql.begin(async (tx) => {
 	`;
 
 	for (const old of oldRows) {
-		const bookId = old.key.startsWith('overlord/') ? 'overlord' : 'mushoku_tensei';
+		const bookId = old.key.split('/')[0];
+		if (!bookId || !validBookIds.has(bookId)) {
+			console.warn('Skipping OLD VERSION file with unknown bookId', old.key);
+			continue;
+		}
 		const volumeNumber = oldVolumeNumber(old.key);
 		const candidates = dbChapters.filter(
 			(chapter) => chapter.book_id === bookId && chapter.volume_number === volumeNumber
@@ -312,23 +330,60 @@ await sql.begin(async (tx) => {
 
 // 4. Delete stale hash-based objects only after copies and DB updates succeed.
 if (deleteOld) {
+	const [bookUrls, volumeUrls, chapterUrls, versionUrls, illustrationUrls, broadcastUrls] =
+		await Promise.all([
+			sql`select cover_url, home_image_url, video_url from books`,
+			sql`select cover_url from volumes`,
+			sql`select audio_url from chapters`,
+			sql`select audio_url from chapter_audio_versions`,
+			sql`select image_url from illustrations`,
+			sql`select cover_url from broadcasts`
+		]);
+	const referencedKeys = new Set();
+	const addReferencedUrl = (url) => {
+		const key = dbKeyFromUrl(url);
+		if (key) referencedKeys.add(key);
+	};
+	for (const row of bookUrls) {
+		addReferencedUrl(row.cover_url);
+		addReferencedUrl(row.home_image_url);
+		addReferencedUrl(row.video_url);
+	}
+	for (const row of volumeUrls) addReferencedUrl(row.cover_url);
+	for (const row of chapterUrls) addReferencedUrl(row.audio_url);
+	for (const row of versionUrls) addReferencedUrl(row.audio_url);
+	for (const row of illustrationUrls) addReferencedUrl(row.image_url);
+	for (const row of broadcastUrls) addReferencedUrl(row.cover_url);
+
 	const stale = target
 		.filter(
 			(item) =>
-				item.key.startsWith('chapters/') ||
-				item.key.startsWith('volumes/') ||
-				item.key.startsWith('legacy/')
+				(item.key.startsWith('chapters/') ||
+					item.key.startsWith('volumes/') ||
+					item.key.startsWith('legacy/')) &&
+				!referencedKeys.has(item.key)
 		)
 		.map((item) => ({ Key: item.key }));
+	let deletedCount = 0;
+	let deleteErrors = 0;
 	for (let index = 0; index < stale.length; index += 1000) {
-		await client.send(
+		const batch = stale.slice(index, index + 1000);
+		const response = await client.send(
 			new DeleteObjectsCommand({
 				Bucket: targetBucket,
-				Delete: { Objects: stale.slice(index, index + 1000), Quiet: true }
+				Delete: { Objects: batch, Quiet: true }
 			})
 		);
+		const errors = response.Errors ?? [];
+		if (errors.length > 0) {
+			deleteErrors += errors.length;
+			console.error('DeleteObjectsCommand returned errors:', errors);
+		}
+		deletedCount += batch.length - errors.length;
 	}
-	console.log(`Deleted ${stale.length} legacy hash-based objects.`);
+	console.log(
+		`Deleted ${deletedCount} unused legacy hash-based objects${deleteErrors ? ` (${deleteErrors} errors)` : ''}.`
+	);
 }
 
 await sql.end();

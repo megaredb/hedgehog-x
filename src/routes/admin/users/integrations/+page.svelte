@@ -30,7 +30,7 @@
 		statusLoading = true;
 		statusError = '';
 		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 8000);
+		const timeout = setTimeout(() => controller.abort(), 15000);
 		try {
 			const response = await fetch('/api/admin/integrations', {
 				headers: { accept: 'application/json' },

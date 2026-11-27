@@ -1,4 +1,5 @@
 import { error, redirect } from '@sveltejs/kit';
+import { requireAdmin } from '$lib/server/admin';
 import type { PageServerLoad } from './$types';
 
 const LEGACY_TABS: Record<string, string> = {
@@ -9,7 +10,8 @@ const LEGACY_TABS: Record<string, string> = {
 	illustrations: 'illustrations'
 };
 
-export const load: PageServerLoad = async ({ params, url }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
+	requireAdmin(locals);
 	const tab = LEGACY_TABS[params.legacy];
 	if (!tab) throw error(404, 'Страница не найдена');
 

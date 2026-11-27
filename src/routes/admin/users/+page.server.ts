@@ -174,10 +174,20 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	let expiring = 0;
 	let lifetime = 0;
 	let blocked = 0;
-	for (const summary of summaries.values()) {
+	for (const item of users) {
+		const summary = item.subscription;
+		if (!summary) continue;
 		if (summary.active) active += 1;
-		if (summary.boostyActive) boosty += 1;
-		if (summary.daysLeft != null && summary.daysLeft > 0 && summary.daysLeft <= 7) expiring += 1;
+		if (!summary.blocked && !summary.revoked && summary.boostyActive) boosty += 1;
+		if (
+			!summary.blocked &&
+			!summary.revoked &&
+			summary.daysLeft != null &&
+			summary.daysLeft > 0 &&
+			summary.daysLeft <= 7
+		) {
+			expiring += 1;
+		}
 		if (summary.isLifetime) lifetime += 1;
 		if (summary.blocked) blocked += 1;
 	}
@@ -312,7 +322,7 @@ export const actions: Actions = {
 		};
 	},
 	setRole: async ({ request, locals }) => {
-		requireAdmin(locals);
+		requireFullAdmin(locals);
 		const form = await request.formData();
 		const id = parseUserId(form.get('id'));
 		const role = String(form.get('role') ?? '').trim();
@@ -322,11 +332,12 @@ export const actions: Actions = {
 			.from(user)
 			.where(eq(user.id, id))
 			.limit(1);
-		if (target?.role === 'author') {
+		if (!target) return fail(404, { error: 'Пользователь не найден' });
+		if (target.role === 'author') {
 			return fail(400, { error: 'Роль автора назначается отдельно' });
 		}
 
-		if (id === locals.user?.id && role !== 'admin') {
+		if (target.role === 'admin' && role !== 'admin') {
 			const [{ count: adminCount }] = await db
 				.select({ count: sql<number>`count(*)` })
 				.from(user)
@@ -410,6 +421,7 @@ export const actions: Actions = {
 
 		const mode = String(form.get('mode') ?? 'days');
 		const note = String(form.get('note') ?? '').trim() || null;
+		const idempotencyKey = String(form.get('idempotencyKey') ?? '').trim() || null;
 		const lifetime = mode === 'lifetime';
 		const days = mode === 'days' ? Number(form.get('days') ?? 0) : null;
 		const amountRub = mode === 'amount' ? Number(form.get('amountRub') ?? 0) : null;
@@ -422,6 +434,7 @@ export const actions: Actions = {
 				amountRub,
 				lifetime,
 				note,
+				idempotencyKey,
 				pricePerDay: await getSubscriptionPricePerDay()
 			});
 			const message = result.isLifetime
@@ -473,13 +486,23 @@ export const actions: Actions = {
 	},
 
 	block: async ({ request, locals }) => {
-		requireAdmin(locals);
-		const admin = locals.user;
-		if (!admin) return fail(401, { error: 'Требуется авторизация' });
+		const admin = requireAdmin(locals);
 		const form = await request.formData();
 		const userId = parseUserId(form.get('userId'));
-		if (!(await assertUserExists(userId))) return fail(404, { error: 'Пользователь не найден' });
+		if (!userId) return fail(404, { error: 'Пользователь не найден' });
+		const [target] = await db
+			.select({ id: user.id, role: user.role })
+			.from(user)
+			.where(eq(user.id, userId))
+			.limit(1);
+		if (!target) return fail(404, { error: 'Пользователь не найден' });
 		const block = String(form.get('blocked') ?? '1') === '1';
+		if (block && userId === admin.id) {
+			return fail(400, { error: 'Нельзя заблокировать самого себя' });
+		}
+		if (block && admin.role === 'author' && target.role === 'admin') {
+			return fail(403, { error: 'Автор не может заблокировать администратора' });
+		}
 		await setBlocked(userId, block, admin.id, String(form.get('reason') ?? '').trim() || null);
 		return {
 			success: true,

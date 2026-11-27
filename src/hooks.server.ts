@@ -53,7 +53,8 @@ function allowUpload(event: RequestEvent): boolean {
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const isUploadRequest =
-		event.request.method === 'POST' && event.url.pathname.startsWith('/admin');
+		event.request.method === 'POST' &&
+		(event.url.pathname.startsWith('/admin') || event.url.pathname.startsWith('/api/admin'));
 	if (isUploadRequest) {
 		const length = Number(event.request.headers.get('content-length') ?? '0');
 		if (Number.isFinite(length) && length > MAX_UPLOAD_REQUEST_BYTES) {

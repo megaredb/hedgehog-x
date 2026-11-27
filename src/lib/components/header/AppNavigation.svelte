@@ -28,8 +28,12 @@
 	import { strings } from '$lib/constants/strings';
 
 	const session = useSession();
-	const subscriptionActive = $derived(Boolean(page.data.subscriptionActive));
-	const subscriptionLifetime = $derived(Boolean(page.data.subscriptionLifetime));
+	const subscriptionActive = $derived(
+		Boolean(session.user) && Boolean(page.data.subscriptionActive)
+	);
+	const subscriptionLifetime = $derived(
+		Boolean(session.user) && Boolean(page.data.subscriptionLifetime)
+	);
 
 	type LiveBroadcastInfo = {
 		id: string;
@@ -116,7 +120,7 @@
 	]);
 
 	const adminGroup = $derived(
-		page.data.isAdmin === true
+		Boolean(session.user) && page.data.isAdmin === true
 			? [
 					{
 						links: [

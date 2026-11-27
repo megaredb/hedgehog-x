@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { audioStore } from '$lib/audio-store.svelte';
+	import { normalizeVersionId } from '$lib/audio-version';
 	import {
 		db,
 		type OfflineBook,
@@ -194,6 +195,7 @@
 			url: c.audioUrl,
 			title: c.title,
 			duration: c.durationSeconds,
+			versionId: 'default',
 			artwork: volume.coverUrl,
 			blurhash: volume.blurhash,
 			album: volume.title,
@@ -202,7 +204,11 @@
 			startTime: c.id === targetChapter.id ? seekTime : 0
 		}));
 
-		if (audioStore.currentTrack?.id === targetChapter.id && !audioStore.currentTrack.broadcastId) {
+		if (
+			audioStore.currentTrack?.id === targetChapter.id &&
+			!audioStore.currentTrack.broadcastId &&
+			normalizeVersionId(audioStore.currentTrack.versionId) === 'default'
+		) {
 			if (seekTime > 0) {
 				audioStore.seek(seekTime, false);
 			}

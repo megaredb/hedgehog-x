@@ -114,6 +114,40 @@ export async function findUserByTelegramId(telegramId: string): Promise<string |
 	return row?.userId ?? null;
 }
 
+function formatTelegramError(error: unknown): string {
+	if (error instanceof TelegramApiError) {
+		if (error.status === 429) {
+			return 'Telegram временно ограничил запросы. Попробуйте позже.';
+		}
+		if (error.status === 0) {
+			return 'Не удалось связаться с Telegram. Попробуйте позже.';
+		}
+		if (error.status === 401 || error.status === 403) {
+			return 'Ошибка доступа Telegram-бота. Обратитесь к администратору.';
+		}
+		return 'Не удалось проверить статус в Telegram. Попробуйте позже.';
+	}
+	return 'Не удалось связаться с Telegram. Попробуйте позже.';
+}
+
+function formatDiscordError(error: unknown, botToken: string): string {
+	if (error instanceof DiscordApiError) {
+		if (error.status === 429) {
+			return 'Discord временно ограничил запросы. Попробуйте позже.';
+		}
+		if (error.status === 0) {
+			return 'Не удалось связаться с Discord. Попробуйте позже.';
+		}
+		if (error.status === 401 || error.status === 403) {
+			return botToken
+				? 'Ошибка доступа Discord-бота. Обратитесь к администратору.'
+				: 'Discord-токен устарел или не хватает прав. Перепривяжите Discord в профиле';
+		}
+		return 'Не удалось проверить статус в Discord. Попробуйте позже.';
+	}
+	return 'Не удалось связаться с Discord. Попробуйте позже.';
+}
+
 export async function checkTelegramSource(userId: string): Promise<SourceCheckResult> {
 	if (!isTelegramConfigured()) {
 		return {
@@ -175,17 +209,17 @@ export async function checkTelegramSource(userId: string): Promise<SourceCheckRe
 				};
 			}
 		}
-		const message = error instanceof Error ? error.message : 'Ошибка Telegram';
+		const rawMessage = error instanceof Error ? error.message : 'Ошибка Telegram';
 		await touchSourceCheck({
 			userId,
 			provider: 'telegram',
 			externalId: identity.accountId,
-			lastError: message.slice(0, 500)
+			lastError: rawMessage.slice(0, 500)
 		});
 		return {
 			provider: 'telegram',
 			status: 'error',
-			message,
+			message: formatTelegramError(error),
 			checked: false
 		};
 	}
@@ -244,7 +278,11 @@ export async function checkDiscordSource(userId: string): Promise<SourceCheckRes
 			checked: true
 		};
 	} catch (error) {
-		if (error instanceof DiscordApiError && (error.status === 404 || error.status === 400)) {
+		const isMemberNotFound =
+			error instanceof DiscordApiError &&
+			error.status === 404 &&
+			(!botToken || error.code === '10007');
+		if (isMemberNotFound) {
 			await recordSourceState({
 				userId,
 				provider: 'discord',
@@ -260,21 +298,21 @@ export async function checkDiscordSource(userId: string): Promise<SourceCheckRes
 				checked: true
 			};
 		}
-		const message = error instanceof Error ? error.message : 'Ошибка Discord';
+		const rawMessage = error instanceof Error ? error.message : 'Ошибка Discord';
 		await touchSourceCheck({
 			userId,
 			provider: 'discord',
 			externalId: identity.accountId,
-			lastError: message.slice(0, 500)
+			lastError: rawMessage.slice(0, 500)
 		});
 		const reauth =
-			error instanceof DiscordApiError && (error.status === 401 || error.status === 403);
+			!botToken &&
+			error instanceof DiscordApiError &&
+			(error.status === 401 || error.status === 403);
 		return {
 			provider: 'discord',
 			status: reauth ? 'reauth' : 'error',
-			message: reauth
-				? 'Discord-токен устарел или не хватает прав. Перепривяжите Discord в профиле'
-				: message,
+			message: formatDiscordError(error, botToken),
 			checked: false
 		};
 	}

@@ -10,6 +10,7 @@ const API_BASE = (env.TELEGRAM_API_BASE_URL?.trim() || 'https://api.telegram.org
 );
 const TOKEN = env.TELEGRAM_BOT_TOKEN?.trim() ?? '';
 const TIMEOUT_MS = 15000;
+const MAX_BODY_BYTES = 1024 * 1024;
 
 export class TelegramApiError extends Error {
 	status: number;
@@ -72,20 +73,31 @@ export interface TelegramWebhookInfo {
 export function telegramCall<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
 	if (!TOKEN) return Promise.reject(new TelegramApiError(0, 'TELEGRAM_BOT_TOKEN не настроен'));
 
-	const endpoint = new URL(`${API_BASE}/bot${TOKEN}/${method}`);
+	let endpoint: URL;
+	try {
+		endpoint = new URL(`${API_BASE}/bot${TOKEN}/${method}`);
+	} catch {
+		log.warn(`${method}: invalid Telegram API URL configuration`);
+		return Promise.reject(new TelegramApiError(0, 'Некорректная конфигурация Telegram API'));
+	}
 	const transport = endpoint.protocol === 'http:' ? http : https;
 	const body = JSON.stringify(params);
 
 	return new Promise<T>((resolve, reject) => {
 		let settled = false;
+		const overallTimer = setTimeout(() => {
+			request.destroy(new Error('timeout'));
+		}, TIMEOUT_MS);
 		const fail = (error: TelegramApiError) => {
 			if (settled) return;
 			settled = true;
+			clearTimeout(overallTimer);
 			reject(error);
 		};
 		const succeed = (value: T) => {
 			if (settled) return;
 			settled = true;
+			clearTimeout(overallTimer);
 			resolve(value);
 		};
 
@@ -104,8 +116,21 @@ export function telegramCall<T>(method: string, params: Record<string, unknown> 
 			},
 			(response) => {
 				let raw = '';
+				let receivedBytes = 0;
 				response.setEncoding('utf8');
+				response.on('error', (error) => {
+					const message = error instanceof Error ? error.message : 'response error';
+					log.warn(`${method}: response failed`, message);
+					fail(new TelegramApiError(0, `Telegram недоступен: ${message}`));
+				});
 				response.on('data', (chunk: string) => {
+					receivedBytes += Buffer.byteLength(chunk, 'utf8');
+					if (receivedBytes > MAX_BODY_BYTES) {
+						request.destroy();
+						response.destroy();
+						fail(new TelegramApiError(0, 'Ответ Telegram превышает допустимый размер'));
+						return;
+					}
 					raw += chunk;
 				});
 				response.on('end', () => {

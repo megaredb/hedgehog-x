@@ -52,6 +52,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const subscription = currentUser ? await getSubscriptionSummary(currentUser.id) : null;
 	const subscribed = Boolean(subscription?.active);
 	const canWatch = Boolean(currentUser && (subscribed || isAdmin));
+	const canRevealMedia = canWatch && !(kind === 'scheduled' && !isAdmin);
 	const canReadChat =
 		canWatch &&
 		Boolean(state.startedAt) &&
@@ -61,7 +62,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		canReadChat
 			? listMessages(state.id, state.startedAt, undefined, currentUser?.id, CHAT_PAGE_SIZE + 1)
 			: Promise.resolve([]),
-		getBroadcastIllustrations(state.id)
+		canRevealMedia ? getBroadcastIllustrations(state.id) : Promise.resolve([])
 	]);
 	const hasMoreMessages = latestMessages.length > CHAT_PAGE_SIZE;
 	const viewersCount = kind === 'published' ? await broadcastViewerCount(state.id) : 0;
@@ -74,22 +75,25 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				? await broadcastViewerParticipants(state.id)
 				: [];
 	const messages = hasMoreMessages ? latestMessages.slice(1) : latestMessages;
-	const images = [
-		...(state.coverUrl
-			? [
-					{
-						id: 'cover',
-						imageUrl: state.coverUrl,
-						caption: 'Обложка',
-						showAtSeconds: 0,
-						sortOrder: -1
-					}
-				]
-			: []),
-		...illustrations
-	];
+	const images = canRevealMedia
+		? [
+				...(state.coverUrl
+					? [
+							{
+								id: 'cover',
+								imageUrl: state.coverUrl,
+								caption: 'Обложка',
+								showAtSeconds: 0,
+								sortOrder: -1
+							}
+						]
+					: []),
+				...illustrations
+			]
+		: [];
+	const publicBroadcast = canRevealMedia ? state : { ...state, audioUrl: '' };
 	return {
-		broadcast: state,
+		broadcast: publicBroadcast,
 		kind,
 		canWatch,
 		savedProgress,

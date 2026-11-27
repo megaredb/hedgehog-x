@@ -5,7 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { decode } from 'blurhash';
-import { uploadImage, uploadAudio, deleteFromStorage } from './r2';
+import {
+	uploadImage,
+	uploadAudio,
+	deleteFromStorage,
+	audioContentTypeForExt,
+	videoContentTypeForExt,
+	resolveLocalUploadPath,
+	StorageValidationError
+} from './r2';
 
 const r2Configured = Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_BUCKET_NAME);
 const testUploadDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hedgehog-uploads-'));
@@ -53,5 +61,58 @@ describe('R2 & Image Processing Storage Service', { skip: r2Configured }, () => 
 
 		// Clean up
 		await deleteFromStorage(result.url);
+	});
+
+	it('does not duplicate filenamePrefix on local image fallback', async () => {
+		const sampleBuffer = await sharp({
+			create: {
+				width: 16,
+				height: 16,
+				channels: 4,
+				background: { r: 10, g: 20, b: 30, alpha: 1 }
+			}
+		})
+			.png()
+			.toBuffer();
+
+		const result = await uploadImage(sampleBuffer, {
+			folder: 'test-prefix',
+			filenamePrefix: 'cover'
+		});
+		const expectedFile = path.join(testUploadDir, result.key);
+		assert.ok(fs.existsSync(expectedFile), `Expected file at ${expectedFile}`);
+		assert.strictEqual(await deleteFromStorage(result.url), true);
+		assert.ok(!fs.existsSync(expectedFile));
+	});
+
+	it('blocks path traversal on local upload and delete', async () => {
+		const outsideFile = path.join(os.tmpdir(), `hedgehog-outside-${Date.now()}.txt`);
+		fs.writeFileSync(outsideFile, 'do-not-delete');
+		try {
+			const relTraversal = path.relative(testUploadDir, outsideFile).split(path.sep).join('/');
+			assert.strictEqual(resolveLocalUploadPath(testUploadDir, relTraversal), null);
+			assert.strictEqual(resolveLocalUploadPath(testUploadDir, '/etc/passwd'), null);
+			assert.strictEqual(resolveLocalUploadPath(testUploadDir, 'a/../../b.txt'), null);
+			assert.strictEqual(await deleteFromStorage(relTraversal), false);
+			assert.strictEqual(await deleteFromStorage(outsideFile), false);
+			assert.strictEqual(await deleteFromStorage('https://evil.example/books/a.webp'), false);
+			assert.ok(fs.existsSync(outsideFile), 'Outside file must not be deleted');
+
+			const sampleAudio = Buffer.from('RIFF mock audio buffer data');
+			await assert.rejects(
+				() => uploadAudio(sampleAudio, { folder: '../escape', originalFilename: 'x.mp3' }),
+				StorageValidationError
+			);
+		} finally {
+			fs.rmSync(outsideFile, { force: true });
+		}
+	});
+
+	it('maps audio and video extensions to strict allowlisted content types', () => {
+		assert.strictEqual(audioContentTypeForExt('.mp3'), 'audio/mpeg');
+		assert.strictEqual(audioContentTypeForExt('.ogg'), 'audio/ogg');
+		assert.strictEqual(audioContentTypeForExt('.html'), 'audio/mpeg');
+		assert.strictEqual(videoContentTypeForExt('.webm'), 'video/webm');
+		assert.strictEqual(videoContentTypeForExt('.svg'), 'video/mp4');
 	});
 });

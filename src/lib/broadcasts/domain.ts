@@ -41,8 +41,11 @@ export interface BroadcastState {
 export function broadcastKind(state: BroadcastState, now = new Date()): BroadcastKind {
 	if (state.publishedAt && state.endedAt) return 'published';
 	if (state.endedAt) return 'ended';
-	if (state.startedAt && now.getTime() < state.startedAt.getTime() + state.durationSeconds * 1000) {
-		return 'live';
+	if (state.startedAt) {
+		if (now.getTime() < state.startedAt.getTime() + state.durationSeconds * 1000) {
+			return 'live';
+		}
+		return state.publishedAt ? 'published' : 'ended';
 	}
 	return 'scheduled';
 }

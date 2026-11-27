@@ -48,7 +48,7 @@
 		<div>
 			<h2 class="mb-4 text-xl font-bold tracking-tight">Наши каналы и площадки</h2>
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				{#each socialLinks as item (item.url)}
+				{#each socialLinks as item, itemIndex (`${item.url}-${item.title}-${itemIndex}`)}
 					<a
 						href={item.url}
 						target="_blank"
@@ -88,7 +88,7 @@
 				Почему стоит подписаться?
 			</h2>
 			<div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
-				{#each benefits as benefit (benefit.title)}
+				{#each benefits as benefit, benefitIndex (`${benefit.title}-${benefitIndex}`)}
 					{@const IconComponent = benefitIcons[benefit.icon] ?? Sparkles}
 					<div class="flex flex-col items-center gap-3 text-center sm:items-start sm:text-left">
 						<div

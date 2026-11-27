@@ -50,9 +50,20 @@ function hashPart(value: string): string {
 	return (hash >>> 0).toString(36).padStart(7, '0');
 }
 
+const MAX_VERSION_ID_LENGTH = 64;
+
+function normalizeVersionId(versionId: string | null | undefined): string {
+	if (typeof versionId !== 'string') return 'default';
+	const trimmed = versionId.trim();
+	if (!trimmed) return 'default';
+	return trimmed.slice(0, MAX_VERSION_ID_LENGTH);
+}
+
 /**
  * Builds a deterministic primary key for daily_listening_stats.
- * The key is bounded to 8 + 7*3 + 2 = 31 chars and cannot collide on '_'.
+ * Preserves the legacy 4-part format for the default audio version so existing
+ * production rows do not collide on the unique tuple after migration 0011,
+ * and uses the 5-part format for alternative versions.
  */
 export function buildDailyStatId(
 	date: string,
@@ -62,7 +73,14 @@ export function buildDailyStatId(
 	versionId: string | null | undefined = 'default'
 ): string {
 	const safeDate = date || formatDateKey();
-	return `${safeDate}_${hashPart(bookId || 'nobook')}_${hashPart(chapterId || 'nochapter')}_${hashPart(versionId || 'default')}_${hashPart(userId || 'anon')}`;
+	const normalizedVersion = normalizeVersionId(versionId);
+	const bookHash = hashPart(bookId || 'nobook');
+	const chapterHash = hashPart(chapterId || 'nochapter');
+	const userHash = hashPart(userId || 'anon');
+	if (normalizedVersion === 'default') {
+		return `${safeDate}_${bookHash}_${chapterHash}_${userHash}`;
+	}
+	return `${safeDate}_${bookHash}_${chapterHash}_${hashPart(normalizedVersion)}_${userHash}`;
 }
 
 /**
@@ -119,14 +137,28 @@ export function validateListenSession(input: unknown): {
 		}
 	}
 
+	let versionId = 'default';
+	if (data.versionId !== undefined && data.versionId !== null) {
+		if (typeof data.versionId !== 'string') {
+			return { valid: false, error: 'Invalid versionId' };
+		}
+		const trimmedVersionId = data.versionId.trim();
+		if (trimmedVersionId.length > MAX_VERSION_ID_LENGTH) {
+			return {
+				valid: false,
+				error: `Invalid versionId: must be at most ${MAX_VERSION_ID_LENGTH} characters`
+			};
+		}
+		if (trimmedVersionId.length > 0) {
+			versionId = trimmedVersionId;
+		}
+	}
+
 	return {
 		valid: true,
 		session: {
 			chapterId: data.chapterId.trim(),
-			versionId:
-				typeof data.versionId === 'string' && data.versionId.trim()
-					? data.versionId.trim()
-					: 'default',
+			versionId,
 			bookId: typeof data.bookId === 'string' ? data.bookId.trim() : null,
 			volumeId: typeof data.volumeId === 'string' ? data.volumeId.trim() : null,
 			listenedSeconds: seconds,

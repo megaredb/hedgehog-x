@@ -2,7 +2,7 @@ import { htmlAudio, type Track } from '$lib/html-audio.js';
 import { resolveMediaUrl } from '$lib/utils/mirror.js';
 import { calculateNextIndex, calculatePreviousIndex, type RepeatMode } from '$lib/audio-queue.js';
 import { db } from '$lib/client/db';
-import { audioVersionKey, broadcastProgressKey } from '$lib/audio-version';
+import { audioVersionKey, broadcastProgressKey, normalizeVersionId } from '$lib/audio-version';
 
 export type { RepeatMode } from '$lib/audio-queue.js';
 export { calculateNextIndex, calculatePreviousIndex } from '$lib/audio-queue.js';
@@ -160,8 +160,13 @@ class AudioStore {
 		if (this.isLoading) return;
 		if (this.currentTrack?.broadcastLive) {
 			const startedAt = Number(this.currentTrack.broadcastStartedAt);
+			const clockSkewMs =
+				typeof this.currentTrack.clockSkewMs === 'number' &&
+				Number.isFinite(this.currentTrack.clockSkewMs)
+					? this.currentTrack.clockSkewMs
+					: 0;
 			if (Number.isFinite(startedAt) && startedAt > 0) {
-				const offset = Math.max(0, (Date.now() - startedAt) / 1000);
+				const offset = Math.max(0, (Date.now() - clockSkewMs - startedAt) / 1000);
 				if (offset < (this.currentTrack.duration ?? Infinity)) this.seek(offset, false);
 			}
 		}
@@ -197,7 +202,8 @@ class AudioStore {
 	}
 
 	seek(time: number, isInteractive = true): void {
-		const valid = this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : time;
+		const valid =
+			this.duration > 0 ? Math.max(0, Math.min(time, this.duration)) : Math.max(0, time);
 		if (isInteractive && Math.abs(valid - this.currentTime) > 10) {
 			this.lastSeekFrom = this.currentTime;
 			this.undoSeekAvailable = true;
@@ -227,15 +233,19 @@ class AudioStore {
 	}
 
 	private async withSavedStart(track: Track): Promise<Track> {
+		const hasExplicitStart =
+			typeof track.startTime === 'number' &&
+			Number.isFinite(track.startTime) &&
+			track.startTime >= 0;
 		if (track.broadcastId) {
 			if (track.broadcastLive) return track;
-			if (track.startTime && track.startTime > 0) return track;
+			if (hasExplicitStart) return track;
 			const replay = await db.progress.get(broadcastProgressKey(String(track.broadcastId)));
 			if (!replay || replay.isCompleted || replay.progressSeconds <= 0) return track;
 			return { ...track, startTime: replay.progressSeconds };
 		}
-		if (track.startTime && track.startTime > 0) return track;
-		const versionId = typeof track.versionId === 'string' ? track.versionId : 'default';
+		if (hasExplicitStart) return track;
+		const versionId = normalizeVersionId(track.versionId);
 		const saved = await db.progress.get(audioVersionKey(String(track.id), versionId));
 		if (!saved || saved.isCompleted || saved.progressSeconds <= 0) return track;
 		return { ...track, startTime: saved.progressSeconds };
@@ -289,8 +299,8 @@ class AudioStore {
 			this.currentQueueIndex = -1;
 			return;
 		}
-		const currentVersion = this.currentTrack?.versionId ?? 'default';
-		const targetVersion = target.versionId ?? 'default';
+		const currentVersion = normalizeVersionId(this.currentTrack?.versionId);
+		const targetVersion = normalizeVersionId(target.versionId);
 		const wasSameTrack =
 			this.currentTrack?.id === target.id &&
 			currentVersion === targetVersion &&
@@ -330,7 +340,16 @@ class AudioStore {
 	setQueue(tracks: Track[], startIndex = 0): void {
 		const resolvedTracks = tracks.map((t) => ({ ...t, url: resolveMediaUrl(t.url) }));
 		const current = resolvedTracks[startIndex] ?? null;
-		this.clearClipRange();
+		if (
+			current &&
+			typeof current.clipStart === 'number' &&
+			typeof current.clipEnd === 'number' &&
+			current.clipEnd > current.clipStart
+		) {
+			this.setClipRange(current.clipStart, current.clipEnd);
+		} else {
+			this.clearClipRange();
+		}
 		this.queue = resolvedTracks;
 		this.currentQueueIndex = current ? startIndex : -1;
 		this.currentTrack = current;
@@ -473,7 +492,13 @@ class AudioStore {
 			return;
 		}
 		const resolvedTrack: Track = { ...track, url: resolveMediaUrl(track.url) };
-		if (this.currentTrack?.id === resolvedTrack.id) return;
+		if (
+			this.currentTrack?.id === resolvedTrack.id &&
+			normalizeVersionId(this.currentTrack?.versionId) ===
+				normalizeVersionId(resolvedTrack.versionId)
+		) {
+			return;
+		}
 		this.currentTrack = resolvedTrack;
 		this.queue = [resolvedTrack];
 		this.currentQueueIndex = 0;
@@ -558,7 +583,15 @@ class AudioStore {
 
 		this.currentTrack = resolvedTrack;
 		this.currentQueueIndex = queueIndex;
-		this.clearClipRange();
+		if (
+			typeof resolvedTrack.clipStart === 'number' &&
+			typeof resolvedTrack.clipEnd === 'number' &&
+			resolvedTrack.clipEnd > resolvedTrack.clipStart
+		) {
+			this.setClipRange(resolvedTrack.clipStart, resolvedTrack.clipEnd);
+		} else {
+			this.clearClipRange();
+		}
 		this.duration = resolvedTrack.duration ?? 0;
 		this.currentTime = resolvedTrack.startTime ?? 0;
 		this.progress = this.duration > 0 ? (this.currentTime / this.duration) * 100 : 0;

@@ -11,9 +11,11 @@ import {
 	setSyncOwner
 } from '$lib/client/db/syncState';
 import { createLogger } from '$lib/logger';
-import { audioVersionKey } from '$lib/audio-version';
+import { audioVersionKey, isBroadcastProgressKey } from '$lib/audio-version';
 import { flushBookmarkQueue } from './bookmarkSync';
 import { guestAdoption } from './guestAdoption.svelte';
+import { likeService } from './likeService';
+import { progressSync } from './progressSync.svelte';
 import { decideSyncAction, type SyncAction } from './syncPolicy';
 import {
 	mapServerBookToOfflineBook,
@@ -76,12 +78,15 @@ type UserSyncPayload = {
  * The endpoint is idempotent (GREATEST/upsert/onConflictDoNothing).
  */
 async function pushLocalUserData(fetchFn: typeof fetch): Promise<void> {
-	const [progress, bookmarks, volumeLikes, chapterLikes] = await Promise.all([
+	const [rawProgress, bookmarks, volumeLikes, chapterLikes] = await Promise.all([
 		db.progress.toArray(),
 		db.bookmarks.toArray(),
 		db.volumeLikes.toArray(),
 		db.chapterLikes.toArray()
 	]);
+	const progress = rawProgress.filter(
+		(p) => !p.broadcastId && !isBroadcastProgressKey(p.chapterId)
+	);
 
 	if (
 		progress.length === 0 &&
@@ -159,7 +164,7 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 			return { status: 'error' };
 		}
 
-		const payload = (await res.json()) as UserSyncPayload;
+		let payload = (await res.json()) as UserSyncPayload;
 		const userId = typeof payload.userId === 'string' ? payload.userId : '';
 		if (!userId) {
 			// Compatibility with an older server: never hydrate/purge without
@@ -168,11 +173,41 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 			return { status: 'error' };
 		}
 
-		const [owner, localCounts, pendingMutations] = await Promise.all([
+		let [owner, localCounts, pendingMutations] = await Promise.all([
 			getSyncOwner(),
 			countLocalUserData(),
 			countPendingUserMutations()
 		]);
+
+		// When the same authenticated user has queued offline mutations, flush them
+		// first and then re-fetch authoritative server state so replace does not
+		// drop or race local mutations.
+		if (owner?.userId === userId && pendingMutations > 0) {
+			await Promise.allSettled([
+				progressSync.flushImmediately(),
+				progressSync.flushOfflineQueue(),
+				likeService.syncLikesQueue(fetchFn),
+				flushBookmarkQueue(fetchFn)
+			]);
+			const refreshedRes = await fetchFn('/api/user/sync', {
+				headers: { Accept: 'application/json' }
+			});
+			if (refreshedRes.status === 401) {
+				await clearSessionLocalState();
+				return { status: 'unauthenticated' };
+			}
+			if (!refreshedRes.ok) {
+				log.warn(`User data sync refresh failed with status ${refreshedRes.status}`);
+				return { status: 'error' };
+			}
+			payload = (await refreshedRes.json()) as UserSyncPayload;
+			[owner, localCounts, pendingMutations] = await Promise.all([
+				getSyncOwner(),
+				countLocalUserData(),
+				countPendingUserMutations()
+			]);
+		}
+
 		const hasLocal = Object.values(localCounts).some((count) => count > 0);
 
 		let decision = decideSyncAction({
@@ -219,6 +254,51 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 		const purgeScope = decision === 'replace' ? ('all' as const) : undefined;
 		const options = { allowEmptyPurge: decision === 'replace' };
 
+		const [existingProgress, existingBookmarks] = await Promise.all([
+			db.progress.toArray(),
+			db.bookmarks.toArray()
+		]);
+		const preservedBroadcastProgress = existingProgress.filter(
+			(p) => Boolean(p.broadcastId) || isBroadcastProgressKey(p.chapterId)
+		);
+		const existingBookmarkMap = new Map(existingBookmarks.map((b) => [b.id, b]));
+
+		const hydratedProgress = [
+			...(payload.listeningProgress ?? []).map((progress) => ({
+				chapterId: audioVersionKey(progress.chapterId, progress.versionId ?? 'default'),
+				baseChapterId: progress.chapterId,
+				versionId: progress.versionId ?? 'default',
+				progressSeconds: progress.progressSeconds,
+				isCompleted: !!progress.isCompleted,
+				updatedAt: progress.updatedAt ?? 0
+			})),
+			...preservedBroadcastProgress
+		];
+
+		const hydratedBookmarks = (payload.bookmarks ?? []).map((bookmark) => {
+			const existing = existingBookmarkMap.get(bookmark.id);
+			return {
+				id: bookmark.id,
+				chapterId: bookmark.chapterId,
+				versionId: bookmark.versionId ?? 'default',
+				timestampSeconds: bookmark.timestampSeconds,
+				endTimestampSeconds: bookmark.endTimestampSeconds ?? null,
+				note: bookmark.note ?? '',
+				createdAt: bookmark.createdAt ?? 0,
+				...(existing?.broadcastId
+					? {
+							broadcastId: existing.broadcastId,
+							broadcastLive: existing.broadcastLive,
+							broadcastTitle: existing.broadcastTitle,
+							broadcastBookTitle: existing.broadcastBookTitle,
+							broadcastVolumeTitle: existing.broadcastVolumeTitle,
+							broadcastCoverUrl: existing.broadcastCoverUrl,
+							broadcastHref: existing.broadcastHref
+						}
+					: {})
+			};
+		});
+
 		await Promise.all([
 			hydrate(
 				'chapterLikes',
@@ -240,33 +320,8 @@ async function performUserDataSync(fetchFn: typeof fetch): Promise<UserSyncResul
 				purgeScope,
 				options
 			),
-			hydrate(
-				'progress',
-				(payload.listeningProgress ?? []).map((progress) => ({
-					chapterId: audioVersionKey(progress.chapterId, progress.versionId ?? 'default'),
-					baseChapterId: progress.chapterId,
-					versionId: progress.versionId ?? 'default',
-					progressSeconds: progress.progressSeconds,
-					isCompleted: !!progress.isCompleted,
-					updatedAt: progress.updatedAt ?? 0
-				})),
-				purgeScope,
-				options
-			),
-			hydrate(
-				'bookmarks',
-				(payload.bookmarks ?? []).map((bookmark) => ({
-					id: bookmark.id,
-					chapterId: bookmark.chapterId,
-					versionId: bookmark.versionId ?? 'default',
-					timestampSeconds: bookmark.timestampSeconds,
-					endTimestampSeconds: bookmark.endTimestampSeconds ?? null,
-					note: bookmark.note ?? '',
-					createdAt: bookmark.createdAt ?? 0
-				})),
-				purgeScope,
-				options
-			)
+			hydrate('progress', hydratedProgress, purgeScope, options),
+			hydrate('bookmarks', hydratedBookmarks, purgeScope, options)
 		]);
 
 		await setSyncOwner(userId);

@@ -25,6 +25,9 @@ export interface DonationLedgerInput {
 }
 
 export function donationLedgerValues(input: DonationLedgerInput) {
+	if (!Number.isFinite(input.amountRub) || Math.floor(input.amountRub) <= 0) {
+		throw new RangeError('amountRub must be a positive finite number');
+	}
 	return {
 		donorKey: donorKeyForUser(input.userId),
 		userId: input.userId,

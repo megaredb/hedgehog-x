@@ -29,6 +29,7 @@
 	let lastSeekTime = 0;
 	let lastUpdateTime = 0;
 	let prevTrackKey: string | null = null;
+	let loadSeq = 0;
 	let lastProgressSaveTime = 0;
 	let lastBroadcastProgressTime = 0;
 	const PROGRESS_SAVE_INTERVAL = 5000; // save progress every 5 seconds
@@ -235,19 +236,24 @@
 
 	async function retryPlayback(audio: HTMLAudioElement): Promise<boolean> {
 		if (errorRetryCount >= MAX_ERROR_RETRIES) return false;
+		const seq = ++loadSeq;
 		errorRetryCount++;
 		const delay = 2 ** (errorRetryCount - 1) * ERROR_RETRY_DELAY;
 		await new Promise((r) => setTimeout(r, delay));
+		if (seq !== loadSeq) return false;
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
 		try {
 			const currentTime = audio.currentTime;
 			const wasPlaying = !audio.paused;
-			if (audioStore.currentTrack) {
+			const track = audioStore.currentTrack;
+			if (track) {
 				await htmlAudio.load({
-					url: audioStore.currentTrack.url,
-					id: audioStore.currentTrack.id,
+					url: track.url,
+					id: track.id,
+					versionId: track.versionId,
 					startTime: currentTime
 				});
+				if (seq !== loadSeq) return false;
 				if (wasPlaying) await htmlAudio.play();
 			}
 			return true;
@@ -429,18 +435,23 @@
 			}
 
 			if (audioStore.repeatMode === 'one' && audioStore.currentTrack) {
+				const seq = ++loadSeq;
+				const track = audioStore.currentTrack;
 				try {
 					await htmlAudio.load({
-						url: audioStore.currentTrack.url,
-						id: audioStore.currentTrack.id,
+						url: track.url,
+						id: track.id,
+						versionId: track.versionId,
 						startTime: 0,
 						isLiveStream
 					});
+					if (seq !== loadSeq) return;
 					await htmlAudio.play();
 					audioStore.currentTime = 0;
 					audioStore.progress = 0;
 					return;
 				} catch {
+					if (seq !== loadSeq) return;
 					/* fall through to next */
 				}
 			}
@@ -504,6 +515,7 @@
 		// ── Restore persisted state ───────────────────────────────────────────────
 		(async () => {
 			if (!audioStore.currentTrack || audioStore.currentTime <= 0) return;
+			const seq = ++loadSeq;
 			const track = audioStore.currentTrack;
 			const audioDur = audio.duration || audioStore.duration || 0;
 			const isLive = htmlAudio.isLive(audioDur);
@@ -511,13 +523,21 @@
 			prevTrackKey = `${track.id}::${typeof track.versionId === 'string' ? track.versionId : 'default'}`; // suppress the track-change effect on restore
 			try {
 				audioStore.isLoading = true;
-				await htmlAudio.load({ url: track.url, id: track.id, startTime, isLiveStream: isLive });
+				await htmlAudio.load({
+					url: track.url,
+					id: track.id,
+					versionId: track.versionId,
+					startTime,
+					isLiveStream: isLive
+				});
+				if (seq !== loadSeq) return;
 				htmlAudio.setVolume({ volume: audioStore.volume });
 				htmlAudio.setMuted(audioStore.isMuted);
 				htmlAudio.setPlaybackRate(audioStore.playbackRate);
 				audioStore.isLoading = false;
 				audioStore.isPlaying = false;
 			} catch {
+				if (seq !== loadSeq) return;
 				audioStore.isError = true;
 				audioStore.errorMessage = 'Error restoring audio state';
 				audioStore.isPlaying = false;
@@ -527,6 +547,7 @@
 		})();
 
 		return () => {
+			loadSeq++;
 			ctrl.abort();
 			htmlAudio.removeEventListener('bufferUpdate', handleBufferUpdate);
 			listeningTracker.flush();
@@ -563,14 +584,23 @@
 		lastBroadcastProgressTime = 0;
 
 		const startTime = track.startTime ?? 0;
+		const seq = ++loadSeq;
 
 		htmlAudio
-			.load({ url: track.url, id: track.id, startTime, isLiveStream: false })
+			.load({
+				url: track.url,
+				id: track.id,
+				versionId: track.versionId,
+				startTime,
+				isLiveStream: false
+			})
 			.then(() => {
+				if (seq !== loadSeq) return;
 				audioStore.isLoading = false;
 				if (audioStore.isPlaying) return htmlAudio.play();
 			})
 			.catch(() => {
+				if (seq !== loadSeq) return;
 				audioStore.isLoading = false;
 				audioStore.setError('Error loading track');
 			});

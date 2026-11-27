@@ -4,7 +4,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import { createLogger } from '$lib/logger';
 import { resolveMediaUrl, getFallbackMediaUrl } from '$lib/utils/mirror';
 import { parseContentLength, hasEnoughDownloadSpace, buildCorsUrl } from './downloadUtils';
-import { audioVersionKey } from '$lib/audio-version';
+import { audioVersionKey, opfsAudioFileName, splitAudioVersionKey } from '$lib/audio-version';
 
 const log = createLogger('Downloads');
 
@@ -12,8 +12,9 @@ function downloadKey(chapterId: string, versionId = 'default'): string {
 	return audioVersionKey(chapterId, versionId);
 }
 
-function storageFileName(key: string): string {
-	return key.replaceAll('::', '__');
+function storageFileName(key: string, baseChapterId?: string, versionId?: string): string {
+	const parsed = splitAudioVersionKey(key);
+	return opfsAudioFileName(baseChapterId ?? parsed.chapterId, versionId ?? parsed.versionId);
 }
 
 export interface DownloadSource {
@@ -167,7 +168,8 @@ async function performDownload(download: OfflineDownload, chapter?: OfflineChapt
 		}
 
 		const opfsRoot = await navigator.storage.getDirectory();
-		const fileHandle = await opfsRoot.getFileHandle(storageFileName(key), { create: true });
+		const opfsName = storageFileName(key, download.baseChapterId, download.versionId);
+		const fileHandle = await opfsRoot.getFileHandle(opfsName, { create: true });
 		const writable = await fileHandle.createWritable();
 
 		try {
@@ -187,7 +189,7 @@ async function performDownload(download: OfflineDownload, chapter?: OfflineChapt
 			}
 		} catch (e) {
 			await writable.abort().catch(() => {});
-			await opfsRoot.removeEntry(storageFileName(key)).catch(() => {});
+			await opfsRoot.removeEntry(opfsName).catch(() => {});
 			await reader.cancel().catch(() => {});
 			throw e;
 		}
@@ -378,7 +380,12 @@ export function useDownloads() {
 
 		try {
 			const opfsRoot = await navigator.storage.getDirectory();
-			await opfsRoot.removeEntry(storageFileName(key));
+			const opfsName = storageFileName(key, download?.baseChapterId, download?.versionId);
+			await opfsRoot.removeEntry(opfsName);
+			const legacyName = key.replaceAll('::', '__');
+			if (legacyName !== opfsName) {
+				await opfsRoot.removeEntry(legacyName).catch(() => {});
+			}
 		} catch (e: unknown) {
 			if (e instanceof Error && e.name !== 'NotFoundError') {
 				log.warn('Failed to remove audio file from OPFS:', e);

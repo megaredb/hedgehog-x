@@ -260,12 +260,15 @@
 				<!-- Seek Step -->
 				<div class="space-y-2.5">
 					<div class="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-						<label for="seek-step-group" class="text-sm font-medium"
-							>{strings.settings.seekStep}</label
+						<span id="seek-step-label" class="text-sm font-medium">{strings.settings.seekStep}</span
 						>
 						<span class="text-xs text-muted-foreground">{strings.settings.seekStepDesc}</span>
 					</div>
-					<div id="seek-step-group" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+					<div
+						role="group"
+						aria-labelledby="seek-step-label"
+						class="grid grid-cols-2 gap-2 sm:grid-cols-4"
+					>
 						{#each SEEK_STEPS as step (step)}
 							<Button
 								type="button"
@@ -596,9 +599,9 @@
 <!-- Cache clear confirmation modal -->
 <ConfirmModal
 	bind:open={isClearModalOpen}
-	title="Очистить локальный кэш и загрузки?"
-	description="Будет удалён кэш страниц, временные аудиофайлы и сохранённые офлайн-главы. При следующем прослушивании они будут скачиваться заново с CDN."
-	confirmLabel="Очистить всё"
+	title="Очистить кэш страниц?"
+	description="Будет удалён кэш страниц и временные файлы. Скачанные офлайн-главы и данные локальной базы сохранятся."
+	confirmLabel="Очистить кэш"
 	cancelLabel="Отмена"
 	confirming={isClearing}
 	onConfirm={handleConfirmClearCache}

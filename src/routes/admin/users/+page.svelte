@@ -42,6 +42,7 @@
 	let grantDays = $state(30);
 	let grantAmount = $state(1000);
 	let grantNote = $state('');
+	let grantIdempotencyKey = $state('');
 	let grantSubmitting = $state(false);
 	// eslint-disable-next-line svelte/prefer-writable-derived -- modal needs a writable binding
 	let detailsOpen = $state(false);
@@ -213,6 +214,7 @@
 		grantDays = 30;
 		grantAmount = 1000;
 		grantNote = '';
+		grantIdempotencyKey = crypto.randomUUID();
 		grantOpen = true;
 	}
 
@@ -829,6 +831,7 @@
 		>
 			<input type="hidden" name="userId" value={grantUser.id} />
 			<input type="hidden" name="mode" value={grantMode} />
+			<input type="hidden" name="idempotencyKey" value={grantIdempotencyKey} />
 			<div class="flex items-center gap-3 rounded-lg border bg-muted/40 p-2.5">
 				{#if avatarFor(grantUser)}
 					<img

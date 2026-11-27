@@ -178,7 +178,7 @@
 					<h2 class="text-base font-semibold">{strings.support.cryptoTitle}</h2>
 				</div>
 				<div class="space-y-4">
-					{#each support.wallets as wallet (wallet.network + wallet.address)}
+					{#each support.wallets as wallet, walletIndex (`${wallet.network}-${wallet.address}-${walletIndex}`)}
 						{#if wallet.enabled && wallet.address}
 							<button
 								type="button"
@@ -203,40 +203,36 @@
 				<h2 class="text-base font-semibold">{strings.support.cardTransferTitle}</h2>
 			</div>
 			<div class="flex flex-wrap gap-4">
-				{#each support.cards as card (card.number + card.label + card.payUrl)}
+				{#each support.cards as card, cardIndex (`${card.number}-${card.label}-${card.payUrl}-${cardIndex}`)}
 					{#if card.enabled && (card.number || card.payUrl)}
 						<div class="w-full sm:w-80">
 							<div
-								class="relative aspect-[1.586/1] w-full cursor-pointer overflow-hidden rounded-2xl p-5 text-white shadow-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								class="relative aspect-[1.586/1] w-full overflow-hidden rounded-2xl p-5 text-white shadow-lg"
 								style={`background: linear-gradient(135deg, ${card.colorFrom || '#0f172a'}, ${card.colorTo || '#312e81'})`}
-								role="button"
-								tabindex="0"
-								onclick={() => openBankCard(card)}
-								onkeydown={(event) => {
-									if (event.key === 'Enter' || event.key === ' ') {
-										event.preventDefault();
-										openBankCard(card);
-									}
-								}}
 							>
-								<div class="relative flex items-start justify-between gap-3">
+								<button
+									type="button"
+									class="absolute inset-0 z-0 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+									onclick={() => openBankCard(card)}
+									aria-label={`Открыть QR-код: ${card.label || 'Банковская карта'}`}
+								></button>
+								<div
+									class="pointer-events-none relative z-10 flex items-start justify-between gap-3"
+								>
 									<span class="text-sm font-extrabold tracking-[0.12em]"
 										>{card.brand || 'HEDGEHOG.INC'}</span
 									>
 									<CreditCard class="h-5 w-5 text-white/60" />
 								</div>
-								<div class="absolute inset-x-5 bottom-5">
+								<div class="pointer-events-none absolute inset-x-5 bottom-5 z-10">
 									<p class="text-[10px] font-semibold tracking-[0.16em] text-white/65 uppercase">
 										{card.label || 'Банковская карта'}
 									</p>
 									{#if card.number}
 										<button
 											type="button"
-											class="mt-1 block max-w-full truncate text-left font-mono text-[13px] tracking-[0.05em] whitespace-nowrap text-white select-all sm:text-[14px] xl:text-[15px]"
-											onclick={(event) => {
-												event.stopPropagation();
-												copyCardNumber(card.number);
-											}}
+											class="pointer-events-auto relative z-20 mt-1 block max-w-full cursor-pointer truncate text-left font-mono text-[13px] tracking-[0.05em] whitespace-nowrap text-white select-all sm:text-[14px] xl:text-[15px]"
+											onclick={() => copyCardNumber(card.number)}
 											aria-label="Скопировать номер карты"
 										>
 											{#if copiedCard === card.number}

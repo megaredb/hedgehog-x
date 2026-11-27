@@ -75,6 +75,7 @@
 			use:enhance={submit}
 			class="space-y-4"
 		>
+			<input type="hidden" name="mode" value={isEditing ? 'update' : 'create'} />
 			{#if isEditing}
 				<input type="hidden" name="id" value={book?.id ?? ''} />
 			{:else}

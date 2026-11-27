@@ -72,7 +72,11 @@ async function discordFetch<T>(
 		const message =
 			(data && typeof data === 'object' && 'message' in data && String(data.message)) ||
 			`HTTP ${response.status}`;
-		throw new DiscordApiError(response.status, message);
+		const code =
+			data && typeof data === 'object' && 'code' in data && data.code != null
+				? String(data.code)
+				: null;
+		throw new DiscordApiError(response.status, message, code);
 	}
 	return data as T;
 }

@@ -6,6 +6,7 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { createLogger } from './lib/logger';
+import { PAGE_CACHE_DENYLIST } from './lib/client/page-cache';
 
 const log = createLogger('SW');
 
@@ -49,15 +50,7 @@ const navigationRoute = new NavigationRoute(
 	},
 	{
 		// Never cache authenticated/personal pages in the shared pages-cache.
-		denylist: [
-			/^\/admin/,
-			/^\/auth/,
-			/^\/bookmarks/,
-			/^\/history/,
-			/^\/profile/,
-			/^\/settings/,
-			/^\/subscription/
-		]
+		denylist: [...PAGE_CACHE_DENYLIST]
 	}
 );
 registerRoute(navigationRoute);

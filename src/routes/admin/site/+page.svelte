@@ -180,7 +180,10 @@
 
 	$effect(() => {
 		const tab = page.url.searchParams.get('tab');
-		if ((tab === 'about' || tab === 'support' || tab === 'community') && tab !== activePage) {
+		if (
+			(tab === 'about' || tab === 'support' || tab === 'community' || tab === 'settings') &&
+			tab !== activePage
+		) {
 			activePage = tab;
 		}
 	});

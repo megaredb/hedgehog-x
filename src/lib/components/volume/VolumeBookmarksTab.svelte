@@ -76,6 +76,10 @@
 			return;
 		}
 
+		const hasClip =
+			bookmark.endTimestampSeconds != null &&
+			bookmark.endTimestampSeconds > bookmark.timestampSeconds;
+
 		if (versionId !== 'default') {
 			const version = chapterVersions.find(
 				(item) => item.chapterId === bookmark.chapterId && item.versionId === versionId
@@ -96,12 +100,13 @@
 						artist: book?.title || 'Hedgehog X',
 						volumeId: volume?.id,
 						bookId,
-						startTime: bookmark.timestampSeconds
+						startTime: bookmark.timestampSeconds,
+						clipStart: hasClip ? bookmark.timestampSeconds : null,
+						clipEnd: hasClip ? bookmark.endTimestampSeconds : null
 					}
 				],
 				0
 			);
-			audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 			return;
 		}
 
@@ -117,11 +122,13 @@
 			artist: book?.title || 'Hedgehog X',
 			volumeId: volume?.id,
 			bookId,
-			startTime: chapter.id === bookmark.chapterId ? bookmark.timestampSeconds : 0
+			startTime: chapter.id === bookmark.chapterId ? bookmark.timestampSeconds : 0,
+			...(chapter.id === bookmark.chapterId && hasClip
+				? { clipStart: bookmark.timestampSeconds, clipEnd: bookmark.endTimestampSeconds }
+				: {})
 		}));
 
 		audioStore.setQueueAndPlay(tracks, index);
-		audioStore.setClipRange(bookmark.timestampSeconds, bookmark.endTimestampSeconds);
 	}
 
 	function openEditModal(bookmark: OfflineBookmark) {
@@ -220,7 +227,7 @@
 											{formatDate(bookmark.createdAt)}
 										</span>
 									{/if}
-									{#if bookmark.versionId !== 'default' || hasMultipleVersions}
+									{#if (bookmark.versionId ?? 'default') !== 'default' || hasMultipleVersions}
 										<span
 											class="text-xxs inline-flex items-center rounded-md border px-2 py-0.5 font-semibold {bookmark.versionId ===
 												'default' || !bookmark.versionId

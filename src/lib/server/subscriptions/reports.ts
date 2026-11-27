@@ -129,9 +129,12 @@ export async function getRevenueSummary(now = new Date()): Promise<RevenueSummar
 }
 
 /** Active effective subscribers: lifetime/manual or any active Telegram/Discord source. */
-export async function getActiveSubscriberIds(now = new Date()): Promise<string[]> {
+export async function getActiveSubscriberIds(
+	now = new Date(),
+	executor: Pick<typeof db, 'select'> = db
+): Promise<string[]> {
 	const [subscriptionRows, sourceRows] = await Promise.all([
-		db
+		executor
 			.select({ userId: subscriptions.userId })
 			.from(subscriptions)
 			.where(
@@ -141,7 +144,7 @@ export async function getActiveSubscriberIds(now = new Date()): Promise<string[]
 					or(eq(subscriptions.isLifetime, true), gt(subscriptions.manualExpiresAt, now))
 				)
 			),
-		db
+		executor
 			.select({ userId: subscriptionSources.userId })
 			.from(subscriptionSources)
 			.leftJoin(subscriptions, eq(subscriptionSources.userId, subscriptions.userId))

@@ -2,17 +2,19 @@ import { error, json } from '@sveltejs/kit';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { broadcastMessages, broadcastReactions } from '$lib/server/db/schema';
-import { broadcastKind, hasBroadcastSubscription, syncBroadcast } from '$lib/server/broadcasts';
+import { broadcastKind, hasBroadcastAccess, syncBroadcast } from '$lib/server/broadcasts';
 import type { RequestHandler } from './$types';
 
 const ALLOWED = new Set(['👍', '❤️', '🔥', '😂']);
 
 export const POST: RequestHandler = async ({ params, locals, request }) => {
-	if (!locals.user) throw error(401, 'Требуется вход');
-	if (!(await hasBroadcastSubscription(locals.user.id))) throw error(403, 'Нужна подписка');
+	const currentUser = locals.user;
+	if (!currentUser) throw error(401, 'Требуется вход');
+	if (!(await hasBroadcastAccess(currentUser))) throw error(403, 'Нужна подписка');
 	const state = await syncBroadcast(params.id ?? '');
 	if (!state || broadcastKind(state) !== 'live')
 		throw error(409, 'Реакции доступны только в эфире');
+	if (!state.chatEnabled) throw error(403, 'Чат отключён');
 	const payload = await request.json().catch(() => null);
 	const messageId = typeof payload?.messageId === 'string' ? payload.messageId : '';
 	const emoji = typeof payload?.emoji === 'string' ? payload.emoji : '';
@@ -23,39 +25,43 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 		.where(and(eq(broadcastMessages.id, messageId), eq(broadcastMessages.broadcastId, state.id)))
 		.limit(1);
 	if (!message) throw error(404, 'Сообщение не найдено');
-	if (message.userId === locals.user.id) throw error(403, 'Нельзя реагировать на своё сообщение');
-	const [existing] = await db
-		.select({ emoji: broadcastReactions.emoji })
-		.from(broadcastReactions)
-		.where(
-			and(
-				eq(broadcastReactions.messageId, messageId),
-				eq(broadcastReactions.userId, locals.user.id)
+	if (message.userId === currentUser.id) throw error(403, 'Нельзя реагировать на своё сообщение');
+	const myReaction = await db.transaction(async (tx) => {
+		const [existing] = await tx
+			.select({ emoji: broadcastReactions.emoji })
+			.from(broadcastReactions)
+			.where(
+				and(
+					eq(broadcastReactions.messageId, messageId),
+					eq(broadcastReactions.userId, currentUser.id)
+				)
 			)
-		)
-		.limit(1);
-	let myReaction: string | null = emoji;
-	if (existing?.emoji === emoji) {
-		await db
+			.limit(1);
+		if (existing?.emoji === emoji) {
+			await tx
+				.delete(broadcastReactions)
+				.where(
+					and(
+						eq(broadcastReactions.messageId, messageId),
+						eq(broadcastReactions.userId, currentUser.id)
+					)
+				);
+			return null;
+		}
+		await tx
 			.delete(broadcastReactions)
 			.where(
 				and(
 					eq(broadcastReactions.messageId, messageId),
-					eq(broadcastReactions.userId, locals.user.id)
+					eq(broadcastReactions.userId, currentUser.id)
 				)
 			);
-		myReaction = null;
-	} else {
-		await db
-			.delete(broadcastReactions)
-			.where(
-				and(
-					eq(broadcastReactions.messageId, messageId),
-					eq(broadcastReactions.userId, locals.user.id)
-				)
-			);
-		await db.insert(broadcastReactions).values({ messageId, userId: locals.user.id, emoji });
-	}
+		await tx
+			.insert(broadcastReactions)
+			.values({ messageId, userId: currentUser.id, emoji })
+			.onConflictDoNothing();
+		return emoji;
+	});
 	const rows = await db
 		.select({ emoji: broadcastReactions.emoji, value: sql<number>`count(*)` })
 		.from(broadcastReactions)

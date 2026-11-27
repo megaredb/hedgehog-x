@@ -328,6 +328,37 @@ describe('likeService (Offline-first likes & sync)', () => {
 			assert.equal(remainingQueue.length, 1);
 			assert.equal(remainingQueue[0].action, 'LIKE_VOLUME');
 		});
+
+		it('chunks batches of >100 items and drops permanent 4xx chunks', async () => {
+			for (let i = 0; i < 120; i++) {
+				await mockDb.syncQueue.add({
+					action: 'LIKE_VOLUME',
+					payload: { id: `vol-${i}`, volumeId: `vol-${i}` },
+					timestamp: 1000 + i
+				});
+			}
+
+			const batchSizes: number[] = [];
+			let callCount = 0;
+			const chunkFetch: typeof fetch = async (_input, init) => {
+				callCount++;
+				const body = JSON.parse(String(init?.body || '{}')) as {
+					volumeLikeUpdates: unknown[];
+				};
+				batchSizes.push(body.volumeLikeUpdates.length);
+				// First chunk fails with permanent 400; second chunk succeeds
+				if (callCount === 1) {
+					return new Response(JSON.stringify({ error: 'Bad request' }), { status: 400 });
+				}
+				return new Response(JSON.stringify({ success: true }), { status: 200 });
+			};
+
+			const res = await service.syncLikesQueue(chunkFetch);
+			assert.deepEqual(batchSizes, [100, 20]);
+			assert.equal(res.synced, 20);
+			const remaining = await mockDb.syncQueue.toArray();
+			assert.equal(remaining.length, 0);
+		});
 	});
 
 	describe('Read helpers', () => {

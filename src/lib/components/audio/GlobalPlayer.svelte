@@ -618,7 +618,10 @@
 					value={bookmarkStart}
 					onchange={(value) => {
 						bookmarkStart = value;
-						if (bookmarkEnd !== null && bookmarkEnd <= value) bookmarkEnd = null;
+						if (bookmarkEnd !== null && bookmarkEnd <= value) {
+							bookmarkEnd = null;
+							hasBookmarkEnd = false;
+						}
 					}}
 				/>
 				<div class="space-y-1.5">

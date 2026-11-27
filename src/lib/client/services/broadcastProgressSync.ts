@@ -16,6 +16,8 @@ class BroadcastProgressSyncService {
 	private pending = new Map<string, PendingProgress>();
 	private timer: ReturnType<typeof setTimeout> | null = null;
 	private ownerPromise: Promise<string | null> | null = null;
+	private cachedOwnerId: string | null = null;
+	private hasCachedOwner = false;
 
 	constructor() {
 		if (typeof window === 'undefined') return;
@@ -24,6 +26,27 @@ class BroadcastProgressSyncService {
 		document.addEventListener('visibilitychange', () => {
 			if (document.visibilityState === 'hidden') void this.flush();
 		});
+		void this.refreshOwner();
+	}
+
+	private refreshOwner(): Promise<string | null> {
+		const promise = getCurrentOwnerId().then((owner) => {
+			this.cachedOwnerId = owner;
+			this.hasCachedOwner = true;
+			return owner;
+		});
+		return promise;
+	}
+
+	clear(): void {
+		if (this.timer) {
+			clearTimeout(this.timer);
+			this.timer = null;
+		}
+		this.pending.clear();
+		this.ownerPromise = null;
+		this.cachedOwnerId = null;
+		this.hasCachedOwner = false;
 	}
 
 	record(
@@ -39,7 +62,9 @@ class BroadcastProgressSyncService {
 			positionSeconds: Math.max(0, Math.floor(positionSeconds)),
 			isCompleted
 		});
-		if (!this.ownerPromise) this.ownerPromise = getCurrentOwnerId();
+		if (!this.ownerPromise) {
+			this.ownerPromise = this.refreshOwner();
+		}
 		this.schedule();
 	}
 
@@ -51,8 +76,8 @@ class BroadcastProgressSyncService {
 		if (this.pending.size === 0) return;
 		if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-		const owner = await (this.ownerPromise ?? getCurrentOwnerId());
-		const currentOwner = await getCurrentOwnerId();
+		const owner = await (this.ownerPromise ?? this.refreshOwner());
+		const currentOwner = await this.refreshOwner();
 		this.ownerPromise = null;
 		if (!owner || owner !== currentOwner) {
 			// Never send the previous account's playback position under a new session.
@@ -77,8 +102,8 @@ class BroadcastProgressSyncService {
 						keepalive: true
 					}
 				);
-				if (response.status === 401 || response.status === 404) {
-					// Session expired or the broadcast was deleted: do not retry.
+				if (response.status === 401 || response.status === 403 || response.status === 404) {
+					// Session expired, access revoked, or broadcast deleted: do not retry.
 					continue;
 				}
 				if (!response.ok) this.restore(entry);
@@ -101,6 +126,10 @@ class BroadcastProgressSyncService {
 
 	private beacon(): void {
 		if (typeof navigator === 'undefined' || this.pending.size === 0) return;
+		if (!this.hasCachedOwner || !this.cachedOwnerId) {
+			this.pending.clear();
+			return;
+		}
 		for (const entry of this.pending.values()) {
 			const body = JSON.stringify({
 				kind: entry.kind,

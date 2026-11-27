@@ -27,9 +27,15 @@
 	class="showcase-section relative flex h-full w-full snap-start snap-always flex-col justify-end overflow-hidden px-8 pb-24 md:px-16 md:pb-32 lg:px-24"
 >
 	<div class="max-w-2xl space-y-6">
-		<h1 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
-			{book.title}
-		</h1>
+		{#if index === 0}
+			<h1 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
+				{book.title}
+			</h1>
+		{:else}
+			<h2 class="text-4xl font-extrabold tracking-tight text-foreground drop-shadow-md md:text-6xl">
+				{book.title}
+			</h2>
+		{/if}
 		{#if book.description}
 			<p
 				class="line-clamp-3 max-w-xl text-lg leading-relaxed text-foreground/90 drop-shadow md:line-clamp-4 md:text-xl"
@@ -58,7 +64,8 @@
 			padding: 0.75rem 1.5rem 1rem;
 		}
 
-		.showcase-section h1 {
+		.showcase-section h1,
+		.showcase-section h2 {
 			font-size: 2rem;
 			line-height: 1.05;
 		}
@@ -75,6 +82,7 @@
 			max-width: min(34rem, calc(100vw - 8rem));
 		}
 
+		.showcase-section :global(a[data-slot='button']),
 		.showcase-section :global(button) {
 			height: 2.5rem;
 			padding-inline: 1.25rem;

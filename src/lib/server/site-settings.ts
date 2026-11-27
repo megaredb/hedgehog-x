@@ -15,6 +15,7 @@ export const DEFAULT_MEDIA_SETTINGS: MediaSettings = {
 
 const CACHE_TTL_MS = 15_000;
 let cached: { value: MediaSettings; expiresAt: number } | null = null;
+let mirrorsCached: { value: SiteMirror[]; expiresAt: number } | null = null;
 
 function cleanBaseUrl(value: unknown): string {
 	if (typeof value !== 'string' || !value.trim()) return '';
@@ -119,7 +120,10 @@ export function invalidateMediaSettingsCache(): void {
 	cached = null;
 }
 
-export async function loadMirrors(): Promise<SiteMirror[]> {
+export async function loadMirrors(force = false): Promise<SiteMirror[]> {
+	if (!force && mirrorsCached && mirrorsCached.expiresAt > Date.now()) {
+		return structuredClone(mirrorsCached.value);
+	}
 	const [row] = await db
 		.select()
 		.from(siteSettings)
@@ -131,7 +135,8 @@ export async function loadMirrors(): Promise<SiteMirror[]> {
 			? (raw as { mirrors?: unknown }).mirrors
 			: raw
 	);
-	return value;
+	mirrorsCached = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+	return structuredClone(value);
 }
 
 export async function saveMirrors(input: unknown): Promise<SiteMirror[]> {
@@ -143,5 +148,10 @@ export async function saveMirrors(input: unknown): Promise<SiteMirror[]> {
 			target: siteSettings.key,
 			set: { value: { mirrors: value }, updatedAt: new Date() }
 		});
-	return value;
+	mirrorsCached = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+	return structuredClone(value);
+}
+
+export function invalidateMirrorsCache(): void {
+	mirrorsCached = null;
 }

@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, desc } from 'drizzle-orm';
+import { and, eq, gt, isNull, desc, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import {
 	subscriptionEvents,
@@ -54,8 +54,6 @@ export async function setSubscriptionPrice(params: {
 		throw new PriceChangeError('Некорректный режим смены цены');
 	}
 
-	const activeIds = await getActiveSubscriberIds(now);
-
 	return db.transaction(async (tx) => {
 		await tx
 			.insert(subscriptionSettings)
@@ -97,38 +95,78 @@ export async function setSubscriptionPrice(params: {
 			const rows = await tx
 				.select({
 					userId: subscriptions.userId,
-					manualExpiresAt: subscriptions.manualExpiresAt
+					manualExpiresAt: subscriptions.manualExpiresAt,
+					revokedAt: subscriptions.revokedAt,
+					revokedRemainingMs: subscriptions.revokedRemainingMs,
+					blockedAt: subscriptions.blockedAt,
+					blockedRemainingMs: subscriptions.blockedRemainingMs
 				})
 				.from(subscriptions)
 				.where(
 					and(
 						eq(subscriptions.isLifetime, false),
-						isNull(subscriptions.revokedAt),
-						isNull(subscriptions.blockedAt),
-						gt(subscriptions.manualExpiresAt, now)
+						or(
+							and(
+								isNull(subscriptions.revokedAt),
+								isNull(subscriptions.blockedAt),
+								gt(subscriptions.manualExpiresAt, now)
+							),
+							gt(subscriptions.revokedRemainingMs, 0),
+							gt(subscriptions.blockedRemainingMs, 0)
+						)
 					)
 				)
 				.for('update');
 
+			const maxMs = 36500 * 86_400_000;
 			for (const row of rows) {
-				if (!row.manualExpiresAt) continue;
-				const remainingMs = row.manualExpiresAt.getTime() - now.getTime();
-				if (remainingMs <= 0) continue;
-				const recalculatedMs = Math.min(
-					repriceRemainingMs(remainingMs, oldPrice, newPrice),
-					36500 * 86400000
-				);
-				const after = new Date(now.getTime() + recalculatedMs);
+				let changed = false;
+				let nextManualExpiresAt = row.manualExpiresAt;
+				let nextRevokedRemainingMs = row.revokedRemainingMs;
+				let nextBlockedRemainingMs = row.blockedRemainingMs;
+
+				if (!row.revokedAt && !row.blockedAt && row.manualExpiresAt) {
+					const remainingMs = row.manualExpiresAt.getTime() - now.getTime();
+					if (remainingMs > 0) {
+						const recalculatedMs = Math.min(
+							repriceRemainingMs(remainingMs, oldPrice, newPrice),
+							maxMs
+						);
+						nextManualExpiresAt = new Date(now.getTime() + recalculatedMs);
+						changed = true;
+					}
+				}
+				if (row.revokedRemainingMs != null && row.revokedRemainingMs > 0) {
+					nextRevokedRemainingMs = Math.min(
+						repriceRemainingMs(row.revokedRemainingMs, oldPrice, newPrice),
+						maxMs
+					);
+					changed = true;
+				}
+				if (row.blockedRemainingMs != null && row.blockedRemainingMs > 0) {
+					nextBlockedRemainingMs = Math.min(
+						repriceRemainingMs(row.blockedRemainingMs, oldPrice, newPrice),
+						maxMs
+					);
+					changed = true;
+				}
+				if (!changed) continue;
+
 				await tx
 					.update(subscriptions)
-					.set({ manualExpiresAt: after, updatedBy: params.adminUserId })
+					.set({
+						manualExpiresAt: nextManualExpiresAt,
+						revokedRemainingMs: nextRevokedRemainingMs,
+						blockedRemainingMs: nextBlockedRemainingMs,
+						updatedBy: params.adminUserId
+					})
 					.where(eq(subscriptions.userId, row.userId));
 				await tx.insert(subscriptionEvents).values({
 					userId: row.userId,
 					type: 'price_recalc',
 					source: 'system',
 					beforeExpiresAt: row.manualExpiresAt,
-					afterExpiresAt: after,
+					afterExpiresAt: nextManualExpiresAt,
 					pricePerDay: newPrice,
 					adminUserId: params.adminUserId,
 					note: `Цена дня ${oldPrice} → ${newPrice} ₽; остаток пересчитан`
@@ -137,6 +175,7 @@ export async function setSubscriptionPrice(params: {
 			}
 		}
 
+		const activeIds = await getActiveSubscriberIds(now, tx);
 		if (activeIds.length > 0) {
 			await tx
 				.insert(subscriptionPriceNotices)

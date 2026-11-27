@@ -78,6 +78,7 @@ if (!building && (!authSecret || authSecret.length < 32)) {
  * Extracts real Telegram user ID from OIDC claims.
  */
 function telegramUserIdFromClaims(claims: { sub: string; id?: number | null }): string | null {
+	if (claims.id == null || !Number.isFinite(claims.id)) return null;
 	return String(claims.id);
 }
 
@@ -101,7 +102,7 @@ export const auth = betterAuth({
 			telegramOidcUsername: { type: 'string' },
 			discordAvatar: { type: 'string' },
 			discordUsername: { type: 'string' },
-			role: { type: 'string', defaultValue: 'user' }
+			role: { type: 'string', defaultValue: 'user', input: false }
 		}
 	},
 	socialProviders: {

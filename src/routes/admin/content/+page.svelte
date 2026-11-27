@@ -586,7 +586,10 @@
 		draggedBookId = null;
 	}
 
-	onDestroy(() => clearTimeout(searchTimer));
+	onDestroy(() => {
+		clearTimeout(searchTimer);
+		clearTimeout(toastTimer);
+	});
 
 	const moveEnhance: SubmitFunction = () => {
 		return async ({ result, update }) => {

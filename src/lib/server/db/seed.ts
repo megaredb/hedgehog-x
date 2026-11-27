@@ -306,7 +306,7 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 							blurhash: volume.blurhash,
 							status: volume.status
 						})
-						.onConflictDoNothing({ target: volumes.id })
+						.onConflictDoNothing()
 						.returning({ id: volumes.id });
 					if (volumeRows.length) inserted++;
 					else skipped++;
@@ -324,7 +324,7 @@ export async function ensureDefaultBooks(database: typeof db = db): Promise<void
 								published: true,
 								telegramPostUrl: chapter.telegramPostUrl
 							})
-							.onConflictDoNothing({ target: chapters.id })
+							.onConflictDoNothing()
 							.returning({ id: chapters.id });
 						if (chapterRows.length) inserted++;
 						else skipped++;

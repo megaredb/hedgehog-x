@@ -90,17 +90,34 @@
 		chapters.length > 0 && chapters.every((c) => manager.isDownloaded(c.id))
 	);
 
+	const chapterIdSet = $derived(new Set(chapters.map((chapter) => chapter.id)));
+
+	function isDownloadInVolume(download: {
+		volumeId?: string;
+		baseChapterId?: string;
+		chapterId: string;
+	}): boolean {
+		return (
+			download.volumeId === volume?.id ||
+			chapterIdSet.has(download.baseChapterId ?? download.chapterId)
+		);
+	}
+
 	const availableVersions = $derived.by(() => {
 		const versions = [{ id: 'default', label: 'Новая версия' }];
-		const old = chapterVersions.some((version) => version.versionId === 'old');
-		if (old) versions.push({ id: 'old', label: 'Старая версия' });
+		for (const version of chapterVersions) {
+			if (!version.versionId || versions.some((item) => item.id === version.versionId)) continue;
+			versions.push({
+				id: version.versionId,
+				label: version.versionId === 'old' ? 'Старая версия' : version.versionId
+			});
+		}
 		return versions;
 	});
 
 	function downloadsForVersion(versionId: string) {
 		return manager.downloads.filter(
-			(download) =>
-				download.volumeId === volume?.id && (download.versionId ?? 'default') === versionId
+			(download) => isDownloadInVolume(download) && (download.versionId ?? 'default') === versionId
 		);
 	}
 
@@ -406,7 +423,7 @@
 		<Dialog.Footer class="flex flex-wrap justify-end gap-2">
 			<Button variant="outline" onclick={() => (isDownloadModalOpen = false)}>Закрыть</Button>
 			<Button variant="outline" onclick={downloadAllVersions}>Скачать всё</Button>
-			{#if manager.downloads.some((item) => item.volumeId === volume?.id && item.status === 'downloaded')}
+			{#if manager.downloads.some((item) => isDownloadInVolume(item) && item.status === 'downloaded')}
 				<Button
 					variant="destructive"
 					onclick={() => volume && void manager.deleteVolume(volume.id)}

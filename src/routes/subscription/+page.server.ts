@@ -21,6 +21,18 @@ import { loadSitePage } from '$lib/server/site-content';
 
 const lastChecks = new Map<string, number>();
 const CHECK_COOLDOWN_MS = 20_000;
+const CLEANUP_INTERVAL_MS = 60_000;
+let lastCleanupAt = 0;
+
+function pruneLastChecks(now: number) {
+	if (now - lastCleanupAt < CLEANUP_INTERVAL_MS && lastChecks.size < 1000) return;
+	lastCleanupAt = now;
+	for (const [key, timestamp] of lastChecks) {
+		if (now - timestamp >= CHECK_COOLDOWN_MS) {
+			lastChecks.delete(key);
+		}
+	}
+}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const baseConfig = publicSubscriptionConfig();
@@ -73,13 +85,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 export const actions: Actions = {
 	check: async ({ locals }) => {
 		if (!locals.user) return fail(401, { error: 'Требуется авторизация' });
+		const now = Date.now();
+		pruneLastChecks(now);
 		const previous = lastChecks.get(locals.user.id) ?? 0;
-		if (Date.now() - previous < CHECK_COOLDOWN_MS) {
+		if (now - previous < CHECK_COOLDOWN_MS) {
 			return fail(429, {
 				error: 'Проверка уже выполнялась недавно. Попробуйте через несколько секунд.'
 			});
 		}
-		lastChecks.set(locals.user.id, Date.now());
+		lastChecks.set(locals.user.id, now);
 		const result = await checkAllSubscriptionSources(locals.user.id);
 		const messages = [result.telegram.message, result.discord.message].filter(Boolean);
 		return {
