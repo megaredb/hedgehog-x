@@ -75,7 +75,7 @@ const directProbeCache = new Map<string, { available: boolean; expiresAt: number
 async function isDirectMediaAvailable(url: string): Promise<boolean> {
 	const cached = directProbeCache.get(url);
 	if (cached && cached.expiresAt > Date.now()) return cached.available;
-	let available = false;
+	let available: boolean;
 	try {
 		const response = await fetch(url, {
 			method: 'HEAD',
