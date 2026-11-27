@@ -190,15 +190,6 @@
 	view-transition-name: global-audio-player;
 }
 
-/* Keep the persistent player usable while a modal is open. The drawer opens
-   above the modal; dialog outside-click is ignored for both surfaces. */
-body:has([data-slot='dialog-overlay']) .global-audio-player {
-	position: fixed;
-	inset-inline: 0;
-	bottom: 0;
-	z-index: 110;
-}
-
 ::view-transition-group(global-audio-player) {
 	animation: none;
 	z-index: 50;

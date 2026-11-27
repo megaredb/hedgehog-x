@@ -154,7 +154,6 @@
 	let autoplayPriming = false;
 	let autoplayWasMuted = false;
 	let autoplayTimer: ReturnType<typeof setTimeout> | null = null;
-	let portraitQuery: MediaQueryList | null = null;
 	let chatText = $state('');
 	let chatError = $state('');
 	let showLinkHint = $state(false);
@@ -204,13 +203,6 @@
 		if (typeof window !== 'undefined' && window.innerWidth < 1024) {
 			setMobileTab('chat');
 			setLandscapeTab('chat');
-		}
-	}
-
-	function handlePortraitOrientation(event: MediaQueryListEvent) {
-		if (event.matches && isChatCollapsed) {
-			isChatCollapsed = false;
-			document.body.classList.remove('broadcast-chat-collapsed');
 		}
 	}
 
@@ -1008,8 +1000,6 @@
 	onMount(() => {
 		const previousOverflow = document.body.style.overflow;
 		document.addEventListener('pointerdown', handleAttachOutside);
-		portraitQuery = window.matchMedia('(max-width: 1023px) and (orientation: portrait)');
-		portraitQuery.addEventListener('change', handlePortraitOrientation);
 		document.body.style.overflow = 'hidden';
 		document.body.classList.add('broadcast-page');
 		const clockTimer = setInterval(() => {
@@ -1023,8 +1013,6 @@
 				htmlAudio.setMuted(autoplayWasMuted);
 			}
 			document.removeEventListener('pointerdown', handleAttachOutside);
-			portraitQuery?.removeEventListener('change', handlePortraitOrientation);
-			portraitQuery = null;
 			document.body.style.overflow = previousOverflow;
 			document.body.classList.remove('broadcast-expanded');
 			document.body.classList.remove('broadcast-page');
@@ -1292,14 +1280,25 @@
 				{/if}
 			</div>
 		{/snippet}
-		{#if isChatCollapsed}
+		<div class="absolute top-3 right-3 z-50 hidden flex-col items-end gap-2 lg:flex landscape:flex">
 			<button
 				type="button"
-				class="absolute top-14 right-3 z-50 hidden h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card/95 text-foreground shadow-xl backdrop-blur-md transition hover:bg-muted lg:top-16 lg:right-3 lg:flex landscape:flex"
-				onclick={showChat}
-				aria-label="Открыть чат"><MessageCircle class="h-5 w-5" /></button
+				class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+				onclick={toggleExpanded}
+				aria-label={isExpanded ? 'Выйти из полноэкранного режима' : 'На весь экран'}
+				>{#if isExpanded}<Minimize2 class="h-4 w-4" />{:else}<Maximize2
+						class="h-4 w-4"
+					/>{/if}</button
 			>
-		{/if}
+			{#if isChatCollapsed}
+				<button
+					type="button"
+					class="flex h-9 w-9 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+					onclick={showChat}
+					aria-label="Открыть чат"><MessageCircle class="h-4 w-4" /></button
+				>
+			{/if}
+		</div>
 		<div
 			class="absolute inset-x-2 top-2 z-40 hidden items-center gap-0.5 rounded-xl border border-white/15 bg-black/55 p-1 text-white backdrop-blur-md lg:hidden portrait:flex landscape:hidden"
 		>
@@ -1346,15 +1345,6 @@
 						aria-label="Иллюстрации по таймингу"
 					/>
 				</div>
-				<button
-					type="button"
-					class="absolute top-3 right-3 z-30 hidden h-8 w-8 items-center justify-center rounded-lg border border-white/20 bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65 lg:flex"
-					onclick={toggleExpanded}
-					aria-label={isExpanded ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-					>{#if isExpanded}<Minimize2 class="h-4 w-4" />{:else}<Maximize2
-							class="h-4 w-4"
-						/>{/if}</button
-				>
 				<div
 					class="absolute inset-0 flex items-center justify-center p-2 {audioStore.queue.length > 0
 						? 'max-lg:landscape:pb-20'
@@ -1505,7 +1495,7 @@
 			{/if}
 
 			<aside
-				class="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/90 {isChatCollapsed
+				class="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/90 {isChatCollapsed
 					? 'hidden'
 					: ''} shadow-[0_18px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl lg:w-[420px] lg:flex-none max-lg:landscape:w-[48%] max-lg:landscape:flex-none {mobileTab ===
 					'overview' ||
@@ -1821,7 +1811,7 @@
 					<div
 						bind:this={messagesEl}
 						onscroll={handleChatScroll}
-						class="chat-scroll flex min-h-0 flex-1 flex-col-reverse gap-3 overflow-y-auto p-4 {mobileTab !==
+						class="chat-scroll flex min-h-0 min-w-0 flex-1 flex-col-reverse gap-3 overflow-x-hidden overflow-y-auto p-4 {mobileTab !==
 						'chat'
 							? 'max-lg:portrait:hidden'
 							: ''} {landscapeTab !== 'chat' ? 'max-lg:landscape:hidden' : ''}"
@@ -1851,7 +1841,7 @@
 									<div
 										id={'broadcast-message-' + message.id}
 										in:fly={{ y: 8, duration: 180 }}
-										class="chat-message-row flex items-start gap-2.5"
+										class="chat-message-row flex w-full min-w-0 items-start gap-2.5"
 										class:blurred={taggedSpoiler}
 									>
 										<div class="relative shrink-0 pt-0.5">
@@ -1891,7 +1881,7 @@
 													>{/if}
 											</div>
 											<div
-												class="chat-message-bubble mt-1 rounded-2xl rounded-tl-sm border px-2.5 py-2 transition-colors duration-500 {lifetime
+												class="chat-message-bubble mt-1 max-w-full min-w-0 rounded-2xl rounded-tl-sm border px-2.5 py-2 transition-colors duration-500 {lifetime
 													? 'border-amber-400/25 bg-amber-500/10'
 													: subscribed
 														? 'border-emerald-400/20 bg-emerald-500/8'
@@ -1917,7 +1907,7 @@
 													</button>
 												{/if}
 												{#if bodyText}<p
-														class="text-xs leading-relaxed break-words whitespace-pre-wrap"
+														class="text-xs leading-relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap"
 													>
 														{#each bodySegments as segment, index (index)}{#if segment.mention}<span
 																	class="font-semibold text-sky-400">{segment.text}</span
@@ -2241,6 +2231,7 @@
 	}
 
 	.chat-scroll {
+		overflow-x: hidden;
 		scrollbar-width: none;
 		-ms-overflow-style: none;
 	}

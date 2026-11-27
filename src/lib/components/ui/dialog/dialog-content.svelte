@@ -36,7 +36,9 @@
 			const target = event.target;
 			if (
 				target instanceof Element &&
-				target.closest('.global-audio-player, [data-slot="drawer-content"]')
+				target.closest(
+					'.global-audio-player, [data-slot="drawer-content"], [data-slot="drawer-overlay"]'
+				)
 			) {
 				event.preventDefault();
 				return;

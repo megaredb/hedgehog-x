@@ -2,8 +2,6 @@
 	import { Volume, Volume1, Volume2, VolumeX } from '@lucide/svelte';
 	import { audioStore } from '$lib/audio-store.svelte.js';
 	import { cn } from '$lib/utils.js';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-	import * as Tooltip from '$lib/components/ui/tooltip';
 	import { Button, type ButtonSize, type ButtonVariant } from '$lib/components/ui/button';
 	import { Slider } from '$lib/components/ui/slider';
 
@@ -14,6 +12,9 @@
 	}
 
 	let { class: className = '', size = 'icon', variant = 'outline' }: Props = $props();
+
+	let open = $state(false);
+	let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
 	let volumePercent = $derived(Math.round(audioStore.volume * 100));
 
@@ -32,41 +33,63 @@
 		if (v === 0 && !audioStore.isMuted) audioStore.toggleMute();
 		if (v > 0 && audioStore.isMuted) audioStore.toggleMute();
 	}
+
+	function show() {
+		if (closeTimer) {
+			clearTimeout(closeTimer);
+			closeTimer = null;
+		}
+		open = true;
+	}
+
+	function hide() {
+		if (closeTimer) clearTimeout(closeTimer);
+		closeTimer = setTimeout(() => {
+			open = false;
+			closeTimer = null;
+		}, 150);
+	}
+
+	function toggleMute() {
+		audioStore.toggleMute();
+	}
 </script>
 
-<DropdownMenu.Root>
-	<Tooltip.Root>
-		<Tooltip.Trigger>
-			{#snippet child({ props: tooltipProps })}
-				<DropdownMenu.Trigger {...tooltipProps}>
-					{#snippet child({ props: dropdownProps })}
-						<Button
-							class={cn('hidden md:flex', className)}
-							data-slot="audio-volume-button"
-							{size}
-							{variant}
-							{...dropdownProps}
-						>
-							<VolumeIcon class={cn(audioStore.isMuted && 'opacity-40', 'text-primary')} />
-						</Button>
-					{/snippet}
-				</DropdownMenu.Trigger>
-			{/snippet}
-		</Tooltip.Trigger>
-		<Tooltip.Content sideOffset={4}>{tooltipLabel}</Tooltip.Content>
-	</Tooltip.Root>
+<div
+	class={cn('relative hidden md:flex', className)}
+	role="group"
+	aria-label="Громкость"
+	onmouseenter={show}
+	onmouseleave={hide}
+>
+	<Button
+		class="shrink-0"
+		data-slot="audio-volume-button"
+		{size}
+		{variant}
+		onclick={toggleMute}
+		aria-label={audioStore.isMuted ? 'Включить звук' : 'Выключить звук'}
+		title={tooltipLabel}
+	>
+		<VolumeIcon class={cn(audioStore.isMuted && 'opacity-40', 'text-primary')} />
+	</Button>
 
-	<DropdownMenu.Content align="center" class={cn('flex min-w-8 flex-col gap-1.5 p-1.5', className)}>
-		<div class="flex flex-col-reverse items-center gap-2">
-			<!-- Mute toggle icon -->
+	{#if open}
+		<div
+			class="absolute right-0 bottom-full z-50 mb-2 flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-popover p-2 text-popover-foreground shadow-lg"
+			role="group"
+			aria-label="Регулятор громкости"
+			onmouseenter={show}
+			onmouseleave={hide}
+		>
 			<button
 				type="button"
-				aria-label={audioStore.isMuted ? 'Unmute' : 'Mute'}
+				aria-label={audioStore.isMuted ? 'Включить звук' : 'Выключить звук'}
 				class={cn(
 					'size-4 shrink-0 cursor-pointer',
 					audioStore.isMuted ? 'opacity-40' : 'opacity-60'
 				)}
-				onclick={() => audioStore.toggleMute()}
+				onclick={toggleMute}
 			>
 				<VolumeX class="size-4" />
 			</button>
@@ -74,17 +97,15 @@
 			<Slider
 				type="single"
 				orientation="vertical"
-				class={className}
+				class="h-24"
 				max={100}
 				min={0}
-				bind:value={volumePercent}
-				onValueChange={(e) => {
-					handleSliderChange(e);
-				}}
+				value={volumePercent}
+				onValueChange={handleSliderChange}
 			/>
 
 			<Volume2 aria-hidden="true" class="size-4 shrink-0 opacity-60" />
 			<span class="font-mono text-xs tabular-nums">{volumePercent}%</span>
 		</div>
-	</DropdownMenu.Content>
-</DropdownMenu.Root>
+	{/if}
+</div>
