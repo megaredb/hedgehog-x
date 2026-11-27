@@ -5,12 +5,13 @@
 
 	let viewport = $state<HTMLSpanElement | null>(null);
 	let track = $state<HTMLSpanElement | null>(null);
+	let measureEl = $state<HTMLSpanElement | null>(null);
 	let distance = $state(0);
 	let overflow = $state(false);
 
 	function measure() {
-		if (!viewport || !track) return;
-		const next = Math.max(0, track.scrollWidth - viewport.clientWidth);
+		if (!viewport || !measureEl) return;
+		const next = Math.max(0, measureEl.scrollWidth - viewport.clientWidth);
 		distance = next;
 		overflow = next > 4;
 	}
@@ -19,7 +20,7 @@
 		measure();
 		const observer = new ResizeObserver(measure);
 		if (viewport) observer.observe(viewport);
-		if (track) observer.observe(track);
+		if (measureEl) observer.observe(measureEl);
 		return () => observer.disconnect();
 	});
 </script>
@@ -29,6 +30,7 @@
 	class="marquee-text {overflow ? 'is-overflow' : ''} {className}"
 	title={text}
 >
+	<span class="marquee-measure" bind:this={measureEl} aria-hidden="true">{text}</span>
 	<span bind:this={track} class="marquee-track" style={'--marquee-distance: -' + distance + 'px'}>
 		{text}
 	</span>
@@ -36,6 +38,7 @@
 
 <style>
 	.marquee-text {
+		position: relative;
 		display: block;
 		min-width: 0;
 		max-width: 100%;
@@ -55,6 +58,15 @@
 			#000 calc(100% - 8px),
 			transparent 100%
 		);
+	}
+
+	.marquee-measure {
+		position: absolute;
+		top: 0;
+		left: 0;
+		visibility: hidden;
+		pointer-events: none;
+		white-space: nowrap;
 	}
 
 	.marquee-track {
