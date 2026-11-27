@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { useSession } from '$lib/client/session.svelte';
@@ -6,6 +7,7 @@
 	import {
 		BookOpen,
 		Bookmark,
+		CalendarClock,
 		Crown,
 		Download,
 		Heart,
@@ -19,6 +21,47 @@
 	} from '@lucide/svelte';
 
 	const session = useSession();
+	type RailParticipant = { id: string; name: string; image: string | null };
+	type RailBroadcast = {
+		id: string;
+		title: string;
+		coverUrl: string | null;
+		listeners: number;
+		participants: RailParticipant[];
+		kind: string;
+	};
+	let activeBroadcast = $state<RailBroadcast | null>(null);
+	let broadcastTimer: ReturnType<typeof setInterval> | null = null;
+
+	async function refreshActiveBroadcast() {
+		try {
+			const res = await fetch('/api/broadcasts/active', { cache: 'no-store' });
+			if (!res.ok) return;
+			const payload = await res.json();
+			const next = payload.broadcast;
+			activeBroadcast =
+				next?.kind === 'live' || next?.kind === 'scheduled'
+					? {
+							...next,
+							participants: Array.isArray(next.participants) ? next.participants : []
+						}
+					: null;
+		} catch {
+			// The rail is usable even if the broadcast endpoint is unavailable.
+		}
+	}
+
+	onMount(() => {
+		void refreshActiveBroadcast();
+		broadcastTimer = setInterval(refreshActiveBroadcast, 10_000);
+		return () => {
+			if (broadcastTimer) clearInterval(broadcastTimer);
+		};
+	});
+
+	onDestroy(() => {
+		if (broadcastTimer) clearInterval(broadcastTimer);
+	});
 	const subscriptionActive = $derived(Boolean(page.data.subscriptionActive));
 	const subscriptionLifetime = $derived(Boolean(page.data.subscriptionLifetime));
 	const links = [
@@ -84,6 +127,66 @@
 				: 'bg-emerald-500 text-white shadow-[0_6px_18px_rgba(16,185,129,0.25)]'}"
 			><Crown class="h-4.5 w-4.5" /></a
 		>
+		{#if activeBroadcast}
+			<a
+				href={resolve('/broadcasts/[id]', { id: activeBroadcast.id })}
+				title={activeBroadcast.title}
+				aria-label={activeBroadcast.title}
+				class="relative mt-1 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-muted/60 shadow-sm transition hover:border-primary/40 hover:brightness-110"
+			>
+				{#if activeBroadcast.coverUrl}
+					<img src={activeBroadcast.coverUrl} alt="" class="h-full w-full object-cover" />
+				{:else}
+					{#if activeBroadcast.kind === 'scheduled'}
+						<CalendarClock class="h-4 w-4 text-amber-500" />
+					{:else}
+						<Radio class="h-4 w-4 text-red-400" />
+					{/if}
+				{/if}
+				{#if activeBroadcast.kind === 'live'}
+					<span
+						class="absolute inset-x-0 bottom-0 flex h-2.5 items-end justify-center gap-[1px] bg-black/45"
+						aria-hidden="true"
+					>
+						<span class="w-[1px] animate-pulse rounded-full bg-white" style="height:4px"></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white"
+							style="height:7px; animation-delay:120ms"
+						></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white"
+							style="height:3px; animation-delay:240ms"
+						></span>
+						<span
+							class="w-[1px] animate-pulse rounded-full bg-white"
+							style="height:5px; animation-delay:360ms"
+						></span>
+					</span>
+				{/if}
+			</a>
+			{#if activeBroadcast.participants.length > 0}
+				<div class="mt-0.5 flex items-center justify-center -space-x-1">
+					{#each activeBroadcast.participants.slice(0, 3) as participant (participant.id)}
+						<span
+							title={participant.name}
+							class="relative flex h-4 w-4 overflow-hidden rounded-full border border-background bg-muted text-[6px] font-bold"
+						>
+							{#if participant.image}<img
+									src={participant.image}
+									alt=""
+									class="h-full w-full object-cover"
+									loading="lazy"
+								/>{:else}{participant.name.charAt(0).toUpperCase()}{/if}
+						</span>
+					{/each}
+					{#if activeBroadcast.listeners > 3}
+						<span class="text-[8px] font-semibold text-muted-foreground"
+							>+{activeBroadcast.listeners - 3}</span
+						>
+					{/if}
+				</div>
+			{/if}
+		{/if}
 	</nav>
 	<a
 		href={session.user ? resolve('/profile') : resolve('/auth')}
